@@ -1,18 +1,25 @@
-
 "use client";
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useForm } from 'react-hook-form';
 import { ToastContainer, toast } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
 import { Listbox } from '@headlessui/react';
+import { collection, addDoc } from 'firebase/firestore';
+import { signInAnonymously, onAuthStateChanged } from 'firebase/auth';
+import { db, auth } from '../../../app/fconfig'; // Adjust path to your fconfig file
+import { useRouter } from 'next/navigation';
 
 export default function RegistrationForm() {
+  const router = useRouter();
   const { register, handleSubmit, formState: { errors }, setValue } = useForm();
   const [membershipType, setMembershipType] = useState('Basic');
   const [exerciseDays, setExerciseDays] = useState([]);
   const [exerciseTime, setExerciseTime] = useState('Mornings');
   const [startMonth, setStartMonth] = useState('September');
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
+  const [formErrors, setFormErrors] = useState({});
 
   const membershipOptions = ['Basic', 'Premium', 'Pro'];
   const days = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
@@ -21,27 +28,151 @@ export default function RegistrationForm() {
   const reasons = ['Stress', 'Depression', 'Boredom', 'Happiness', 'Habit', 'Annoyance'];
   const goals = ['Development of muscles', 'Reducing the stress', 'Losing body fat', 'Increasing the motivation', 'Training for an event/specific sport', 'Other'];
 
-  const onSubmit = async (data) => {
-    try {
-      const response = await fetch('/api/register', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ ...data, membershipType, exerciseDays, exerciseTime, startMonth }),
-      });
-      if (response.ok) {
-        toast.success('Registration successful!');
-      } else {
-        toast.error('Registration failed. Please try again.');
+  // Handle Firebase Authentication
+  useEffect(() => {
+    if (!auth || !db) {
+      console.error('Firebase services not initialized:', { auth, db });
+      setFormErrors({ global: 'Firebase services are not initialized. Please check configuration.' });
+      setIsLoading(false);
+      return;
+    }
+
+    console.log('Firebase auth initialized, starting authentication process');
+
+    let mounted = true;
+    let retryCount = 0;
+    const maxRetries = 3;
+    const retryDelay = 1000; // 1 second
+
+    const attemptSignIn = async () => {
+      try {
+        console.log(`Attempting anonymous sign-in (retry ${retryCount})`);
+        await signInAnonymously(auth);
+        if (mounted) {
+          console.log('Signed in anonymously');
+        }
+      } catch (err) {
+        if (mounted) {
+          console.error('Anonymous sign-in failed:', {
+            code: err.code || 'N/A',
+            message: err.message,
+            retryCount,
+          });
+          let errorMessage = err.message;
+          if (err.code === 'auth/configuration-not-found') {
+            errorMessage = 'Firebase Authentication is not properly configured. Please ensure anonymous sign-in is enabled in the Firebase Console.';
+          }
+          if (retryCount < maxRetries) {
+            retryCount++;
+            console.log(`Retrying sign-in after ${retryDelay}ms`);
+            setTimeout(attemptSignIn, retryDelay);
+          } else {
+            setFormErrors({ global: `Authentication failed: ${errorMessage}` });
+            setIsLoading(false);
+          }
+        }
       }
-    } catch (error) {
-      toast.error('An error occurred. Please try again.');
+    };
+
+    const initializeAuth = async () => {
+      try {
+        const unsubscribe = onAuthStateChanged(auth, (user) => {
+          if (!mounted) return;
+
+          if (user) {
+            setIsAuthenticated(true);
+            setIsLoading(false);
+            console.log('User is signed in:', user.uid);
+          } else {
+            console.log('No user signed in, attempting anonymous sign-in');
+            attemptSignIn();
+          }
+        });
+
+        return () => {
+          mounted = false;
+          unsubscribe();
+        };
+      } catch (err) {
+        if (mounted) {
+          console.error('Authentication setup error:', {
+            code: err.code || 'N/A',
+            message: err.message,
+            stack: err.stack,
+          });
+          setFormErrors({ global: `Authentication setup failed: ${err.message}` });
+          setIsLoading(false);
+        }
+      }
+    };
+
+    initializeAuth();
+
+    return () => {
+      mounted = false;
+    };
+  }, []);
+
+  const onSubmit = async (data) => {
+    setFormErrors({});
+
+    if (!isAuthenticated || !auth.currentUser) {
+      toast.error('User is not authenticated. Please wait or try again.');
+      setFormErrors({ global: 'User is not authenticated. Please wait or try again.' });
+      return;
+    }
+
+    try {
+      // Verify Firestore is initialized
+      if (!db) {
+        throw new Error('Firestore database is not initialized.');
+      }
+
+      const dataToStore = {
+        ...data,
+        membershipType,
+        exerciseDays,
+        exerciseTime,
+        startMonth,
+        uid: auth.currentUser.uid,
+        createdAt: new Date().toISOString(),
+      };
+
+      // Attempt to write to Firestore
+      const aerobicsCollectionRef = collection(db, 'aerobics');
+      await addDoc(aerobicsCollectionRef, dataToStore);
+
+      toast.success('Registration successful!');
+      router.push('/success');
+    } catch (err) {
+      console.error('Firestore error:', {
+        code: err.code || 'N/A',
+        message: err.message || 'Unknown error occurred',
+        stack: err.stack || 'No stack trace available',
+        details: err.details || 'No additional details',
+      });
+      let errorMessage = 'An error occurred while saving your registration.';
+      if (err.code === 'permission-denied') {
+        errorMessage = 'Permission denied: Unable to save data. Please ensure anonymous users have write access to the aerobics collection.';
+      } else if (err.code === 'unavailable') {
+        errorMessage = 'Firestore service is unavailable. Please check your network connection and try again.';
+      } else if (err.message) {
+        errorMessage = `Error: ${err.message}`;
+      }
+      toast.error(errorMessage);
+      setFormErrors({ global: errorMessage });
     }
   };
+
+  if (isLoading) {
+    return <div className="text-center py-12">Loading...</div>;
+  }
 
   return (
     <div className="min-h-screen bg-gray-100 flex items-center justify-center py-12 px-4 sm:px-6 lg:px-8">
       <div className="max-w-3xl w-full space-y-8 bg-white p-10 rounded-lg shadow-lg">
         <h2 className="text-3xl font-extrabold text-gray-900 text-center">Aerobics Fitness Registration</h2>
+        {formErrors.global && <p className="text-red-500 text-center">{formErrors.global}</p>}
         <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
           {/* Personal Information */}
           <div className="grid grid-cols-1 gap-6 sm:grid-cols-2">
@@ -401,7 +532,12 @@ export default function RegistrationForm() {
 
           <button
             type="submit"
-            className="w-full bg-indigo-600 text-white py-2 px-4 rounded-md hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+            disabled={!isAuthenticated}
+            className={`w-full py-2 px-4 rounded-md text-white ${
+              isAuthenticated
+                ? 'bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500'
+                : 'bg-gray-400 cursor-not-allowed'
+            }`}
           >
             Submit
           </button>

@@ -1,10 +1,14 @@
 "use client";
-import { useState } from 'react';
+
+import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-
 import Head from 'next/head';
-
-
+import { ToastContainer, toast } from 'react-toastify';
+import 'react-toastify/dist/ReactToastify.css';
+import { collection, addDoc } from 'firebase/firestore';
+import { signInAnonymously, onAuthStateChanged } from 'firebase/auth';
+import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
+import { db, auth, storage } from '../fconfig'; // Adjust path to your fconfig file
 
 export default function PersonalTrainingForm() {
   const router = useRouter();
@@ -49,6 +53,9 @@ export default function PersonalTrainingForm() {
   });
   const [errors, setErrors] = useState({});
   const [uploading, setUploading] = useState(false);
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
+  const [formErrors, setFormErrors] = useState({});
 
   const handleChange = (e) => {
     const { name, value, type, checked, files } = e.target;
@@ -93,54 +100,186 @@ export default function PersonalTrainingForm() {
     return Object.keys(newErrors).length === 0;
   };
 
+  // Handle Firebase Authentication
+  useEffect(() => {
+    if (!auth || !db || !storage) {
+      console.error('Firebase services not initialized:', { auth, db, storage });
+      setFormErrors({ global: 'Firebase services are not initialized. Please check configuration.' });
+      setIsLoading(false);
+      return;
+    }
+
+    console.log('Firebase auth initialized, starting authentication process');
+
+    let mounted = true;
+    let retryCount = 0;
+    const maxRetries = 3;
+    const retryDelay = 1000; // 1 second
+
+    const attemptSignIn = async () => {
+      try {
+        console.log(`Attempting anonymous sign-in (retry ${retryCount})`);
+        await signInAnonymously(auth);
+        if (mounted) {
+          console.log('Signed in anonymously');
+        }
+      } catch (err) {
+        if (mounted) {
+          console.error('Anonymous sign-in failed:', {
+            code: err.code || 'N/A',
+            message: err.message || 'Unknown error',
+            retryCount,
+          });
+          let errorMessage = err.message || 'Unknown authentication error';
+          if (err.code === 'auth/configuration-not-found') {
+            errorMessage = 'Firebase Authentication is not properly configured. Please ensure anonymous sign-in is enabled in the Firebase Console.';
+          }
+          if (retryCount < maxRetries) {
+            retryCount++;
+            console.log(`Retrying sign-in after ${retryDelay}ms`);
+            setTimeout(attemptSignIn, retryDelay);
+          } else {
+            setFormErrors({ global: `Authentication failed: ${errorMessage}` });
+            setIsLoading(false);
+          }
+        }
+      }
+    };
+
+    const initializeAuth = async () => {
+      try {
+        const unsubscribe = onAuthStateChanged(auth, (user) => {
+          if (!mounted) return;
+
+          if (user) {
+            setIsAuthenticated(true);
+            setIsLoading(false);
+            console.log('User is signed in:', user.uid);
+          } else {
+            console.log('No user signed in, attempting anonymous sign-in');
+            attemptSignIn();
+          }
+        });
+
+        return () => {
+          mounted = false;
+          unsubscribe();
+        };
+      } catch (err) {
+        if (mounted) {
+          console.error('Authentication setup error:', {
+            code: err.code || 'N/A',
+            message: err.message || 'Unknown error',
+            stack: err.stack || 'No stack trace',
+          });
+          setFormErrors({ global: `Authentication setup failed: ${err.message || 'Unknown error'}` });
+          setIsLoading(false);
+        }
+      }
+    };
+
+    initializeAuth();
+
+    return () => {
+      mounted = false;
+    };
+  }, []);
+
   const handleSubmit = async (e) => {
     e.preventDefault();
     if (!validateForm()) return;
 
+    if (!isAuthenticated || !auth.currentUser) {
+      const errorMessage = 'User is not authenticated. Please wait or try again.';
+      toast.error(errorMessage);
+      setFormErrors({ global: errorMessage });
+      return;
+    }
+
     setUploading(true);
+    setFormErrors({});
     let photoUrl = '';
 
     try {
+      // Verify Firebase services are initialized
+      if (!db || !storage) {
+        throw new Error('Firebase Firestore or Storage is not initialized.');
+      }
+
+      // Log current user for debugging
+      console.log('Current user:', auth.currentUser ? auth.currentUser.uid : 'No user');
+
       // Upload photo to Firebase Storage
       if (formData.photo) {
         const photoRef = ref(storage, `photos/${formData.email}_${formData.photo.name}`);
+        console.log('Uploading photo to:', photoRef.fullPath);
         await uploadBytes(photoRef, formData.photo);
         photoUrl = await getDownloadURL(photoRef);
+        console.log('Photo uploaded successfully:', photoUrl);
       }
 
-      // Prepare form data for API
-      const formDataToSend = new FormData();
-      Object.keys(formData).forEach((key) => {
-        if (key === 'photo') return; // Skip photo as it's uploaded separately
-        if (key === 'preferredTrainingTime') {
-          formDataToSend.append(key, formData[key].join(',')); // Convert array to string
-        } else if (formData[key] !== null && formData[key] !== undefined) {
-          formDataToSend.append(key, formData[key]);
-        }
-      });
-      formDataToSend.append('photoUrl', photoUrl);
-      if (!formData.bmi) calculateBMI();
-      formDataToSend.append('bmi', formData.bmi);
+      // Sanitize data to ensure no undefined or null values
+      const sanitizedData = Object.fromEntries(
+        Object.entries(formData).map(([key, value]) => [
+          key,
+          key === 'preferredTrainingTime' ? value : value ?? ''
+        ])
+      );
 
-      // Send form data to API route
-      const response = await fetch('/api/submit-form', {
-        method: 'POST',
-        body: formDataToSend,
-      });
+      // Calculate BMI if not already calculated
+      if (!sanitizedData.bmi) calculateBMI();
 
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.error || 'Failed to submit form');
-      }
+      const dataToStore = {
+        ...sanitizedData,
+        photo: null, // Exclude file object
+        photoUrl,
+        bmi: sanitizedData.bmi || formData.bmi,
+        preferredTrainingTime: sanitizedData.preferredTrainingTime || [],
+        uid: auth.currentUser.uid,
+        createdAt: new Date().toISOString(),
+      };
 
+      // Log data for debugging
+      console.log('Submitting data to Firestore:', dataToStore);
+
+      // Write to Firestore
+      const personalTrainingCollectionRef = collection(db, 'personalTraining');
+      console.log('Writing to Firestore collection:', personalTrainingCollectionRef.path);
+      await addDoc(personalTrainingCollectionRef, dataToStore);
+
+      toast.success('Registration successful!');
       router.push('/success');
-    } catch (error) {
-      console.error('Submission error:', error);
-      setErrors({ submit: error.message || 'Failed to submit form. Please try again.' });
+    } catch (err) {
+      console.error('Detailed Firebase error:', {
+        name: err.name || 'N/A',
+        code: err.code || 'N/A',
+        message: err.message || 'Unknown error occurred',
+        stack: err.stack || 'No stack trace available',
+        details: err.details || 'No additional details',
+        timestamp: new Date().toISOString(),
+      });
+      let errorMessage = 'An error occurred while saving your registration.';
+      if (err.code === 'permission-denied') {
+        errorMessage = 'Permission denied: Unable to save data. Please ensure anonymous users have write access to the personalTraining collection in Firestore. Check Firebase Console security rules.';
+      } else if (err.code === 'unavailable') {
+        errorMessage = 'Firebase service is unavailable. Please check your network connection and try again.';
+      } else if (err.code === 'invalid-argument') {
+        errorMessage = 'Invalid data provided to Firebase. Please check your form inputs.';
+      } else if (err.code === 'storage/unauthorized') {
+        errorMessage = 'Storage permission denied. Please ensure anonymous users have write access to Firebase Storage.';
+      } else if (err.message) {
+        errorMessage = `Error: ${err.message}`;
+      }
+      toast.error(errorMessage);
+      setFormErrors({ global: errorMessage });
     } finally {
       setUploading(false);
     }
   };
+
+  if (isLoading) {
+    return <div className="text-center py-12">Loading...</div>;
+  }
 
   return (
     <>
@@ -150,6 +289,7 @@ export default function PersonalTrainingForm() {
       <div className="min-h-screen bg-zinc-100 flex items-center justify-center py-12 px-4 sm:px-6 lg:px-8">
         <div className="max-w-3xl w-full bg-white p-8 rounded-lg shadow-lg">
           <h2 className="text-3xl font-bold text-center text-gray-900 mb-6">Personal Training Consultation Form</h2>
+          {formErrors.global && <p className="text-red-500 text-center">{formErrors.global}</p>}
           <form onSubmit={handleSubmit} className="space-y-6">
             {/* Personal Information */}
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -653,9 +793,11 @@ export default function PersonalTrainingForm() {
             <div>
               <button
                 type="submit"
-                disabled={uploading}
-                className={`w-full flex justify-center py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 ${
-                  uploading ? 'opacity-50 cursor-not-allowed' : ''
+                disabled={uploading || !isAuthenticated}
+                className={`w-full flex justify-center py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white ${
+                  uploading || !isAuthenticated
+                    ? 'bg-gray-400 cursor-not-allowed'
+                    : 'bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500'
                 }`}
               >
                 {uploading ? 'Submitting...' : 'Submit'}
@@ -663,6 +805,7 @@ export default function PersonalTrainingForm() {
               {errors.submit && <p className="text-red-500 text-xs mt-2">{errors.submit}</p>}
             </div>
           </form>
+          <ToastContainer />
         </div>
       </div>
     </>

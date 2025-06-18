@@ -10,6 +10,9 @@
   },
   "dependencies": {
     "@headlessui/react": "^2.2.4",
+    "firebase": "^11.9.1",
+    "lucide-react": "^0.517.0",
+    "mongodb": "^6.17.0",
     "mongoose": "^8.16.0",
     "next": "15.3.3",
     "react": "^19.0.0",

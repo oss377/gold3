@@ -11,7 +11,7 @@ export default function HomeClient() {
   const router = useRouter();
 
   const categories = [
-    { id: 'cardio', name: 'karate', icon: '🏃‍♂️' },
+    { id: 'cardio', name: 'Karate', icon: '🏃‍♂️' },
     { id: 'aerobics', name: 'Aerobics', icon: '💃' },
     { id: 'gym', name: 'Gym Workouts', icon: '🏋️‍♂️' },
   ];
@@ -26,6 +26,26 @@ export default function HomeClient() {
   const handleRegisterNavigation = (path) => {
     setAuthModalOpen(false);
     router.push(path);
+  };
+
+  // Handle login form submission
+  const handleLogin = (e) => {
+    e.preventDefault();
+    const formData = new FormData(e.target);
+    const email = formData.get('email');
+    const password = formData.get('password');
+
+    // Mock admin credentials check (replace with actual authentication logic)
+    const isAdmin = email === 'awekeadisie@gmail.com' && password === '123456';
+
+    if (isAdmin) {
+      setAuthModalOpen(false);
+      router.push('/admin');
+    } else {
+      // For non-admin users, redirect to dashboard or handle regular login
+      setAuthModalOpen(false);
+      router.push('/dashboard');
+    }
   };
 
   return (
@@ -249,7 +269,7 @@ export default function HomeClient() {
             </div>
             
             {authType === 'login' ? (
-              <form className="space-y-4">
+              <form className="space-y-4" onSubmit={handleLogin}>
                 <div>
                   <label className="block text-gray-700 mb-1">Email</label>
                   <input 

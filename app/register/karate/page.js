@@ -1,6 +1,22 @@
 'use client';
 
 import { useState } from 'react';
+import { initializeApp } from 'firebase/app';
+import { getFirestore, collection, addDoc } from 'firebase/firestore';
+import { getStorage, ref, uploadBytes, getDownloadURL } from 'firebase/storage';
+
+const firebaseConfig = {
+  apiKey: "AIzaSyDLnWumpMzRswx9AkjJOv6Rw3xAhOvqr0c",
+  authDomain: "gold-57e14.firebaseapp.com",
+  projectId: "gold-57e14",
+  storageBucket: "gold-57e14.firebasestorage.app",
+  messagingSenderId: "1026627253984",
+  appId: "1:1026627253984:web:c6e298ef472e640542c285",
+  measurementId: "G-F8W74RCHJ3"
+};
+const app = initializeApp(firebaseConfig);
+const db = getFirestore(app);
+const storage = getStorage(app);
 
 export default function RegistrationForm() {
   const [formData, setFormData] = useState({
@@ -59,57 +75,60 @@ export default function RegistrationForm() {
     setSuccess('');
     setError('');
 
-    const data = new FormData();
-    Object.keys(formData).forEach((key) => {
-      if (formData[key] !== null) {
-        data.append(key, formData[key]);
-      }
-    });
-
     try {
-      const response = await fetch('/api/register', {
-        method: 'POST',
-        body: data,
-      });
+      let photoURL = null;
 
-      const result = await response.json();
-      if (response.ok) {
-        setSuccess('Registration submitted successfully!');
-        setFormData({
-          firstName: '',
-          lastName: '',
-          phoneNumber: '',
-          photo: null,
-          address: '',
-          city: '',
-          country: '',
-          jobType: '',
-          email: '',
-          emergencyName: '',
-          emergencyPhone: '',
-          gender: '',
-          height: '',
-          weight: '',
-          age: '',
-          relationship: '',
-          yearsTraining: '',
-          behavioral: '',
-          healthIssues: '',
-          rank: '',
-          smoke: false,
-          surgery: false,
-          alcohol: false,
-          heartDisease: false,
-          hearingProblem: false,
-          visionProblem: false,
-          startDate: '',
-          signature: '',
-        });
-      } else {
-        setError(result.error || 'Something went wrong.');
+      // Handle photo upload to Firebase Storage if a photo is provided
+      if (formData.photo) {
+        const photoRef = ref(storage, `photos/${formData.photo.name}_${Date.now()}`);
+        await uploadBytes(photoRef, formData.photo);
+        photoURL = await getDownloadURL(photoRef);
       }
+
+      // Prepare data for Firestore, excluding the file object
+      const dataToSave = {
+        ...formData,
+        photo: photoURL, // Store the download URL instead of the file
+        timestamp: new Date().toISOString(), // Add a timestamp for record-keeping
+      };
+
+      // Save to Firestore "karate" collection
+      await addDoc(collection(db, 'karate'), dataToSave);
+
+      setSuccess('Registration submitted successfully!');
+      setFormData({
+        firstName: '',
+        lastName: '',
+        phoneNumber: '',
+        photo: null,
+        address: '',
+        city: '',
+        country: '',
+        jobType: '',
+        email: '',
+        emergencyName: '',
+        emergencyPhone: '',
+        gender: '',
+        height: '',
+        weight: '',
+        age: '',
+        relationship: '',
+        yearsTraining: '',
+        behavioral: '',
+        healthIssues: '',
+        rank: '',
+        smoke: false,
+        surgery: false,
+        alcohol: false,
+        heartDisease: false,
+        hearingProblem: false,
+        visionProblem: false,
+        startDate: '',
+        signature: '',
+      });
     } catch (err) {
-      setError('Failed to submit the form.');
+      console.error('Error submitting form:', err);
+      setError('Failed to submit the form. Please try again.');
     }
   };
 
