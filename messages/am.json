@@ -1,0 +1,76 @@
+{
+  "home": {
+    "brandName": "ወርቅ ጂም እና የአካል ብቃት ማዕከል",
+    "nav": {
+      "home": "መነሻ",
+      "workouts": "የአካል ብቃት እንቅስቃሴዎች",
+      "favorites": "ተወዳጆች",
+      "login": "መግባት",
+      "register": "መመዝገብ"
+    },
+    "hero": {
+      "title": "ሰውነትዎን ይለውጡ",
+      "subtitle": "በባለሙያ መመሪያ",
+      "description": "የእርስዎን የአካል ብቃት ደረጃ እና ግቦች የሚያሟሉ በመቶዎች የሚቆጠሩ የባለሙያ የአካል ብቃት ቪዲዮዎችን ይድረሱ።",
+      "startConsultancy": "ምክክር ጀምር",
+      "browseWorkouts": "የአካል ብቃት እንቅስቃሴዎችን ያስሱ"
+    },
+    "popularCategories": "ታዋቂ ምድቦች",
+    "categories": {
+      "karate": "ካራቴ",
+      "aerobics": "ኤሮቢክስ",
+      "gym": "የጂም እንቅስቃሴዎች"
+    },
+    "workouts": "የአካል ብቃት እንቅስቃሴዎች",
+    "viewAll": "ሁሉንም ይመልከቱ",
+    "untitledWorkout": "ርዕስ የሌለው የአካል ብቃት እንቅስቃሴ",
+    "noDescription": "ምንም መግለጫ የለም",
+    "markActive": "ንቁ አድርግ",
+    "markPending": "በመጠባበቅ ላይ አድርግ",
+    "delete": "ሰርዝ",
+    "cta": {
+      "title": "ለመለወጥ ዝግጁ ነዎት?",
+      "description": "በእኛ ፕሮግራሞች የአካል ብቃት ግቦቻቸውን እያሳካ ካሉ በሺዎች ከሚቆጠሩ አባላት ጋር ይቀላቀሉ።",
+      "getStarted": "ዛሬ ጀምር"
+    },
+    "footer": {
+      "brand": "ፊትፍሌክስ",
+      "description": "በባለሙያ መመሪያ እና የአካል ብቃት እቅዶች ያለው የእርስዎ ሙሉ የአካል ብቃት መፍትሄ።",
+      "company": "ድርጅት",
+      "about": "ስለ እኛ",
+      "careers": "ሥራዎች",
+      "blog": "ብሎግ",
+      "support": "ድጋፍ",
+      "help": "የእገዛ ማዕከል",
+      "contact": "ያነጋግሩን",
+      "faq": "ተደጋጋሚ ጥያቄዎች",
+      "legal": "ህጋዊ",
+      "terms": "ውሎች",
+      "privacy": "ግላዊነት",
+      "cookies": "ኩኪዎች",
+      "rights": "ሁሉም መብቶች የተጠበቁ ናቸው።"
+    },
+    "languages": {
+      "english": "እንግሊዝኛ",
+      "amharic": "አማርኛ"
+    }
+  },
+  "auth": {
+    "welcomeBack": "እንኳን ተመልሰው መጡ",
+    "chooseProgram": "የእርስዎን ፕሮግራም ይምረጡ",
+    "emailLabel": "ኢሜይል",
+    "emailPlaceholder": "የእርስዎ@ኢሜይል.com",
+    "passwordLabel": "የይለፍ ቃል",
+    "passwordPlaceholder": "የእርስዎ የይለፍ ቃል",
+    "rememberMe": "እኔን አስታውስ",
+    "forgotPassword": "የይለፍ ቃል ረሱ?",
+    "loginButton": "መግባት",
+    "noAccount": "መለያ የለዎትም?",
+    "signUp": "መመዝገብ",
+    "haveAccount": "መለያ አለዎት?",
+    "login": "መግባት",
+    "registerAerobics": "ወደ ኤሮቢክስ መመዝገብ",
+    "registerGym": "ወደ ጂም መመዝገብ",
+    "registerKarate": "ወደ ካራቴ መመዝገብ"
+  }
+}

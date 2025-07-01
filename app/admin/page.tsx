@@ -20,14 +20,14 @@ import {
   Trash2,
   Clock,
   Info,
+  RefreshCw,
 } from "lucide-react";
 import Link from "next/link";
 import VideoUploadModal from "../../components/VideoUploadModal";
 import RegisterMember from "../../components/RegisterMember";
 import { db } from "../fconfig";
-import { collection, getDocs, deleteDoc, doc, updateDoc, getDoc, Firestore } from "firebase/firestore";
+import { collection, getDocs, deleteDoc, doc, updateDoc, getDoc } from "firebase/firestore";
 
-// Define interface for member data
 interface Member {
   id: string;
   name: string;
@@ -36,16 +36,14 @@ interface Member {
   status: string;
   statusColor: string;
   collectionType: string;
-  [key: string]: any; // Allow additional dynamic fields
+  [key: string]: any;
 }
 
-// Define interface for modal state
 interface MemberDetailsModal {
   isOpen: boolean;
   member: Member | null;
 }
 
-// Define interface for navigation items
 interface NavItem {
   name: string;
   href?: string;
@@ -68,9 +66,9 @@ export default function GymDashboard() {
   });
   const [detailsModal, setDetailsModal] = useState<MemberDetailsModal>({ isOpen: false, member: null });
   const [fetchError, setFetchError] = useState<string | null>(null);
+  const [isLoading, setIsLoading] = useState<boolean>(true);
   const router = useRouter();
 
-  // Define navigation items
   const navItems: NavItem[] = [
     { name: "Dashboard", href: "/admin", icon: BarChart },
     { name: "Members", href: "/admin/members", icon: Users },
@@ -79,83 +77,67 @@ export default function GymDashboard() {
     { name: "Logout", icon: LogOut },
   ];
 
-  // Fetch members from all collections
-  useEffect(() => {
-    const fetchMembers = async () => {
-      try {
-        setFetchError(null); // Reset error state
-        const collections = ["consult", "gym", "karate", "aerobics"];
-        const allMembers: { [key: string]: Member[] } = { consult: [], gym: [], karate: [], aerobics: [] };
+  const fetchMembers = async () => {
+    try {
+      setIsLoading(true);
+      setFetchError(null);
+      
+      const collections = ["consult", "gym", "karate", "aerobics"];
+      const allMembers: { [key: string]: Member[] } = { consult: [], gym: [], karate: [], aerobics: [] };
 
-        for (const collectionName of collections) {
-          const querySnapshot = await getDocs(collection(db as Firestore, collectionName));
-          if (querySnapshot.empty) {
-            console.log(`No documents found in collection: ${collectionName}`);
-          } else {
-            const memberData = querySnapshot.docs.map((doc) => {
-              const data = doc.data();
-              return {
-                id: doc.id,
-                name: data.name || "Unknown",
-                email: data.email || "Unknown",
-                membership: data.membership || "Unknown",
-                status: data.status || "Unknown",
-                statusColor: data.statusColor || "text-gray-500",
-                collectionType: collectionName,
-                ...data, // Include all fields from Firestore
-              };
-            });
-            allMembers[collectionName] = memberData;
-            console.log(`Fetched ${memberData.length} members from ${collectionName}`);
-          }
+      await Promise.all(collections.map(async (collectionName) => {
+        try {
+          const querySnapshot = await getDocs(collection(db, collectionName));
+          const memberData = querySnapshot.docs.map((doc) => {
+            const data = doc.data();
+            return {
+              id: doc.id,
+              name: data.name || "Unknown",
+              email: data.email || "Unknown",
+              membership: data.membership || "Unknown",
+              status: data.status || "Unknown",
+              statusColor: data.statusColor || "text-gray-500",
+              collectionType: collectionName,
+              ...data,
+            };
+          });
+          allMembers[collectionName] = memberData;
+        } catch (error) {
+          console.error(`Error fetching ${collectionName}:`, error);
+          allMembers[collectionName] = [];
         }
+      }));
 
-        setMembers(allMembers);
-      } catch (error) {
-        const errorMessage = `Error fetching members: ${error instanceof Error ? error.message : String(error)}`;
-        console.error(errorMessage);
-        setFetchError(errorMessage);
-      }
-    };
+      setMembers(allMembers);
+    } catch (error) {
+      console.error("Error fetching members:", error);
+      setFetchError("Failed to fetch members. Please try again.");
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  useEffect(() => {
     fetchMembers();
   }, []);
 
-  // Toggle sidebar visibility
+  const refreshData = () => {
+    fetchMembers();
+  };
+
   const toggleSidebar = () => setIsSidebarOpen(!isSidebarOpen);
-
-  // Toggle high contrast mode
   const toggleContrast = () => setIsHighContrast(!isHighContrast);
+  const handleLogout = () => router.push("/");
+  const openUploadModal = () => setIsUploadModalOpen(true);
+  const closeUploadModal = () => setIsUploadModalOpen(false);
+  const openRegisterModal = () => setIsRegisterModalOpen(true);
+  const closeRegisterModal = () => setIsRegisterModalOpen(false);
 
-  // Handle logout
-  const handleLogout = () => {
-    router.push("/");
-  };
-
-  // Open video upload modal
-  const openUploadModal = () => {
-    setIsUploadModalOpen(true);
-  };
-
-  // Close video upload modal
-  const closeUploadModal = () => {
-    setIsUploadModalOpen(false);
-  };
-
-  // Open register member modal
-  const openRegisterModal = () => {
-    setIsRegisterModalOpen(true);
-  };
-
-  // Close register member modal
-  const closeRegisterModal = () => {
-    setIsRegisterModalOpen(false);
-  };
-
-  // Open details modal with fresh data from Firestore
   const openDetailsModal = async (member: Member) => {
     try {
-      const memberRef = doc(db as Firestore, member.collectionType, member.id);
+      const memberRef = doc(db, member.collectionType, member.id);
       const memberSnap = await getDoc(memberRef);
+      
       if (memberSnap.exists()) {
         const data = memberSnap.data();
         const freshMember: Member = {
@@ -166,151 +148,173 @@ export default function GymDashboard() {
           status: data.status || "Unknown",
           statusColor: data.statusColor || "text-gray-500",
           collectionType: member.collectionType,
-          ...data, // Include all fields
+          ...data,
         };
         setDetailsModal({ isOpen: true, member: freshMember });
       } else {
         console.warn(`Member ${member.id} not found in ${member.collectionType}`);
-        setDetailsModal({ isOpen: true, member }); // Fallback to existing member data
+        setDetailsModal({ isOpen: true, member });
       }
     } catch (error) {
-      console.error(`Error fetching member details: ${error instanceof Error ? error.message : String(error)}`);
-      setDetailsModal({ isOpen: true, member }); // Fallback to existing member data
+      console.error("Error fetching member details:", error);
+      setDetailsModal({ isOpen: true, member });
     }
   };
 
-  // Close details modal
   const closeDetailsModal = () => {
     setDetailsModal({ isOpen: false, member: null });
   };
 
-  // Delete member
   const handleDelete = async (id: string, collectionType: string) => {
     try {
-      await deleteDoc(doc(db as Firestore, collectionType, id));
+      await deleteDoc(doc(db, collectionType, id));
       setMembers((prev) => ({
         ...prev,
         [collectionType]: prev[collectionType].filter((member) => member.id !== id),
       }));
     } catch (error) {
       console.error("Error deleting member:", error);
+      setFetchError("Failed to delete member. Please try again.");
     }
   };
 
-  // Update member status to Pending
   const handleSetPending = async (id: string, collectionType: string) => {
     try {
-      const memberRef = doc(db as Firestore, collectionType, id);
-      await updateDoc(memberRef, { status: "Pending", statusColor: "text-yellow-500" });
+      const memberRef = doc(db, collectionType, id);
+      await updateDoc(memberRef, { 
+        status: "Pending", 
+        statusColor: "text-yellow-500" 
+      });
+      
       setMembers((prev) => ({
         ...prev,
         [collectionType]: prev[collectionType].map((member) =>
-          member.id === id ? { ...member, status: "Pending", statusColor: "text-yellow-500" } : member
+          member.id === id ? { 
+            ...member, 
+            status: "Pending", 
+            statusColor: "text-yellow-500" 
+          } : member
         ),
       }));
     } catch (error) {
       console.error("Error updating status:", error);
+      setFetchError("Failed to update member status. Please try again.");
     }
   };
 
-  // Render a single table for a collection
   const renderTable = (collectionName: string, collectionMembers: Member[]) => (
-    <div
-      className={`${
-        isHighContrast ? "bg-gray-800 text-white border-gray-600" : "bg-white text-gray-900 border-gray-200"
-      } rounded-xl shadow-lg p-6 mb-10 transition-colors duration-300 border`}
-    >
-      <h3 className="text-xl font-semibold mb-6 capitalize">{collectionName} Members</h3>
-      {fetchError && (
-        <div className="text-red-500 mb-4">Error: {fetchError}</div>
+    <div className={`${
+      isHighContrast ? "bg-gray-800 text-white border-gray-600" : "bg-white text-gray-900 border-gray-200"
+    } rounded-xl shadow-lg p-6 mb-10 transition-colors duration-300 border`}>
+      <div className="flex justify-between items-center mb-6">
+        <h3 className="text-xl font-semibold capitalize">{collectionName} Members</h3>
+        <button 
+          onClick={refreshData}
+          className={`flex items-center px-3 py-1 rounded-lg text-sm ${
+            isHighContrast 
+              ? "bg-gray-700 hover:bg-gray-600" 
+              : "bg-gray-100 hover:bg-gray-200"
+          }`}
+          disabled={isLoading}
+        >
+          <RefreshCw size={16} className={`mr-1 ${isLoading ? "animate-spin" : ""}`} />
+          Refresh
+        </button>
+      </div>
+      
+      {isLoading && (
+        <div className="text-center py-4">Loading {collectionName} members...</div>
       )}
-      {collectionMembers.length === 0 && !fetchError && (
+      
+      {fetchError && (
+        <div className="text-red-500 mb-4">{fetchError}</div>
+      )}
+      
+      {!isLoading && collectionMembers.length === 0 && !fetchError && (
         <div className="text-gray-500 mb-4">No members found in {collectionName}</div>
       )}
-      {collectionMembers.length > 0 && (
-        <table className="w-full text-left">
-          <thead>
-            <tr
-              className={`border-b ${
+      
+      {!isLoading && collectionMembers.length > 0 && (
+        <div className="overflow-x-auto">
+          <table className="w-full text-left">
+            <thead>
+              <tr className={`border-b ${
                 isHighContrast ? "border-gray-600 text-gray-300" : "border-gray-200 text-gray-600"
-              }`}
-            >
-              <th className="py-4 px-2">Name</th>
-              <th className="py-4 px-2">Email</th>
-              <th className="py-4 px-2">Membership</th>
-              <th className="py-4 px-2">Status</th>
-              <th className="py-4 px-2">Actions</th>
-            </tr>
-          </thead>
-          <tbody>
-            {collectionMembers
-              .filter(
-                (member) =>
+              }`}>
+                <th className="py-4 px-2">Name</th>
+                <th className="py-4 px-2">Email</th>
+                <th className="py-4 px-2">Membership</th>
+                <th className="py-4 px-2">Status</th>
+                <th className="py-4 px-2">Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              {collectionMembers
+                .filter((member) =>
                   member.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
                   member.email.toLowerCase().includes(searchQuery.toLowerCase())
-              )
-              .map((member) => (
-                <tr
-                  key={`${member.id}-${member.collectionType}`}
-                  className={`border-b ${
-                    isHighContrast ? "border-gray-600 hover:bg-gray-700" : "border-gray-200 hover:bg-gray-50"
-                  } transition-colors duration-200`}
-                >
-                  <td className="py-4 px-2">{member.name}</td>
-                  <td className="py-4 px-2">{member.email}</td>
-                  <td className="py-4 px-2">{member.membership}</td>
-                  <td className="py-4 px-2">
-                    <span className={member.statusColor}>{member.status}</span>
-                  </td>
-                  <td className="py-4 px-2 flex space-x-2">
-                    <button
-                      onClick={() => openDetailsModal(member)}
-                      className={`p-2 rounded-lg ${
-                        isHighContrast
-                          ? "bg-gray-600 text-white hover:bg-gray-500"
-                          : "bg-blue-500 text-white hover:bg-blue-600"
-                      } transition-colors duration-200`}
-                      title="View Details"
-                    >
-                      <Info size={16} />
-                    </button>
-                    <button
-                      onClick={() => handleSetPending(member.id, member.collectionType)}
-                      className={`p-2 rounded-lg ${
-                        isHighContrast
-                          ? "bg-gray-600 text-white hover:bg-gray-500"
-                          : "bg-yellow-500 text-white hover:bg-yellow-600"
-                      } transition-colors duration-200`}
-                      title="Set to Pending"
-                    >
-                      <Clock size={16} />
-                    </button>
-                    <button
-                      onClick={() => handleDelete(member.id, member.collectionType)}
-                      className={`p-2 rounded-lg ${
-                        isHighContrast
-                          ? "bg-gray-600 text-white hover:bg-gray-500"
-                          : "bg-red-500 text-white hover:bg-red-600"
-                      } transition-colors duration-200`}
-                      title="Delete"
-                    >
-                      <Trash2 size={16} />
-                    </button>
-                  </td>
-                </tr>
-              ))}
-          </tbody>
-        </table>
+                )
+                .map((member) => (
+                  <tr
+                    key={`${member.id}-${member.collectionType}`}
+                    className={`border-b ${
+                      isHighContrast ? "border-gray-600 hover:bg-gray-700" : "border-gray-200 hover:bg-gray-50"
+                    } transition-colors duration-200`}
+                  >
+                    <td className="py-4 px-2">{member.name}</td>
+                    <td className="py-4 px-2">{member.email}</td>
+                    <td className="py-4 px-2">{member.membership}</td>
+                    <td className="py-4 px-2">
+                      <span className={member.statusColor}>{member.status}</span>
+                    </td>
+                    <td className="py-4 px-2 flex space-x-2">
+                      <button
+                        onClick={() => openDetailsModal(member)}
+                        className={`p-2 rounded-lg ${
+                          isHighContrast
+                            ? "bg-gray-600 text-white hover:bg-gray-500"
+                            : "bg-blue-500 text-white hover:bg-blue-600"
+                        } transition-colors duration-200`}
+                        title="View Details"
+                      >
+                        <Info size={16} />
+                      </button>
+                      <button
+                        onClick={() => handleSetPending(member.id, member.collectionType)}
+                        className={`p-2 rounded-lg ${
+                          isHighContrast
+                            ? "bg-gray-600 text-white hover:bg-gray-500"
+                            : "bg-yellow-500 text-white hover:bg-yellow-600"
+                        } transition-colors duration-200`}
+                        title="Set to Pending"
+                      >
+                        <Clock size={16} />
+                      </button>
+                      <button
+                        onClick={() => handleDelete(member.id, member.collectionType)}
+                        className={`p-2 rounded-lg ${
+                          isHighContrast
+                            ? "bg-gray-600 text-white hover:bg-gray-500"
+                            : "bg-red-500 text-white hover:bg-red-600"
+                        } transition-colors duration-200`}
+                        title="Delete"
+                      >
+                        <Trash2 size={16} />
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+            </tbody>
+          </table>
+        </div>
       )}
     </div>
   );
 
   return (
-    <div
-      className={`flex h-screen ${
-        isHighContrast ? "bg-gray-900 text-white" : "bg-gray-100 text-gray-900"
-      } font-sans transition-colors duration-300`}
-    >
+    <div className={`flex h-screen ${
+      isHighContrast ? "bg-gray-900 text-white" : "bg-gray-100 text-gray-900"
+    } font-sans transition-colors duration-300`}>
       {/* Sidebar */}
       <aside
         className={`fixed inset-y-0 left-0 z-50 w-64 ${
@@ -322,7 +326,7 @@ export default function GymDashboard() {
         <div className="flex items-center justify-between p-5 border-b border-indigo-500/50">
           <div className="flex items-center space-x-3">
             <Dumbbell size={30} className="text-white" />
-            <h1 className="text-xl font-bold tracking-tight">FitFusion Admin</h1>
+            <h1 className="text-xl font-bold tracking-tight">ADMIN DASHBOARED</h1>
           </div>
           <button className="text-white hover:text-indigo-200" onClick={toggleSidebar}>
             <X size={24} />
@@ -383,7 +387,7 @@ export default function GymDashboard() {
             >
               {isSidebarOpen ? <X size={24} /> : <Menu size={24} />}
             </button>
-            <h2 className="text-2xl font-semibold tracking-tight">Fitness Dashboard</h2>
+            <h2 className="text-2xl font-semibold tracking-tight">ADMIN DASHBOARED</h2>
           </div>
           <div className="flex items-center space-x-6">
             <div className="relative">
@@ -503,7 +507,7 @@ export default function GymDashboard() {
               </div>
               <div className="space-y-2">
                 {Object.entries(detailsModal.member)
-                  .filter(([key]) => key !== "id" && key !== "collectionType") // Exclude id and collectionType
+                  .filter(([key]) => key !== "id" && key !== "collectionType")
                   .map(([key, value]) => (
                     <div key={key} className="flex justify-between">
                       <span className="font-medium capitalize">{key}:</span>
@@ -564,7 +568,7 @@ export default function GymDashboard() {
               isHighContrast ? "bg-gray-800 text-white border-gray-600" : "bg-white text-gray-900 border-gray-200"
             } rounded-xl shadow-lg p-6 mb-10 transition-colors duration-300 border`}
           >
-            <h3 className="text-xl font-semibold mb-6">Today’s Workout Schedule</h3>
+            <h3 className="text-xl font-semibold mb-6">Today's Workout Schedule</h3>
             <div
               className={`grid ${
                 isSidebarOpen ? "grid-cols-1 sm:grid-cols-2" : "grid-cols-1 sm:grid-cols-2 lg:grid-cols-3"

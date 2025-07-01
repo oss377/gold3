@@ -1,13 +1,13 @@
-
-"use client";
-
+'use client';
 import { useState, useEffect } from 'react';
-import { useRouter } from 'next/navigation';
+import { useRouter, Link } from '../app/i18n-setup';
+import { useTranslations } from 'next-intl';
 import { FiUser, FiLogIn, FiMenu, FiX, FiHome, FiVideo, FiHeart, FiTrash2, FiClock } from 'react-icons/fi';
 import { db } from '../app/fconfig'; // Adjust the path to your Firebase config
 import { collection, getDocs, deleteDoc, doc, updateDoc } from 'firebase/firestore';
+import Login from '../components/login';
 
-export default function HomeClient() {
+export default function Home() {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [authModalOpen, setAuthModalOpen] = useState(false);
   const [authType, setAuthType] = useState('login');
@@ -17,12 +17,14 @@ export default function HomeClient() {
     gym: [],
   });
   const [loading, setLoading] = useState(true);
+  const [locale, setLocale] = useState('en');
   const router = useRouter();
+  const t = useTranslations('home');
 
   const categories = [
-    { id: 'karate', name: 'Karate', icon: '🏃‍♂️' },
-    { id: 'aerobics', name: 'Aerobics', icon: '💃' },
-    { id: 'gym', name: 'Gym Workouts', icon: '🏋️‍♂️' },
+    { id: 'karate', name: t('categories.karate'), icon: '🏃‍♂️' },
+    { id: 'aerobics', name: t('categories.aerobics'), icon: '💃' },
+    { id: 'gym', name: t('categories.gym'), icon: '🏋️‍♂️' },
   ];
 
   // Fetch workouts from Firebase
@@ -108,38 +110,59 @@ export default function HomeClient() {
     }
   };
 
+  // Handle language change
+  const handleLanguageChange = (newLocale) => {
+    setLocale(newLocale);
+    router.push(router.pathname, { locale: newLocale });
+  };
+
   return (
     <div className="min-h-screen flex flex-col bg-gradient-to-br from-gray-50 to-gray-100">
+      {/* Language Switcher */}
+      <div className="container mx-auto px-4 py-2">
+        <div className="flex justify-end">
+          <select
+            id="language-select"
+            value={locale}
+            onChange={(e) => handleLanguageChange(e.target.value)}
+            className="border rounded p-1 text-gray-700"
+          >
+            <option value="en">{t('languages.english')}</option>
+            <option value="am">{t('languages.amharic')}</option>
+          </select>
+        </div>
+      </div>
+
       {/* Header */}
       <header className="bg-white shadow-sm sticky top-0 z-50">
         <div className="container mx-auto px-4 py-4">
           <div className="flex justify-between items-center">
             <div className="flex items-center">
-              <span className="text-2xl font-bold text-indigo-600">FitFlex</span>
+              <span className="text-2xl font-bold text-indigo-600">{t('brandName')}</span>
             </div>
             <nav className="hidden md:flex items-center space-x-8">
-              <a href="#" className="text-gray-700 hover:text-indigo-600 flex items-center">
-                <FiHome className="mr-1" /> Home
-              </a>
-              <a href="#" className="text-gray-700 hover:text-indigo-600 flex items-center">
-                <FiVideo className="mr-1" /> Workouts
-              </a>
-              <a href="#" className="text-gray-700 hover:text-indigo-600 flex items-center">
-                <FiHeart className="mr-1" /> Favorites
-              </a>
+              <Link href="/" className="text-gray-700 hover:text-indigo-600 flex items-center">
+                <FiHome className="mr-1" /> {t('nav.home')}
+              </Link>
+              <Link href="#" className="text-gray-700 hover:text-indigo-600 flex items-center">
+                <FiVideo className="mr-1" /> {t('nav.workouts')}
+              </Link>
+              <Link href="#" className="text-gray-700 hover:text-indigo-600 flex items-center">
+                <FiHeart className="mr-1" /> {t('nav.favorites')}
+              </Link>
             </nav>
             <div className="hidden md:flex items-center space-x-4">
               <button
                 onClick={() => toggleAuthModal('login')}
                 className="px-4 py-2 text-indigo-600 border border-indigo-600 rounded-lg hover:bg-indigo-50 transition"
               >
-                <FiLogIn className="inline mr-1" /> Login
+                <FiLogIn className="inline mr-1" /> {t('nav.login')}
               </button>
               <button
                 onClick={() => toggleAuthModal('register')}
                 className="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition"
               >
-                <FiUser className="inline mr-1" /> Register
+                <FiUser className="inline mr-1" /> {t('nav.register')}
               </button>
             </div>
             <button
@@ -151,27 +174,27 @@ export default function HomeClient() {
           </div>
           {mobileMenuOpen && (
             <div className="md:hidden mt-4 pb-4 space-y-3">
-              <a href="#" className="block px-4 py-2 text-gray-700 hover:bg-gray-100 rounded">
-                <FiHome className="inline mr-2" /> Home
-              </a>
-              <a href="#" className="block px-4 py-2 text-gray-700 hover:bg-gray-100 rounded">
-                <FiVideo className="inline mr-2" /> Workouts
-              </a>
-              <a href="#" className="block px-4 py-2 text-gray-700 hover:bg-gray-100 rounded">
-                <FiHeart className="inline mr-2" /> Favorites
-              </a>
+              <Link href="/" className="block px-4 py-2 text-gray-700 hover:bg-gray-100 rounded">
+                <FiHome className="inline mr-2" /> {t('nav.home')}
+              </Link>
+              <Link href="#" className="block px-4 py-2 text-gray-700 hover:bg-gray-100 rounded">
+                <FiVideo className="inline mr-2" /> {t('nav.workouts')}
+              </Link>
+              <Link href="#" className="block px-4 py-2 text-gray-700 hover:bg-gray-100 rounded">
+                <FiHeart className="inline mr-2" /> {t('nav.favorites')}
+              </Link>
               <div className="pt-2 border-t border-gray-200">
                 <button
                   onClick={() => toggleAuthModal('login')}
                   className="w-full px-4 py-2 text-left text-indigo-600 hover:bg-indigo-50 rounded"
                 >
-                  <FiLogIn className="inline mr-2" /> Login
+                  <FiLogIn className="inline mr-2" /> {t('nav.login')}
                 </button>
                 <button
                   onClick={() => toggleAuthModal('register')}
                   className="w-full px-4 py-2 text-left mt-2 bg-indigo-600 text-white rounded hover:bg-indigo-700"
                 >
-                  <FiUser className="inline mr-2" /> Register
+                  <FiUser className="inline mr-2" /> {t('nav.register')}
                 </button>
               </div>
             </div>
@@ -183,27 +206,27 @@ export default function HomeClient() {
       <main className="flex-grow container mx-auto px-4 py-8">
         <section className="text-center mb-12">
           <h1 className="text-4xl md:text-5xl font-bold text-gray-900 mb-4">
-            Transform Your Body <br className="hidden md:block" />
-            <span className="text-indigo-600">With Expert Guidance</span>
+            {t('hero.title')} <br className="hidden md:block" />
+            <span className="text-indigo-600">{t('hero.subtitle')}</span>
           </h1>
           <p className="text-xl text-gray-600 max-w-2xl mx-auto mb-8">
-            Access hundreds of professional workout videos tailored to your fitness level and goals.
+            {t('hero.description')}
           </p>
           <div className="flex justify-center space-x-4">
             <button
               onClick={() => router.push('../../consultancy')}
               className="px-6 py-3 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition shadow-lg"
             >
-              Start Consultancy
+              {t('hero.startConsultancy')}
             </button>
             <button className="px-6 py-3 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition">
-              Browse Workouts
+              {t('hero.browseWorkouts')}
             </button>
           </div>
         </section>
 
         <div className="mb-12">
-          <h2 className="text-2xl font-semibold mb-6 text-gray-800">Popular Categories</h2>
+          <h2 className="text-2xl font-semibold mb-6 text-gray-800">{t('popularCategories')}</h2>
           <div className="flex overflow-x-auto pb-2 scrollbar-hide">
             {categories.map((category) => (
               <button
@@ -223,9 +246,9 @@ export default function HomeClient() {
               <div className="flex justify-between items-center mb-6">
                 <h2 className="text-2xl font-semibold text-gray-800 flex items-center">
                   <span className="text-2xl mr-2">{category.icon}</span>
-                  {category.name} Workouts
+                  {category.name} {t('workouts')}
                 </h2>
-                <a href="#" className="text-indigo-600 hover:underline">View All</a>
+                <Link href="#" className="text-indigo-600 hover:underline">{t('viewAll')}</Link>
               </div>
               {loading ? (
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
@@ -249,21 +272,21 @@ export default function HomeClient() {
                     <div key={workout.id} className="bg-white rounded-xl shadow-md overflow-hidden hover:shadow-lg transition">
                       <div className="bg-gray-200 h-48 w-full" style={{ backgroundImage: `url(${workout.thumbnail || '/placeholder.jpg'})`, backgroundSize: 'cover' }}></div>
                       <div className="p-4">
-                        <h3 className="text-lg font-medium text-gray-800">{workout.title || 'Untitled Workout'}</h3>
-                        <p className="text-gray-600 text-sm">{workout.description || 'No description available'}</p>
+                        <h3 className="text-lg font-medium text-gray-800">{workout.title || t('untitledWorkout')}</h3>
+                        <p className="text-gray-600 text-sm">{workout.description || t('noDescription')}</p>
                         <div className="flex justify-between items-center mt-4">
                           <button
                             onClick={() => handleTogglePending(category.id, workout.id, workout.pending || false)}
                             className={`px-3 py-1 rounded-lg ${workout.pending ? 'bg-yellow-500 text-white' : 'bg-gray-200 text-gray-700'} hover:bg-yellow-600 transition`}
                           >
                             <FiClock className="inline mr-1" />
-                            {workout.pending ? 'Mark Active' : 'Mark Pending'}
+                            {workout.pending ? t('markActive') : t('markPending')}
                           </button>
                           <button
                             onClick={() => handleDelete(category.id, workout.id)}
                             className="px-3 py-1 bg-red-500 text-white rounded-lg hover:bg-red-600 transition"
                           >
-                            <FiTrash2 className="inline mr-1" /> Delete
+                            <FiTrash2 className="inline mr-1" /> {t('delete')}
                           </button>
                         </div>
                       </div>
@@ -276,15 +299,15 @@ export default function HomeClient() {
         </div>
 
         <section className="mt-16 bg-indigo-600 rounded-xl p-8 text-center text-white">
-          <h2 className="text-3xl font-bold mb-4">Ready to Transform?</h2>
+          <h2 className="text-3xl font-bold mb-4">{t('cta.title')}</h2>
           <p className="text-xl mb-6 max-w-2xl mx-auto">
-            Join thousands of members achieving their fitness goals with our programs.
+            {t('cta.description')}
           </p>
           <button
             onClick={() => toggleAuthModal('register')}
             className="px-8 py-3 bg-white text-indigo-600 rounded-lg font-bold hover:bg-gray-100 transition shadow-lg"
           >
-            Get Started Today
+            {t('cta.getStarted')}
           </button>
         </section>
       </main>
@@ -294,38 +317,38 @@ export default function HomeClient() {
         <div className="container mx-auto px-4">
           <div className="grid grid-cols-1 md:grid-cols-4 gap-8">
             <div>
-              <h3 className="text-xl font-bold mb-4">FitFlex</h3>
+              <h3 className="text-xl font-bold mb-4">{t('footer.brand')}</h3>
               <p className="text-gray-400">
-                Your complete fitness solution with professional guidance and workout plans.
+                {t('footer.description')}
               </p>
             </div>
             <div>
-              <h4 className="font-semibold mb-4">Company</h4>
+              <h4 className="font-semibold mb-4">{t('footer.company')}</h4>
               <ul className="space-y-2">
-                <li><a href="#" className="text-gray-400 hover:text-white">About Us</a></li>
-                <li><a href="#" className="text-gray-400 hover:text-white">Careers</a></li>
-                <li><a href="#" className="text-gray-400 hover:text-white">Blog</a></li>
+                <li><Link href="#" className="text-gray-400 hover:text-white">{t('footer.about')}</Link></li>
+                <li><Link href="#" className="text-gray-400 hover:text-white">{t('footer.careers')}</Link></li>
+                <li><Link href="#" className="text-gray-400 hover:text-white">{t('footer.blog')}</Link></li>
               </ul>
             </div>
             <div>
-              <h4 className="font-semibold mb-4">Support</h4>
+              <h4 className="font-semibold mb-4">{t('footer.support')}</h4>
               <ul className="space-y-2">
-                <li><a href="#" className="text-gray-400 hover:text-white">Help Center</a></li>
-                <li><a href="#" className="text-gray-400 hover:text-white">Contact Us</a></li>
-                <li><a href="#" className="text-gray-400 hover:text-white">FAQ</a></li>
+                <li><Link href="#" className="text-gray-400 hover:text-white">{t('footer.help')}</Link></li>
+                <li><Link href="#" className="text-gray-400 hover:text-white">{t('footer.contact')}</Link></li>
+                <li><Link href="#" className="text-gray-400 hover:text-white">{t('footer.faq')}</Link></li>
               </ul>
             </div>
             <div>
-              <h4 className="font-semibold mb-4">Legal</h4>
+              <h4 className="font-semibold mb-4">{t('footer.legal')}</h4>
               <ul className="space-y-2">
-                <li><a href="#" className="text-gray-400 hover:text-white">Terms</a></li>
-                <li><a href="#" className="text-gray-400 hover:text-white">Privacy</a></li>
-                <li><a href="#" className="text-gray-400 hover:text-white">Cookies</a></li>
+                <li><Link href="#" className="text-gray-400 hover:text-white">{t('footer.terms')}</Link></li>
+                <li><Link href="#" className="text-gray-400 hover:text-white">{t('footer.privacy')}</Link></li>
+                <li><Link href="#" className="text-gray-400 hover:text-white">{t('footer.cookies')}</Link></li>
               </ul>
             </div>
           </div>
           <div className="border-t border-gray-700 mt-8 pt-8 text-center text-gray-400">
-            <p>© {new Date().getFullYear()} FitFlex. All rights reserved.</p>
+            <p>© {new Date().getFullYear()} {t('footer.brand')}. {t('footer.rights')}</p>
           </div>
         </div>
       </footer>
@@ -336,7 +359,7 @@ export default function HomeClient() {
           <div className="bg-white rounded-xl max-w-md w-full p-6 animate-fade-in">
             <div className="flex justify-between items-center mb-4">
               <h3 className="text-2xl font-bold text-gray-800">
-                {authType === 'login' ? 'Welcome Back' : 'Choose Your Program'}
+                {authType === 'login' ? t('auth.welcomeBack') : t('auth.chooseProgram')}
               </h3>
               <button
                 onClick={() => setAuthModalOpen(false)}
@@ -346,84 +369,40 @@ export default function HomeClient() {
               </button>
             </div>
             {authType === 'login' ? (
-              <form className="space-y-4" onSubmit={handleLogin}>
-                <div>
-                  <label className="block text-gray-700 mb-1">Email</label>
-                  <input
-                    type="email"
-                    name="email"
-                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
-                    placeholder="your@email.com"
-                  />
-                </div>
-                <div>
-                  <label className="block text-gray-700 mb-1">Password</label>
-                  <input
-                    type="password"
-                    name="password"
-                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
-                    placeholder="Your password"
-                  />
-                </div>
-                <div className="flex justify-between items-center">
-                  <label className="flex items-center">
-                    <input type="checkbox" className="rounded text-indigo-600" />
-                    <span className="ml-2 text-gray-700">Remember me</span>
-                  </label>
-                  <a href="#" className="text-indigo-600 hover:underline">Forgot password?</a>
-                </div>
-                <button
-                  type="submit"
-                  className="w-full py-3 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition font-medium"
-                >
-                  Login
-                </button>
-              </form>
+              <Login onSubmit={handleLogin} toggleAuthType={setAuthType} />
             ) : (
               <div className="space-y-3">
                 <button
-                  onClick={() => handleRegisterNavigation('/register/aerobics')}
+                  onClick={() => handleRegisterNavigation('/register/earobics')}
                   className="w-full py-3 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition font-medium"
                 >
-                  Register to Aerobics
+                  {t('auth.registerAerobics')}
                 </button>
                 <button
                   onClick={() => handleRegisterNavigation('/register/gym')}
                   className="w-full py-3 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition font-medium"
                 >
-                  Register to Gym
+                  {t('auth.registerGym')}
                 </button>
                 <button
                   onClick={() => handleRegisterNavigation('/register/karate')}
                   className="w-full py-3 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition font-medium"
                 >
-                  Register to Karate
+                  {t('auth.registerKarate')}
                 </button>
+                <div className="mt-4 text-center text-gray-600">
+                  <p>
+                    {t('auth.haveAccount')}{' '}
+                    <button
+                      onClick={() => setAuthType('login')}
+                      className="text-indigo-600 hover:underline"
+                    >
+                      {t('auth.login')}
+                    </button>
+                  </p>
+                </div>
               </div>
             )}
-            <div className="mt-4 text-center text-gray-600">
-              {authType === 'login' ? (
-                <p>
-                  Don't have an account?{' '}
-                  <button
-                    onClick={() => setAuthType('register')}
-                    className="text-indigo-600 hover:underline"
-                  >
-                    Sign up
-                  </button>
-                </p>
-              ) : (
-                <p>
-                  Already have an account?{' '}
-                  <button
-                    onClick={() => setAuthType('login')}
-                    className="text-indigo-600 hover:underline"
-                  >
-                    Login
-                  </button>
-                </p>
-              )}
-            </div>
           </div>
         </div>
       )}

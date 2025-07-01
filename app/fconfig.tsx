@@ -4,14 +4,15 @@ import { getAuth, Auth } from 'firebase/auth';
 import { getStorage, FirebaseStorage } from 'firebase/storage';
 
 const firebaseConfig = {
-  apiKey: "AIzaSyDLnWumpMzRswx9AkjJOv6Rw3xAhOvqr0c",
-  authDomain: "gold-57e14.firebaseapp.com",
-  projectId: "gold-57e14",
-  storageBucket: "gold-57e14.firebasestorage.app",
-  messagingSenderId: "1026627253984",
-  appId: "1:1026627253984:web:c6e298ef472e640542c285",
-  measurementId: "G-F8W74RCHJ3"
+  apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY || "AIzaSyDLnWumpMzRswx9AkjJOv6Rw3xAhOvqr0c",
+  authDomain: process.env.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN || "gold-57e14.firebaseapp.com",
+  projectId: process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID || "gold-57e14",
+  storageBucket: process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET || "gold-57e14.firebasestorage.app",
+  messagingSenderId: process.env.NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID || "1026627253984",
+  appId: process.env.NEXT_PUBLIC_FIREBASE_APP_ID || "1:1026627253984:web:c6e298ef472e640542c285",
+  measurementId: process.env.NEXT_PUBLIC_FIREBASE_MEASUREMENT_ID || "G-F8W74RCHJ3",
 };
+
 // Validate configuration
 const requiredFields = ['apiKey', 'authDomain', 'projectId', 'appId'];
 for (const field of requiredFields) {
