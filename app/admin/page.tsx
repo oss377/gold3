@@ -1,5 +1,5 @@
 "use client";
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { useRouter } from "next/navigation";
 import {
   Bell,
@@ -25,17 +25,18 @@ import {
 import Link from "next/link";
 import VideoUploadModal from "../../components/VideoUploadModal";
 import RegisterMember from "../../components/RegisterMember";
+import DataFetcher from "../../components/DataFetcher";
 import { db } from "../fconfig";
-import { collection, getDocs, deleteDoc, doc, updateDoc, getDoc } from "firebase/firestore";
+import { deleteDoc, doc, updateDoc, getDoc } from "firebase/firestore";
 
 interface Member {
   id: string;
-  name: string;
-  email: string;
-  membership: string;
-  status: string;
-  statusColor: string;
-  collectionType: string;
+  name: string | undefined;
+  email: string | undefined;
+  membership: string | undefined;
+  status: string | undefined;
+  statusColor: string | undefined;
+  collectionType: string | undefined;
   [key: string]: any;
 }
 
@@ -62,11 +63,15 @@ export default function GymDashboard() {
     consult: [],
     gym: [],
     karate: [],
+    personalTraining: [],
+    registrations: [],
+    videos: [],
     aerobics: [],
   });
   const [detailsModal, setDetailsModal] = useState<MemberDetailsModal>({ isOpen: false, member: null });
   const [fetchError, setFetchError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState<boolean>(true);
+  const [refreshTrigger, setRefreshTrigger] = useState<number>(0);
   const router = useRouter();
 
   const navItems: NavItem[] = [
@@ -77,52 +82,14 @@ export default function GymDashboard() {
     { name: "Logout", icon: LogOut },
   ];
 
-  const fetchMembers = async () => {
-    try {
-      setIsLoading(true);
-      setFetchError(null);
-      
-      const collections = ["consult", "gym", "karate", "aerobics"];
-      const allMembers: { [key: string]: Member[] } = { consult: [], gym: [], karate: [], aerobics: [] };
-
-      await Promise.all(collections.map(async (collectionName) => {
-        try {
-          const querySnapshot = await getDocs(collection(db, collectionName));
-          const memberData = querySnapshot.docs.map((doc) => {
-            const data = doc.data();
-            return {
-              id: doc.id,
-              name: data.name || "Unknown",
-              email: data.email || "Unknown",
-              membership: data.membership || "Unknown",
-              status: data.status || "Unknown",
-              statusColor: data.statusColor || "text-gray-500",
-              collectionType: collectionName,
-              ...data,
-            };
-          });
-          allMembers[collectionName] = memberData;
-        } catch (error) {
-          console.error(`Error fetching ${collectionName}:`, error);
-          allMembers[collectionName] = [];
-        }
-      }));
-
-      setMembers(allMembers);
-    } catch (error) {
-      console.error("Error fetching members:", error);
-      setFetchError("Failed to fetch members. Please try again.");
-    } finally {
-      setIsLoading(false);
-    }
+  const handleDataFetched = (data: { [key: string]: Member[] }, error: string | null) => {
+    setMembers(data);
+    setFetchError(error);
+    setIsLoading(false);
   };
 
-  useEffect(() => {
-    fetchMembers();
-  }, []);
-
   const refreshData = () => {
-    fetchMembers();
+    setRefreshTrigger((prev) => prev + 1);
   };
 
   const toggleSidebar = () => setIsSidebarOpen(!isSidebarOpen);
@@ -135,24 +102,25 @@ export default function GymDashboard() {
 
   const openDetailsModal = async (member: Member) => {
     try {
-      const memberRef = doc(db, member.collectionType, member.id);
+      const collectionType = member.collectionType ?? "unknown";
+      const memberRef = doc(db, collectionType, member.id);
       const memberSnap = await getDoc(memberRef);
-      
+
       if (memberSnap.exists()) {
         const data = memberSnap.data();
         const freshMember: Member = {
           id: memberSnap.id,
-          name: data.name || "Unknown",
-          email: data.email || "Unknown",
-          membership: data.membership || "Unknown",
-          status: data.status || "Unknown",
-          statusColor: data.statusColor || "text-gray-500",
-          collectionType: member.collectionType,
+          name: data.name ?? "Unknown",
+          email: data.email ?? "Unknown",
+          membership: data.membership ?? "Unknown",
+          status: data.status ?? "Unknown",
+          statusColor: data.statusColor ?? "text-gray-500",
+          collectionType: collectionType,
           ...data,
         };
         setDetailsModal({ isOpen: true, member: freshMember });
       } else {
-        console.warn(`Member ${member.id} not found in ${member.collectionType}`);
+        console.warn(`Member ${member.id} not found in ${collectionType}`);
         setDetailsModal({ isOpen: true, member });
       }
     } catch (error) {
@@ -165,12 +133,13 @@ export default function GymDashboard() {
     setDetailsModal({ isOpen: false, member: null });
   };
 
-  const handleDelete = async (id: string, collectionType: string) => {
+  const handleDelete = async (id: string, collectionType: string | undefined) => {
     try {
-      await deleteDoc(doc(db, collectionType, id));
+      const safeCollectionType = collectionType ?? "unknown";
+      await deleteDoc(doc(db, safeCollectionType, id));
       setMembers((prev) => ({
         ...prev,
-        [collectionType]: prev[collectionType].filter((member) => member.id !== id),
+        [safeCollectionType]: prev[safeCollectionType].filter((member) => member.id !== id),
       }));
     } catch (error) {
       console.error("Error deleting member:", error);
@@ -178,22 +147,25 @@ export default function GymDashboard() {
     }
   };
 
-  const handleSetPending = async (id: string, collectionType: string) => {
+  const handleSetPending = async (id: string, collectionType: string | undefined) => {
     try {
-      const memberRef = doc(db, collectionType, id);
-      await updateDoc(memberRef, { 
-        status: "Pending", 
-        statusColor: "text-yellow-500" 
+      const safeCollectionType = collectionType ?? "unknown";
+      const memberRef = doc(db, safeCollectionType, id);
+      await updateDoc(memberRef, {
+        status: "Pending",
+        statusColor: "text-yellow-500",
       });
-      
+
       setMembers((prev) => ({
         ...prev,
-        [collectionType]: prev[collectionType].map((member) =>
-          member.id === id ? { 
-            ...member, 
-            status: "Pending", 
-            statusColor: "text-yellow-500" 
-          } : member
+        [safeCollectionType]: prev[safeCollectionType].map((member) =>
+          member.id === id
+            ? {
+                ...member,
+                status: "Pending",
+                statusColor: "text-yellow-500",
+              }
+            : member
         ),
       }));
     } catch (error) {
@@ -203,17 +175,17 @@ export default function GymDashboard() {
   };
 
   const renderTable = (collectionName: string, collectionMembers: Member[]) => (
-    <div className={`${
-      isHighContrast ? "bg-gray-800 text-white border-gray-600" : "bg-white text-gray-900 border-gray-200"
-    } rounded-xl shadow-lg p-6 mb-10 transition-colors duration-300 border`}>
+    <div
+      className={`${
+        isHighContrast ? "bg-gray-800 text-white border-gray-600" : "bg-white text-gray-900 border-gray-200"
+      } rounded-xl shadow-lg p-6 mb-10 transition-colors duration-300 border`}
+    >
       <div className="flex justify-between items-center mb-6">
         <h3 className="text-xl font-semibold capitalize">{collectionName} Members</h3>
-        <button 
+        <button
           onClick={refreshData}
           className={`flex items-center px-3 py-1 rounded-lg text-sm ${
-            isHighContrast 
-              ? "bg-gray-700 hover:bg-gray-600" 
-              : "bg-gray-100 hover:bg-gray-200"
+            isHighContrast ? "bg-gray-700 hover:bg-gray-600" : "bg-gray-100 hover:bg-gray-200"
           }`}
           disabled={isLoading}
         >
@@ -221,26 +193,24 @@ export default function GymDashboard() {
           Refresh
         </button>
       </div>
-      
-      {isLoading && (
-        <div className="text-center py-4">Loading {collectionName} members...</div>
-      )}
-      
-      {fetchError && (
-        <div className="text-red-500 mb-4">{fetchError}</div>
-      )}
-      
+
+      {isLoading && <div className="text-center py-4">Loading {collectionName} members...</div>}
+
+      {fetchError && <div className="text-red-500 mb-4">{fetchError}</div>}
+
       {!isLoading && collectionMembers.length === 0 && !fetchError && (
         <div className="text-gray-500 mb-4">No members found in {collectionName}</div>
       )}
-      
+
       {!isLoading && collectionMembers.length > 0 && (
         <div className="overflow-x-auto">
           <table className="w-full text-left">
             <thead>
-              <tr className={`border-b ${
-                isHighContrast ? "border-gray-600 text-gray-300" : "border-gray-200 text-gray-600"
-              }`}>
+              <tr
+                className={`border-b ${
+                  isHighContrast ? "border-gray-600 text-gray-300" : "border-gray-200 text-gray-600"
+                }`}
+              >
                 <th className="py-4 px-2">Name</th>
                 <th className="py-4 px-2">Email</th>
                 <th className="py-4 px-2">Membership</th>
@@ -250,22 +220,23 @@ export default function GymDashboard() {
             </thead>
             <tbody>
               {collectionMembers
-                .filter((member) =>
-                  member.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-                  member.email.toLowerCase().includes(searchQuery.toLowerCase())
+                .filter(
+                  (member) =>
+                    (member.name ?? "").toLowerCase().includes(searchQuery.toLowerCase()) ||
+                    (member.email ?? "").toLowerCase().includes(searchQuery.toLowerCase())
                 )
                 .map((member) => (
                   <tr
-                    key={`${member.id}-${member.collectionType}`}
+                    key={`${member.id}-${member.collectionType ?? "unknown"}`}
                     className={`border-b ${
                       isHighContrast ? "border-gray-600 hover:bg-gray-700" : "border-gray-200 hover:bg-gray-50"
                     } transition-colors duration-200`}
                   >
-                    <td className="py-4 px-2">{member.name}</td>
-                    <td className="py-4 px-2">{member.email}</td>
-                    <td className="py-4 px-2">{member.membership}</td>
+                    <td className="py-4 px-2">{member.name ?? "Unknown"}</td>
+                    <td className="py-4 px-2">{member.email ?? "Unknown"}</td>
+                    <td className="py-4 px-2">{member.membership ?? "Unknown"}</td>
                     <td className="py-4 px-2">
-                      <span className={member.statusColor}>{member.status}</span>
+                      <span className={member.statusColor ?? "text-gray-500"}>{member.status ?? "Unknown"}</span>
                     </td>
                     <td className="py-4 px-2 flex space-x-2">
                       <button
@@ -312,9 +283,13 @@ export default function GymDashboard() {
   );
 
   return (
-    <div className={`flex h-screen ${
-      isHighContrast ? "bg-gray-900 text-white" : "bg-gray-100 text-gray-900"
-    } font-sans transition-colors duration-300`}>
+    <div
+      className={`flex h-screen ${
+        isHighContrast ? "bg-gray-900 text-white" : "bg-gray-100 text-gray-900"
+      } font-sans transition-colors duration-300`}
+    >
+      <DataFetcher onDataFetched={handleDataFetched} refreshTrigger={refreshTrigger} />
+
       {/* Sidebar */}
       <aside
         className={`fixed inset-y-0 left-0 z-50 w-64 ${
@@ -326,7 +301,7 @@ export default function GymDashboard() {
         <div className="flex items-center justify-between p-5 border-b border-indigo-500/50">
           <div className="flex items-center space-x-3">
             <Dumbbell size={30} className="text-white" />
-            <h1 className="text-xl font-bold tracking-tight">ADMIN DASHBOARED</h1>
+            <h1 className="text-xl font-bold tracking-tight">ADMIN DASHBOARD</h1>
           </div>
           <button className="text-white hover:text-indigo-200" onClick={toggleSidebar}>
             <X size={24} />
@@ -338,7 +313,7 @@ export default function GymDashboard() {
               <button
                 key={item.name}
                 onClick={handleLogout}
-                className={`flex items-center w-full px-4 py-3 rounded-lg text-sm font-medium transition-all duration-200 ${
+                className={`flex items-center w-64 px-4 py-3 rounded-lg text-sm font-medium transition-all duration-200 ${
                   isHighContrast ? "hover:bg-gray-700 hover:text-white" : "hover:bg-indigo-700 hover:text-white"
                 }`}
               >
@@ -387,7 +362,7 @@ export default function GymDashboard() {
             >
               {isSidebarOpen ? <X size={24} /> : <Menu size={24} />}
             </button>
-            <h2 className="text-2xl font-semibold tracking-tight">ADMIN DASHBOARED</h2>
+            <h2 className="text-2xl font-semibold tracking-tight">ADMIN DASHBOARD</h2>
           </div>
           <div className="flex items-center space-x-6">
             <div className="relative">
@@ -473,18 +448,10 @@ export default function GymDashboard() {
         </header>
 
         {/* Video Upload Modal */}
-        <VideoUploadModal
-          isOpen={isUploadModalOpen}
-          onClose={closeUploadModal}
-          isHighContrast={isHighContrast}
-        />
+        <VideoUploadModal isOpen={isUploadModalOpen} onClose={closeUploadModal} isHighContrast={isHighContrast} />
 
         {/* Register Member Modal */}
-        <RegisterMember
-          isOpen={isRegisterModalOpen}
-          onClose={closeRegisterModal}
-          isHighContrast={isHighContrast}
-        />
+        <RegisterMember isOpen={isRegisterModalOpen} onClose={closeRegisterModal} isHighContrast={isHighContrast} />
 
         {/* Member Details Modal */}
         {detailsModal.isOpen && detailsModal.member && (
@@ -511,7 +478,7 @@ export default function GymDashboard() {
                   .map(([key, value]) => (
                     <div key={key} className="flex justify-between">
                       <span className="font-medium capitalize">{key}:</span>
-                      <span>{typeof value === "object" ? JSON.stringify(value) : String(value)}</span>
+                      <span>{typeof value === "object" ? JSON.stringify(value) : String(value ?? "Unknown")}</span>
                     </div>
                   ))}
               </div>
@@ -594,10 +561,8 @@ export default function GymDashboard() {
           </div>
 
           {/* Members Tables */}
-          {["consult", "gym", "karate", "aerobics"].map((collection) => (
-            <div key={collection}>
-              {renderTable(collection, members[collection])}
-            </div>
+          {["consult", "gym", "karate", "personalTraining", "registrations", "videos", "aerobics"].map((collection) => (
+            <div key={collection}>{renderTable(collection, members[collection])}</div>
           ))}
         </main>
       </div>

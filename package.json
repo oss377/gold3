@@ -11,7 +11,11 @@
   "dependencies": {
     "@headlessui/react": "^2.2.4",
     "@heroicons/react": "^2.2.0",
+    "@types/firebase": "^2.4.32",
     "firebase": "^11.10.0",
+    "firebase-admin": "^13.4.0",
+    "framer-motion": "^12.23.0",
+    "jsonwebtoken": "^9.0.2",
     "lucide-react": "^0.517.0",
     "mongodb": "^6.17.0",
     "mongoose": "^8.16.0",

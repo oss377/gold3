@@ -2,22 +2,10 @@
 import { useState, useCallback } from "react";
 import { useForm } from "react-hook-form";
 import { X, Upload, AlertCircle } from "lucide-react";
-import { initializeApp } from "firebase/app";
 import { getFirestore, collection, addDoc } from "firebase/firestore";
+import { app } from "../app/fconfig";
 
-// Firebase configuration (replace with your actual config)
-const firebaseConfig = {
-  // Your Firebase configuration object here
-  apiKey: "your-api-key",
-  authDomain: "your-auth-domain",
-  projectId: "your-project-id",
-  storageBucket: "your-storage-bucket",
-  messagingSenderId: "your-messaging-sender-id",
-  appId: "your-app-id",
-};
-
-// Initialize Firebase
-const app = initializeApp(firebaseConfig);
+// Initialize Firestore
 const db = getFirestore(app);
 
 // TypeScript interface for video form data
@@ -48,7 +36,6 @@ export default function VideoUploadModal({ isOpen, onClose, isHighContrast }: Vi
     reset,
   } = useForm<VideoFormData>();
 
-  // Handle video upload to Cloudinary and save URL to Firebase
   const onSubmit = useCallback(
     async (data: VideoFormData) => {
       setUploadStatus({ type: "uploading", message: "Uploading videos...", progress: 0 });
@@ -59,10 +46,9 @@ export default function VideoUploadModal({ isOpen, onClose, isHighContrast }: Vi
           const file = files[i];
           const formData = new FormData();
           formData.append("file", file);
-          formData.append("upload_preset", "gold1"); // Replace with your Cloudinary preset
+          formData.append("upload_preset", "gold1");
           formData.append("resource_type", "video");
 
-          // Upload to Cloudinary
           const response = await fetch("https://api.cloudinary.com/v1_1/dnqsoezfo/video/upload", {
             method: "POST",
             body: formData,
@@ -74,7 +60,6 @@ export default function VideoUploadModal({ isOpen, onClose, isHighContrast }: Vi
             throw new Error(result.error?.message || "Upload failed");
           }
 
-          // Save video URL to Firebase
           await addDoc(collection(db, "videos"), {
             title: data.title,
             description: data.description,

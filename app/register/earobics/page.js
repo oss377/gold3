@@ -6,14 +6,18 @@ import { ToastContainer, toast } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
 import { Listbox } from '@headlessui/react';
 import { collection, addDoc } from 'firebase/firestore';
-import { signInAnonymously, onAuthStateChanged } from 'firebase/auth';
+import { signInWithEmailAndPassword, createUserWithEmailAndPassword, onAuthStateChanged } from 'firebase/auth';
 import { db, auth } from '../../../app/fconfig';
 import { useRouter } from 'next/navigation';
 import { ChevronLeftIcon, ChevronRightIcon, CheckCircleIcon } from '@heroicons/react/24/solid';
 
-export default function RegistrationForm() {
+export default function EarobicsRegistrationForm() {
   const router = useRouter();
-  const { register, handleSubmit, formState: { errors }, setValue, watch } = useForm();
+  const { register, handleSubmit, formState: { errors }, setValue, watch } = useForm({
+    defaultValues: {
+      role: 'user'
+    }
+  });
   const [membershipType, setMembershipType] = useState('Basic');
   const [exerciseDays, setExerciseDays] = useState([]);
   const [exerciseTime, setExerciseTime] = useState('Mornings');
@@ -22,6 +26,7 @@ export default function RegistrationForm() {
   const [isLoading, setIsLoading] = useState(true);
   const [formErrors, setFormErrors] = useState({});
   const [currentStep, setCurrentStep] = useState(0);
+  const [isSubmitted, setIsSubmitted] = useState(false);
 
   const membershipOptions = ['Basic', 'Premium', 'Pro'];
   const days = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
@@ -31,7 +36,7 @@ export default function RegistrationForm() {
   const goals = ['Development of muscles', 'Reducing the stress', 'Losing body fat', 'Increasing the motivation', 'Training for an event/specific sport', 'Other'];
 
   const steps = [
-    { name: 'Personal Info', fields: ['firstName', 'lastName', 'birthDate', 'email'] },
+    { name: 'Personal Info', fields: ['firstName', 'lastName', 'birthDate', 'email', 'password', 'role'] },
     { name: 'Contact Info', fields: ['streetAddress', 'streetAddress2', 'city', 'state', 'zipCode', 'phoneNumber', 'emergencyName', 'emergencyPhone'] },
     { name: 'Health Info', fields: ['height', 'weight', 'goalWeight', 'bloodType', 'healthIssues', 'medications', 'smoke', 'surgery', 'alcohol', 'supplements', 'foodTracking', 'proSport', 'exercisePain', 'nightEating', 'breakfastFrequency', 'nutritionRating'] },
     { name: 'Preferences', fields: ['exerciseDays', 'exerciseTime', 'trainingGoals', 'eatingReasons', 'membershipType', 'exerciseDuration', 'startMonth'] },
@@ -40,42 +45,12 @@ export default function RegistrationForm() {
 
   useEffect(() => {
     if (!auth || !db) {
-      console.error('Firebase services not initialized:', { auth, db });
-      setFormErrors({ global: 'Firebase services are not initialized. Please check configuration.' });
+      setFormErrors({ global: 'Firebase services are not initialized.' });
       setIsLoading(false);
       return;
     }
 
     let mounted = true;
-    let retryCount = 0;
-    const maxRetries = 3;
-    const retryDelay = 1000;
-
-    const attemptSignIn = async () => {
-      try {
-        await signInAnonymously(auth);
-        if (mounted) console.log('Signed in anonymously');
-      } catch (err) {
-        if (mounted) {
-          console.error('Anonymous sign-in failed:', {
-            code: err.code || 'N/A',
-            message: err.message,
-            retryCount,
-          });
-          let errorMessage = err.message;
-          if (err.code === 'auth/configuration-not-found') {
-            errorMessage = 'Firebase Authentication is not properly configured.';
-          }
-          if (retryCount < maxRetries) {
-            retryCount++;
-            setTimeout(attemptSignIn, retryDelay);
-          } else {
-            setFormErrors({ global: `Authentication failed: ${errorMessage}` });
-            setIsLoading(false);
-          }
-        }
-      }
-    };
 
     const initializeAuth = async () => {
       try {
@@ -84,9 +59,9 @@ export default function RegistrationForm() {
           if (user) {
             setIsAuthenticated(true);
             setIsLoading(false);
-            console.log('User is signed in:', user.uid);
           } else {
-            attemptSignIn();
+            setIsAuthenticated(false);
+            setIsLoading(false);
           }
         });
         return () => {
@@ -95,7 +70,7 @@ export default function RegistrationForm() {
         };
       } catch (err) {
         if (mounted) {
-          setFormErrors({ global: `Authentication setup failed: ${err.message}` });
+          setFormErrors({ global: `Authentication setup failed: ${err.message || 'Unknown error'}` });
           setIsLoading(false);
         }
       }
@@ -107,36 +82,50 @@ export default function RegistrationForm() {
     };
   }, []);
 
+  const handleAuth = async (email, password, isSignUp = false) => {
+    try {
+      if (isSignUp) {
+        await createUserWithEmailAndPassword(auth, email, password);
+      } else {
+        await signInWithEmailAndPassword(auth, email, password);
+      }
+    } catch (err) {
+      let errorMessage = err.message;
+      if (err.code === 'auth/wrong-password') errorMessage = 'Incorrect password.';
+      if (err.code === 'auth/user-not-found') errorMessage = 'No account found with this email.';
+      if (err.code === 'auth/email-already-in-use') errorMessage = 'Email already in use.';
+      if (err.code === 'auth/invalid-email') errorMessage = 'Invalid email format.';
+      throw new Error(errorMessage);
+    }
+  };
+
   const onSubmit = async (data) => {
     setFormErrors({});
     if (!isAuthenticated || !auth.currentUser) {
-      toast.error('User is not authenticated. Please wait or try again.');
-      setFormErrors({ global: 'User is not authenticated.' });
-      return;
+      try {
+        await handleAuth(data.email, data.password, true);
+      } catch (err) {
+        toast.error(err.message);
+        setFormErrors({ global: err.message });
+        return;
+      }
     }
 
     try {
-      if (!db) throw new Error('Firestore database is not initialized.');
-      const dataToStore = {
+      await addDoc(collection(db, 'earobics'), {
         ...data,
-        membershipType,
         exerciseDays,
         exerciseTime,
+        membershipType,
         startMonth,
-        uid: auth.currentUser.uid,
-        createdAt: new Date().toISOString(),
-      };
-
-      const aerobicsCollectionRef = collection(db, 'aerobics');
-      await addDoc(aerobicsCollectionRef, dataToStore);
-      toast.success('Registration successful!');
-      router.push('/success');
-    } catch (err) {
-      console.error('Firestore error:', {
-        code: err.code || 'N/A',
-        message: err.message || 'Unknown error occurred',
+        role: 'user',
+        userId: auth.currentUser.uid,
+        createdAt: new Date(),
       });
-      let errorMessage = 'An error occurred while saving your registration.';
+      toast.success('Registration successful!');
+      setIsSubmitted(true);
+    } catch (err) {
+      let errorMessage = err.message;
       if (err.code === 'permission-denied') {
         errorMessage = 'Permission denied: Unable to save data.';
       } else if (err.code === 'unavailable') {
@@ -153,8 +142,19 @@ export default function RegistrationForm() {
     if (currentStep < steps.length - 1) {
       const currentFields = steps[currentStep].fields;
       const hasErrors = currentFields.some((field) => errors[field]);
-      if (!hasErrors) setCurrentStep(currentStep + 1);
-      else toast.error('Please fix errors before proceeding.');
+      if (!hasErrors) {
+        if (currentStep === 0 && !isAuthenticated) {
+          const { email, password } = watch();
+          handleAuth(email, password, true).catch((err) => {
+            toast.error(err.message);
+            setFormErrors({ global: err.message });
+          });
+        } else {
+          setCurrentStep(currentStep + 1);
+        }
+      } else {
+        toast.error('Please fix errors before proceeding.');
+      }
     }
   };
 
@@ -162,147 +162,206 @@ export default function RegistrationForm() {
     if (currentStep > 0) setCurrentStep(currentStep - 1);
   };
 
+  const handleGoToHome = () => {
+    window.location.href = 'http://localhost:3000/';
+  };
+
   const formData = watch();
 
   if (isLoading) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-indigo-100 to-gray-200">
+      <div className="min-h-screen flex items-center justify-center bg-gradient-to-r from-blue-100 to-indigo-100">
         <div className="text-2xl font-semibold text-gray-700 animate-pulse">Loading...</div>
       </div>
     );
   }
 
+  if (isSubmitted) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gradient-to-r from-blue-100 to-indigo-100">
+        <div className="max-w-4xl w-full bg-white p-8 rounded-xl shadow-2xl text-center">
+          <h2 className="text-3xl font-extrabold text-gray-900 mb-6">Registration Complete!</h2>
+          <p className="text-gray-600 mb-8">Thank you for registering with Aerobics Fitness. Your information has been successfully saved.</p>
+          <button
+            onClick={handleGoToHome}
+            className="px-6 py-3 rounded-lg text-sm font-medium bg-indigo-600 text-white hover:bg-indigo-700 focus:ring-2 focus:ring-indigo-500 transition-all duration-300"
+          >
+            Go to Home Page
+          </button>
+        </div>
+      </div>
+    );
+  }
+
   return (
-    <div className="min-h-screen bg-gradient-to-br from-indigo-100 to-gray-200 flex items-center justify-center py-12 px-4 sm:px-6 lg:px-8">
-      <div className="max-w-4xl w-full bg-white rounded-2xl shadow-xl p-8 space-y-8">
-        {/* Progress Bar */}
-        <div className="relative">
-          <div className="flex justify-between mb-4">
-            {steps.map((step, index) => (
-              <div key={step.name} className="flex-1 text-center">
-                <div className={`flex items-center justify-center w-10 h-10 mx-auto rounded-full ${index <= currentStep ? 'bg-indigo-600 text-white' : 'bg-gray-300 text-gray-700'}`}>
-                  {index < currentStep ? <CheckCircleIcon className="w-6 h-6" /> : index + 1}
-                </div>
-                <p className={`mt-2 text-sm font-medium ${index <= currentStep ? 'text-indigo-600' : 'text-gray-500'}`}>{step.name}</p>
+    <div className="min-h-screen bg-gradient-to-r from-blue-100 to-indigo-100 flex items-center justify-center py-12 px-4 sm:px-6 lg:px-8">
+      <div className="max-w-4xl w-full bg-white p-8 rounded-xl shadow-2xl">
+        <h2 className="text-3xl font-extrabold text-center text-gray-900 mb-8">Aerobics Fitness Registration</h2>
+
+        {/* Stepper */}
+        <div className="flex justify-between mb-8">
+          {steps.map((step, index) => (
+            <div key={step.name} className="flex-1 text-center">
+              <div className={`w-10 h-10 mx-auto rounded-full flex items-center justify-center ${index <= currentStep ? 'bg-indigo-600 text-white' : 'bg-gray-200 text-gray-600'}`}>
+                {index < currentStep ? <CheckCircleIcon className="w-6 h-6" /> : index + 1}
               </div>
-            ))}
-          </div>
-          <div className="absolute top-5 left-0 right-0 h-1 bg-gray-200">
-            <div className="h-full bg-indigo-600" style={{ width: `${((currentStep + 1) / steps.length) * 100}%` }}></div>
-          </div>
+              <p className="mt-2 text-sm font-medium text-gray-700">{step.name}</p>
+            </div>
+          ))}
         </div>
 
-        <h2 className="text-3xl font-bold text-gray-900 text-center">Aerobics Fitness Registration</h2>
-        {formErrors.global && <p className="text-red-500 text-center bg-red-50 p-3 rounded-md">{formErrors.global}</p>}
+        {formErrors.global && (
+          <p className="text-red-500 text-center mb-6 bg-red-50 p-3 rounded-md">{formErrors.global}</p>
+        )}
 
         <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
           {/* Step 1: Personal Information */}
           {currentStep === 0 && (
-            <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 animate-fade-in">
-              <div>
-                <label className="block text-sm font-medium text-gray-700">First Name</label>
-                <input
-                  {...register('firstName', { required: 'First name is required' })}
-                  className="mt-1 block w-full border border-gray-300 rounded-lg p-3 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition duration-200"
-                />
-                {errors.firstName && <p className="text-red-500 text-xs mt-1">{errors.firstName.message}</p>}
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700">Last Name</label>
-                <input
-                  {...register('lastName', { required: 'Last name is required' })}
-                  className="mt-1 block w-full border border-gray-300 rounded-lg p-3 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition duration-200"
-                />
-                {errors.lastName && <p className="text-red-500 text-xs mt-1">{errors.lastName.message}</p>}
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700">Birth Date</label>
-                <input
-                  type="date"
-                  {...register('birthDate', { required: 'Birth date is required' })}
-                  className="mt-1 block w-full border border-gray-300 rounded-lg p-3 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition duration-200"
-                />
-                {errors.birthDate && <p className="text-red-500 text-xs mt-1">{errors.birthDate.message}</p>}
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700">Email</label>
-                <input
-                  type="email"
-                  {...register('email', { required: 'Email is required', pattern: { value: /^\S+@\S+$/i, message: 'Invalid email' } })}
-                  className="mt-1 block w-full border border-gray-300 rounded-lg p-3 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition duration-200"
-                />
-                {errors.email && <p className="text-red-500 text-xs mt-1">{errors.email.message}</p>}
+            <div className="space-y-6 animate-fade-in">
+              <h3 className="text-xl font-semibold text-gray-800">Personal Information</h3>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700">First Name</label>
+                  <input
+                    {...register('firstName', { required: 'First name is required' })}
+                    className="mt-1 block w-full px-4 py-3 border border-gray-300 rounded-lg shadow-sm focus:ring-indigo-500 focus:border-indigo-500 transition-all duration-300"
+                    placeholder="Enter your first name"
+                  />
+                  {errors.firstName && <p className="text-red-500 text-xs mt-1">{errors.firstName.message}</p>}
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700">Last Name</label>
+                  <input
+                    {...register('lastName', { required: 'Last name is required' })}
+                    className="mt-1 block w-full px-4 py-3 border border-gray-300 rounded-lg shadow-sm focus:ring-indigo-500 focus:border-indigo-500 transition-all duration-300"
+                    placeholder="Enter your last name"
+                  />
+                  {errors.lastName && <p className="text-red-500 text-xs mt-1">{errors.lastName.message}</p>}
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700">Birth Date</label>
+                  <input
+                    type="date"
+                    {...register('birthDate', { required: 'Birth date is required' })}
+                    className="mt-1 block w-full px-4 py-3 border border-gray-300 rounded-lg shadow-sm focus:ring-indigo-500 focus:border-indigo-500 transition-all duration-300"
+                    placeholder="Select your birth date"
+                  />
+                  {errors.birthDate && <p className="text-red-500 text-xs mt-1">{errors.birthDate.message}</p>}
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700">Email</label>
+                  <input
+                    type="email"
+                    {...register('email', { required: 'Email is required', pattern: { value: /^\S+@\S+\.\S+$/, message: 'Invalid email' } })}
+                    className="mt-1 block w-full px-4 py-3 border border-gray-300 rounded-lg shadow-sm focus:ring-indigo-500 focus:border-indigo-500 transition-all duration-300"
+                    placeholder="Enter your email"
+                  />
+                  {errors.email && <p className="text-red-500 text-xs mt-1">{errors.email.message}</p>}
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700">Password</label>
+                  <input
+                    type="password"
+                    {...register('password', { 
+                      required: 'Password is required', 
+                      minLength: { value: 6, message: 'Password must be at least 6 characters' } 
+                    })}
+                    className="mt-1 block w-full px-4 py-3 border border-gray-300 rounded-lg shadow-sm focus:ring-indigo-500 focus:border-indigo-500 transition-all duration-300"
+                    placeholder="Enter your password"
+                  />
+                  {errors.password && <p className="text-red-500 text-xs mt-1">{errors.password.message}</p>}
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700">Role</label>
+                  <input
+                    {...register('role')}
+                    className="mt-1 block w-full px-4 py-3 border border-gray-300 rounded-lg shadow-sm focus:ring-indigo-500 focus:border-indigo-500 transition-all duration-300"
+                    placeholder="User role"
+                    readOnly
+                  />
+                </div>
               </div>
             </div>
           )}
 
           {/* Step 2: Contact Information */}
           {currentStep === 1 && (
-            <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 animate-fade-in">
-              <div>
-                <label className="block text-sm font-medium text-gray-700">Street Address</label>
-                <input
-                  {...register('streetAddress', { required: 'Street address is required' })}
-                  className="mt-1 block w-full border border-gray-300 rounded-lg p-3 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition duration-200"
-                />
-                {errors.streetAddress && <p className="text-red-500 text-xs mt-1">{errors.streetAddress.message}</p>}
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700">Street Address 2</label>
-                <input
-                  {...register('streetAddress2')}
-                  className="mt-1 block w-full border border-gray-300 rounded-lg p-3 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition duration-200"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700">City</label>
-                <input
-                  {...register('city', { required: 'City is required' })}
-                  className="mt-1 block w-full border border-gray-300 rounded-lg p-3 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition duration-200"
-                />
-                {errors.city && <p className="text-red-500 text-xs mt-1">{errors.city.message}</p>}
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700">State/Province</label>
-                <input
-                  {...register('state', { required: 'State is required' })}
-                  className="mt-1 block w-full border border-gray-300 rounded-lg p-3 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition duration-200"
-                />
-                {errors.state && <p className="text-red-500 text-xs mt-1">{errors.state.message}</p>}
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700">Zip Code</label>
-                <input
-                  {...register('zipCode', { required: 'Zip code is required' })}
-                  className="mt-1 block w-full border border-gray-300 rounded-lg p-3 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition duration-200"
-                />
-                {errors.zipCode && <p className="text-red-500 text-xs mt-1">{errors.zipCode.message}</p>}
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700">Phone Number</label>
-                <input
-                  type="tel"
-                  {...register('phoneNumber', { required: 'Phone number is required' })}
-                  className="mt-1 block w-full border border-gray-300 rounded-lg p-3 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition duration-200"
-                />
-                {errors.phoneNumber && <p className="text-red-500 text-xs mt-1">{errors.phoneNumber.message}</p>}
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700">Emergency Contact Name</label>
-                <input
-                  {...register('emergencyName', { required: 'Emergency contact name is required' })}
-                  className="mt-1 block w-full border border-gray-300 rounded-lg p-3 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition duration-200"
-                />
-                {errors.emergencyName && <p className="text-red-500 text-xs mt-1">{errors.emergencyName.message}</p>}
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700">Emergency Contact Phone</label>
-                <input
-                  type="tel"
-                  {...register('emergencyPhone', { required: 'Emergency phone is required' })}
-                  className="mt-1 block w-full border border-gray-300 rounded-lg p-3 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition duration-200"
-                />
-                {errors.emergencyPhone && <p className="text-red-500 text-xs mt-1">{errors.emergencyPhone.message}</p>}
+            <div className="space-y-6 animate-fade-in">
+              <h3 className="text-xl font-semibold text-gray-800">Contact Information</h3>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700">Street Address</label>
+                  <input
+                    {...register('streetAddress', { required: 'Street address is required' })}
+                    className="mt-1 block w-full px-4 py-3 border border-gray-300 rounded-lg shadow-sm focus:ring-indigo-500 focus:border-indigo-500 transition-all duration-300"
+                    placeholder="Enter your street address"
+                  />
+                  {errors.streetAddress && <p className="text-red-500 text-xs mt-1">{errors.streetAddress.message}</p>}
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700">Street Address 2</label>
+                  <input
+                    {...register('streetAddress2')}
+                    className="mt-1 block w-full px-4 py-3 border border-gray-300 rounded-lg shadow-sm focus:ring-indigo-500 focus:border-indigo-500 transition-all duration-300"
+                    placeholder="Apartment, suite, etc. (optional)"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700">City</label>
+                  <input
+                    {...register('city', { required: 'City is required' })}
+                    className="mt-1 block w-full px-4 py-3 border border-gray-300 rounded-lg shadow-sm focus:ring-indigo-500 focus:border-indigo-500 transition-all duration-300"
+                    placeholder="Enter your city"
+                  />
+                  {errors.city && <p className="text-red-500 text-xs mt-1">{errors.city.message}</p>}
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700">State/Province</label>
+                  <input
+                    {...register('state', { required: 'State is required' })}
+                    className="mt-1 block w-full px-4 py-3 border border-gray-300 rounded-lg shadow-sm focus:ring-indigo-500 focus:border-indigo-500 transition-all duration-300"
+                    placeholder="Enter your state"
+                  />
+                  {errors.state && <p className="text-red-500 text-xs mt-1">{errors.state.message}</p>}
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700">Zip Code</label>
+                  <input
+                    {...register('zipCode', { required: 'Zip code is required' })}
+                    className="mt-1 block w-full px-4 py-3 border border-gray-300 rounded-lg shadow-sm focus:ring-indigo-500 focus:border-indigo-500 transition-all duration-300"
+                    placeholder="Enter your zip code"
+                  />
+                  {errors.zipCode && <p className="text-red-500 text-xs mt-1">{errors.zipCode.message}</p>}
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700">Phone Number</label>
+                  <input
+                    type="tel"
+                    {...register('phoneNumber', { required: 'Phone number is required', pattern: { value: /^\+?[\d\s-]{10,}$/, message: 'Invalid phone number' } })}
+                    className="mt-1 block w-full px-4 py-3 border border-gray-300 rounded-lg shadow-sm focus:ring-indigo-500 focus:border-indigo-500 transition-all duration-300"
+                    placeholder="Enter your phone number"
+                  />
+                  {errors.phoneNumber && <p className="text-red-500 text-xs mt-1">{errors.phoneNumber.message}</p>}
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700">Emergency Contact Name</label>
+                  <input
+                    {...register('emergencyName', { required: 'Emergency contact name is required' })}
+                    className="mt-1 block w-full px-4 py-3 border border-gray-300 rounded-lg shadow-sm focus:ring-indigo-500 focus:border-indigo-500 transition-all duration-300"
+                    placeholder="Enter emergency contact name"
+                  />
+                  {errors.emergencyName && <p className="text-red-500 text-xs mt-1">{errors.emergencyName.message}</p>}
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700">Emergency Contact Phone</label>
+                  <input
+                    type="tel"
+                    {...register('emergencyPhone', { required: 'Emergency phone is required', pattern: { value: /^\+?[\d\s-]{10,}$/, message: 'Invalid phone number' } })}
+                    className="mt-1 block w-full px-4 py-3 border border-gray-300 rounded-lg shadow-sm focus:ring-indigo-500 focus:border-indigo-500 transition-all duration-300"
+                    placeholder="Enter emergency contact phone"
+                  />
+                  {errors.emergencyPhone && <p className="text-red-500 text-xs mt-1">{errors.emergencyPhone.message}</p>}
+                </div>
               </div>
             </div>
           )}
@@ -310,13 +369,15 @@ export default function RegistrationForm() {
           {/* Step 3: Health Information */}
           {currentStep === 2 && (
             <div className="space-y-6 animate-fade-in">
-              <div className="grid grid-cols-1 gap-6 sm:grid-cols-3">
+              <h3 className="text-xl font-semibold text-gray-800">Health Information</h3>
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-6">
                 <div>
                   <label className="block text-sm font-medium text-gray-700">Height (cm)</label>
                   <input
                     type="number"
-                    {...register('height', { required: 'Height is required' })}
-                    className="mt-1 block w-full border border-gray-300 rounded-lg p-3 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition duration-200"
+                    {...register('height', { required: 'Height is required', min: { value: 0, message: 'Height must be positive' } })}
+                    className="mt-1 block w-full px-4 py-3 border border-gray-300 rounded-lg shadow-sm focus:ring-indigo-500 focus:border-indigo-500 transition-all duration-300"
+                    placeholder="Enter height in cm"
                   />
                   {errors.height && <p className="text-red-500 text-xs mt-1">{errors.height.message}</p>}
                 </div>
@@ -324,8 +385,9 @@ export default function RegistrationForm() {
                   <label className="block text-sm font-medium text-gray-700">Weight (kg)</label>
                   <input
                     type="number"
-                    {...register('weight', { required: 'Weight is required' })}
-                    className="mt-1 block w-full border border-gray-300 rounded-lg p-3 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition duration-200"
+                    {...register('weight', { required: 'Weight is required', min: { value: 0, message: 'Weight must be positive' } })}
+                    className="mt-1 block w-full px-4 py-3 border border-gray-300 rounded-lg shadow-sm focus:ring-indigo-500 focus:border-indigo-500 transition-all duration-300"
+                    placeholder="Enter weight in kg"
                   />
                   {errors.weight && <p className="text-red-500 text-xs mt-1">{errors.weight.message}</p>}
                 </div>
@@ -333,34 +395,41 @@ export default function RegistrationForm() {
                   <label className="block text-sm font-medium text-gray-700">Goal Weight (kg)</label>
                   <input
                     type="number"
-                    {...register('goalWeight')}
-                    className="mt-1 block w-full border border-gray-300 rounded-lg p-3 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition duration-200"
+                    {...register('goalWeight', { min: { value: 0, message: 'Goal weight must be positive' } })}
+                    className="mt-1 block w-full px-4 py-3 border border-gray-300 rounded-lg shadow-sm focus:ring-indigo-500 focus:border-indigo-500 transition-all duration-300"
+                    placeholder="Enter goal weight"
                   />
+                  {errors.goalWeight && <p className="text-red-500 text-xs mt-1">{errors.goalWeight.message}</p>}
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-gray-700">Blood Type</label>
                   <input
                     {...register('bloodType')}
-                    className="mt-1 block w-full border border-gray-300 rounded-lg p-3 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition duration-200"
+                    className="mt-1 block w-full px-4 py-3 border border-gray-300 rounded-lg shadow-sm focus:ring-indigo-500 focus:border-indigo-500 transition-all duration-300"
+                    placeholder="Enter your blood type"
                   />
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-gray-700">Health Issues</label>
                   <textarea
                     {...register('healthIssues')}
-                    className="mt-1 block w-full border border-gray-300 rounded-lg p-3 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition duration-200"
+                    className="mt-1 block w-full px-4 py-3 border border-gray-300 rounded-lg shadow-sm focus:ring-indigo-500 focus:border-indigo-500 transition-all duration-300"
+                    rows="4"
+                    placeholder="Describe any health issues"
                   />
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-gray-700">Medications</label>
                   <textarea
                     {...register('medications')}
-                    className="mt-1 block w-full border border-gray-300 rounded-lg p-3 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition duration-200"
+                    className="mt-1 block w-full px-4 py-3 border border-gray-300 rounded-lg shadow-sm focus:ring-indigo-500 focus:border-indigo-500 transition-all duration-300"
+                    rows="4"
+                    placeholder="List any medications"
                   />
                 </div>
               </div>
               <div className="space-y-4">
-                <h3 className="text-lg font-medium text-gray-900">Health & Lifestyle</h3>
+                <h3 className="text-lg font-medium text-gray-800">Health & Lifestyle</h3>
                 {[
                   { label: 'Do you smoke?', name: 'smoke' },
                   { label: 'Had surgery in the last year?', name: 'surgery' },
@@ -380,15 +449,16 @@ export default function RegistrationForm() {
                   </div>
                 ))}
               </div>
-              <div className="grid grid-cols-1 gap-6 sm:grid-cols-3">
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-6">
                 <div>
                   <label className="block text-sm font-medium text-gray-700">Night Eating Frequency (0-5)</label>
                   <input
                     type="number"
                     min="0"
                     max="5"
-                    {...register('nightEating', { required: 'Required', min: 0, max: 5 })}
-                    className="mt-1 block w-full border border-gray-300 rounded-lg p-3 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition duration-200"
+                    {...register('nightEating', { required: 'Required', min: { value: 0, message: 'Must be at least 0' }, max: { value: 5, message: 'Must be at most 5' } })}
+                    className="mt-1 block w-full px-4 py-3 border border-gray-300 rounded-lg shadow-sm focus:ring-indigo-500 focus:border-indigo-500 transition-all duration-300"
+                    placeholder="Enter 0-5"
                   />
                   {errors.nightEating && <p className="text-red-500 text-xs mt-1">{errors.nightEating.message}</p>}
                 </div>
@@ -398,8 +468,9 @@ export default function RegistrationForm() {
                     type="number"
                     min="0"
                     max="5"
-                    {...register('breakfastFrequency', { required: 'Required', min: 0, max: 5 })}
-                    className="mt-1 block w-full border border-gray-300 rounded-lg p-3 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition duration-200"
+                    {...register('breakfastFrequency', { required: 'Required', min: { value: 0, message: 'Must be at least 0' }, max: { value: 5, message: 'Must be at most 5' } })}
+                    className="mt-1 block w-full px-4 py-3 border border-gray-300 rounded-lg shadow-sm focus:ring-indigo-500 focus:border-indigo-500 transition-all duration-300"
+                    placeholder="Enter 0-5"
                   />
                   {errors.breakfastFrequency && <p className="text-red-500 text-xs mt-1">{errors.breakfastFrequency.message}</p>}
                 </div>
@@ -409,8 +480,9 @@ export default function RegistrationForm() {
                     type="number"
                     min="0"
                     max="5"
-                    {...register('nutritionRating', { required: 'Required', min: 0, max: 5 })}
-                    className="mt-1 block w-full border border-gray-300 rounded-lg p-3 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition duration-200"
+                    {...register('nutritionRating', { required: 'Required', min: { value: 0, message: 'Must be at least 0' }, max: { value: 5, message: 'Must be at most 5' } })}
+                    className="mt-1 block w-full px-4 py-3 border border-gray-300 rounded-lg shadow-sm focus:ring-indigo-500 focus:border-indigo-500 transition-all duration-300"
+                    placeholder="Enter 0-5"
                   />
                   {errors.nutritionRating && <p className="text-red-500 text-xs mt-1">{errors.nutritionRating.message}</p>}
                 </div>
@@ -421,6 +493,7 @@ export default function RegistrationForm() {
           {/* Step 4: Preferences */}
           {currentStep === 3 && (
             <div className="space-y-6 animate-fade-in">
+              <h3 className="text-xl font-semibold text-gray-800">Preferences</h3>
               <div>
                 <label className="block text-sm font-medium text-gray-700">Exercise Days</label>
                 <div className="flex flex-wrap gap-4 mt-2">
@@ -430,23 +503,23 @@ export default function RegistrationForm() {
                         type="checkbox"
                         value={day}
                         onChange={(e) => {
-                          if (e.target.checked) {
-                            setExerciseDays([...exerciseDays, day]);
-                          } else {
-                            setExerciseDays(exerciseDays.filter((d) => d !== day));
-                          }
+                          const updatedDays = e.target.checked
+                            ? [...exerciseDays, day]
+                            : exerciseDays.filter((d) => d !== day);
+                          setExerciseDays(updatedDays);
+                          setValue('exerciseDays', updatedDays);
                         }}
-                        className="h-5 w-5 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded"
+                        className="form-checkbox h-5 w-5 text-indigo-600"
                       />
-                      <label className="ml-2 text-sm text-gray-700">{day}</label>
+                      <span className="ml-2 text-gray-700">{day}</span>
                     </div>
                   ))}
                 </div>
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700">Preferred Exercise Time</label>
-                <Listbox value={exerciseTime} onChange={setExerciseTime}>
-                  <Listbox.Button className="mt-1 block w-full border border-gray-300 rounded-lg p-3 bg-white text-left focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition duration-200">
+                <Listbox value={exerciseTime} onChange={(value) => { setExerciseTime(value); setValue('exerciseTime', value); }}>
+                  <Listbox.Button className="mt-1 block w-full px-4 py-3 border border-gray-300 rounded-lg shadow-sm focus:ring-indigo-500 focus:border-indigo-500 transition-all duration-300 text-left">
                     {exerciseTime}
                   </Listbox.Button>
                   <Listbox.Options className="mt-1 bg-white border rounded-lg shadow-lg max-h-60 overflow-auto">
@@ -467,9 +540,9 @@ export default function RegistrationForm() {
                         type="checkbox"
                         {...register('trainingGoals')}
                         value={goal}
-                        className="h-5 w-5 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded"
+                        className="form-checkbox h-5 w-5 text-indigo-600"
                       />
-                      <label className="ml-2 text-sm text-gray-700">{goal}</label>
+                      <span className="ml-2 text-gray-700">{goal}</span>
                     </div>
                   ))}
                 </div>
@@ -483,18 +556,18 @@ export default function RegistrationForm() {
                         type="checkbox"
                         {...register('eatingReasons')}
                         value={reason}
-                        className="h-5 w-5 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded"
+                        className="form-checkbox h-5 w-5 text-indigo-600"
                       />
-                      <label className="ml-2 text-sm text-gray-700">{reason}</label>
+                      <span className="ml-2 text-gray-700">{reason}</span>
                     </div>
                   ))}
                 </div>
               </div>
-              <div className="grid grid-cols-1 gap-6 sm:grid-cols-2">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
                 <div>
                   <label className="block text-sm font-medium text-gray-700">Membership Type</label>
-                  <Listbox value={membershipType} onChange={setMembershipType}>
-                    <Listbox.Button className="mt-1 block w-full border border-gray-300 rounded-lg p-3 bg-white text-left focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition duration-200">
+                  <Listbox value={membershipType} onChange={(value) => { setMembershipType(value); setValue('membershipType', value); }}>
+                    <Listbox.Button className="mt-1 block w-full px-4 py-3 border border-gray-300 rounded-lg shadow-sm focus:ring-indigo-500 focus:border-indigo-500 transition-all duration-300 text-left">
                       {membershipType}
                     </Listbox.Button>
                     <Listbox.Options className="mt-1 bg-white border rounded-lg shadow-lg">
@@ -512,8 +585,9 @@ export default function RegistrationForm() {
                     type="number"
                     min="1"
                     max="12"
-                    {...register('exerciseDuration', { required: 'Required', min: 1, max: 12 })}
-                    className="mt-1 block w-full border border-gray-300 rounded-lg p-3 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition duration-200"
+                    {...register('exerciseDuration', { required: 'Required', min: { value: 1, message: 'Must be at least 1' }, max: { value: 12, message: 'Must be at most 12' } })}
+                    className="mt-1 block w-full px-4 py-3 border border-gray-300 rounded-lg shadow-sm focus:ring-indigo-500 focus:border-indigo-500 transition-all duration-300"
+                    placeholder="Enter 1-12"
                   />
                   {errors.exerciseDuration && <p className="text-red-500 text-xs mt-1">{errors.exerciseDuration.message}</p>}
                 </div>
@@ -526,7 +600,7 @@ export default function RegistrationForm() {
                       setValue('startMonth', value);
                     }}
                   >
-                    <Listbox.Button className="mt-1 block w-full border border-gray-300 rounded-lg p-3 bg-white text-left focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition duration-200">
+                    <Listbox.Button className="mt-1 block w-full px-4 py-3 border border-gray-300 rounded-lg shadow-sm focus:ring-indigo-500 focus:border-indigo-500 transition-all duration-300 text-left">
                       {startMonth}
                     </Listbox.Button>
                     <Listbox.Options className="mt-1 bg-white border rounded-lg shadow-lg max-h-60 overflow-auto">
@@ -545,7 +619,7 @@ export default function RegistrationForm() {
           {/* Step 5: Review & Submit */}
           {currentStep === 4 && (
             <div className="space-y-6 animate-fade-in">
-              <h3 className="text-lg font-medium text-gray-900">Review Your Information</h3>
+              <h3 className="text-xl font-semibold text-gray-800">Review Your Information</h3>
               <div className="bg-gray-50 p-4 rounded-lg space-y-4">
                 <div>
                   <h4 className="text-sm font-semibold text-gray-700">Personal Information</h4>
@@ -553,6 +627,7 @@ export default function RegistrationForm() {
                   <p>Last Name: {formData.lastName || 'Not provided'}</p>
                   <p>Birth Date: {formData.birthDate || 'Not provided'}</p>
                   <p>Email: {formData.email || 'Not provided'}</p>
+                  <p>Role: {formData.role || 'user'}</p>
                 </div>
                 <div>
                   <h4 className="text-sm font-semibold text-gray-700">Contact Information</h4>
@@ -600,7 +675,7 @@ export default function RegistrationForm() {
                 <label className="block text-sm font-medium text-gray-700">Signature</label>
                 <input
                   {...register('signature', { required: 'Signature is required' })}
-                  className="mt-1 block w-full border border-gray-300 rounded-lg p-3 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition duration-200"
+                  className="mt-1 block w-full px-4 py-3 border border-gray-300 rounded-lg shadow-sm focus:ring-indigo-500 focus:border-indigo-500 transition-all duration-300"
                   placeholder="Type your full name as signature"
                 />
                 {errors.signature && <p className="text-red-500 text-xs mt-1">{errors.signature.message}</p>}
@@ -609,31 +684,32 @@ export default function RegistrationForm() {
           )}
 
           {/* Navigation Buttons */}
-          <div className="flex justify-between mt-6">
-            {currentStep > 0 && (
-              <button
-                type="button"
-                onClick={prevStep}
-                className="flex items-center px-4 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 transition duration-200"
-              >
-                <ChevronLeftIcon className="w-5 h-5 mr-2" />
-                Previous
-              </button>
-            )}
+          <div className="flex justify-between mt-8">
+            <button
+              type="button"
+              onClick={prevStep}
+              disabled={currentStep === 0}
+              className={`px-6 py-3 rounded-lg text-sm font-medium transition-all duration-300 ${
+                currentStep === 0
+                  ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                  : 'bg-gray-600 text-white hover:bg-gray-700 focus:ring-2 focus:ring-gray-500'
+              }`}
+            >
+              Previous
+            </button>
             {currentStep < steps.length - 1 ? (
               <button
                 type="button"
                 onClick={nextStep}
-                className="flex items-center px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition duration-200 ml-auto"
+                className="px-6 py-3 rounded-lg text-sm font-medium bg-indigo-600 text-white hover:bg-indigo-700 focus:ring-2 focus:ring-indigo-500 transition-all duration-300"
               >
                 Next
-                <ChevronRightIcon className="w-5 h-5 ml-2" />
               </button>
             ) : (
               <button
                 type="submit"
                 disabled={!isAuthenticated}
-                className={`flex items-center px-4 py-2 rounded-lg text-white transition duration-200 ml-auto ${
+                className={`px-6 py-3 rounded-lg text-sm font-medium text-white transition-all duration-300 ${
                   isAuthenticated
                     ? 'bg-indigo-600 hover:bg-indigo-700 focus:ring-2 focus:ring-indigo-500'
                     : 'bg-gray-400 cursor-not-allowed'
@@ -644,8 +720,19 @@ export default function RegistrationForm() {
             )}
           </div>
         </form>
-        <ToastContainer />
+        <ToastContainer position="top-right" autoClose={3000} />
       </div>
+
+      {/* Custom CSS for animations */}
+      <style jsx>{`
+        .animate-fade-in {
+          animation: fadeIn 0.5s ease-in;
+        }
+        @keyframes fadeIn {
+          from { opacity: 0; transform: translateY(10px); }
+          to { opacity: 1; transform: translateY(0); }
+        }
+      `}</style>
     </div>
   );
 }

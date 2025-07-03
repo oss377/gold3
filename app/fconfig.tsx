@@ -1,6 +1,7 @@
+// app/fconfig.tsx
 import { initializeApp, getApps, FirebaseApp } from 'firebase/app';
-import { getFirestore, Firestore } from 'firebase/firestore';
-import { getAuth, Auth } from 'firebase/auth';
+import { getFirestore, Firestore, collection, query, where, getDocs } from 'firebase/firestore';
+import { getAuth, Auth, signInWithEmailAndPassword } from 'firebase/auth';
 import { getStorage, FirebaseStorage } from 'firebase/storage';
 
 const firebaseConfig = {
@@ -38,4 +39,5 @@ try {
   console.error('Firebase initialization failed:', error instanceof Error ? error.message : error);
 }
 
-export { app, db, auth, storage };
+// Export Firestore and Auth functions
+export { app, db, auth, storage, collection, signInWithEmailAndPassword, query, where, getDocs };
