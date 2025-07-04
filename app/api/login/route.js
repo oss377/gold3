@@ -3,10 +3,29 @@ import { getAuth } from 'firebase-admin/auth';
 import { adminAuth, adminDb } from '@/app/firebase-admin';
 import { collection, query, where, getDocs } from 'firebase/firestore';
 
-export async function POST(request: Request) {
+export async function POST(request) {
   try {
-    // Parse request body
-    const { email, idToken } = await request.json();
+    // Check Content-Type header
+    const contentType = request.headers.get('content-type');
+    if (!contentType || !contentType.includes('application/json')) {
+      return NextResponse.json(
+        { error: 'Invalid content type. Expected application/json' },
+        { status: 400 }
+      );
+    }
+
+    // Parse request body safely
+    let email, idToken;
+    try {
+      const body = await request.json();
+      ({ email, idToken } = body);
+    } catch (jsonError) {
+      console.error('JSON parsing error:', jsonError);
+      return NextResponse.json(
+        { error: 'Invalid JSON in request body' },
+        { status: 400 }
+      );
+    }
 
     if (!email || !idToken) {
       return NextResponse.json(
@@ -70,7 +89,7 @@ export async function POST(request: Request) {
 
     return response;
 
-  } catch (error: any) {
+  } catch (error) {
     console.error('Login error:', error);
 
     let errorMessage = 'Login failed';

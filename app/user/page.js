@@ -2,8 +2,6 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import {
-  Bell,
-  MessageSquare,
   Menu,
   X,
   Dumbbell,
@@ -17,6 +15,8 @@ import {
   Stethoscope,
 } from "lucide-react";
 import Link from "next/link";
+import UserNotification from "../../components/UserNotification";
+import Message from "../../components/Messages";
 
 // Navigation items for user dashboard
 const navItems = [
@@ -49,6 +49,12 @@ export default function UserDashboard() {
   // Handle get consultancy button click
   const handleConsultancy = () => {
     router.push("/consultancy");
+  };
+
+  // Handle message icon click
+  const handleMessageClick = () => {
+    console.log("Message icon clicked! Navigating to messages...");
+    router.push("/messages");
   };
 
   return (
@@ -151,48 +157,8 @@ export default function UserDashboard() {
                 } border focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-all duration-200`}
               />
             </div>
-            <div className="relative group">
-              <Bell
-                size={24}
-                className={`${
-                  isHighContrast ? "text-gray-300 hover:text-white" : "text-gray-600 hover:text-indigo-600"
-                } cursor-pointer transition-colors duration-200`}
-              />
-              {notifications > 0 && (
-                <span className="absolute -top-2 -right-2 bg-red-500 text-white text-xs rounded-full h-5 w-5 flex items-center justify-center animate-pulse">
-                  {notifications}
-                </span>
-              )}
-              <div
-                className={`absolute right-0 mt-3 w-64 ${
-                  isHighContrast ? "bg-gray-700 text-white" : "bg-white text-gray-700"
-                } rounded-lg shadow-xl hidden group-hover:block z-10 transition-opacity duration-200`}
-              >
-                <div className="p-3 text-sm border-b">New class schedule added</div>
-                <div className="p-3 text-sm">Trainer feedback received</div>
-              </div>
-            </div>
-            <div className="relative group">
-              <MessageSquare
-                size={24}
-                className={`${
-                  isHighContrast ? "text-gray-300 hover:text-white" : "text-gray-600 hover:text-indigo-600"
-                } cursor-pointer transition-colors duration-200`}
-              />
-              {messages > 0 && (
-                <span className="absolute -top-2 -right-2 bg-blue-500 text-white text-xs rounded-full h-5 w-5 flex items-center justify-center animate-pulse">
-                  {messages}
-                </span>
-              )}
-              <div
-                className={`absolute right-0 mt-3 w-64 ${
-                  isHighContrast ? "bg-gray-700 text-white" : "bg-white text-gray-700"
-                } rounded-lg shadow-xl hidden group-hover:block z-10 transition-opacity duration-200`}
-              >
-                <div className="p-3 text-sm border-b">Message from trainer</div>
-                <div className="p-3 text-sm">Class reminder</div>
-              </div>
-            </div>
+            <UserNotification count={notifications} isHighContrast={isHighContrast} />
+            <Message count={messages} setMessageCount={setMessages} isHighContrast={isHighContrast} onClick={handleMessageClick} />
             <button
               onClick={handleConsultancy}
               className={`flex items-center px-4 py-2 rounded-lg font-medium transition-colors duration-200 ${
