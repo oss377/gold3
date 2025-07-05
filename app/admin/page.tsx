@@ -1,6 +1,7 @@
-"use client";
-import { useState } from "react";
-import { useRouter } from "next/navigation";
+'use client';
+
+import { useState, useContext } from 'react';
+import { useRouter } from 'next/navigation';
 import {
   Dumbbell,
   Users,
@@ -8,21 +9,24 @@ import {
   BarChart,
   Settings,
   LogOut,
-  Sun,
-  Moon,
   Upload,
   UserPlus,
   Menu,
   XCircle,
-} from "lucide-react";
-import Link from "next/link";
-import VideoUploadModal from "../../components/VideoUploadModal";
-import RegisterMember from "../../components/RegisterMember";
-import DataFetcher from "../../components/DataFetcher";
-import Messages from "../../components/Messages";
-import Notifications from "../../components/Notifications";
-import SearchComponent from "../../components/SearchComponent";
-import UploadSchedule from "../../components/UploadSchedule";
+  Sun,
+  Moon,
+  Globe,
+} from 'lucide-react';
+import Link from 'next/link';
+import VideoUploadModal from '../../components/VideoUploadModal';
+import RegisterMember from '../../components/RegisterMember';
+import UploadSchedule from '../../components/UploadSchedule';
+import DataFetcher from '../../components/DataFetcher';
+import Messages from '../../components/Messages';
+import Notifications from '../../components/Notifications';
+import SearchComponent from '../../components/SearchComponent';
+import { ThemeContext } from '../../context/ThemeContext';
+import { LanguageContext } from '../../context/LanguageContext';
 
 interface NavItem {
   name: string;
@@ -34,25 +38,25 @@ export default function GymDashboard() {
   const [isSidebarOpen, setIsSidebarOpen] = useState<boolean>(true);
   const [notifications, setNotifications] = useState<number>(0);
   const [messages, setMessages] = useState<number>(0);
-  const [isHighContrast, setIsHighContrast] = useState<boolean>(false);
-  const [searchQuery, setSearchQuery] = useState<string>("");
+  const [searchQuery, setSearchQuery] = useState<string>('');
   const [isUploadModalOpen, setIsUploadModalOpen] = useState<boolean>(false);
   const [isRegisterModalOpen, setIsRegisterModalOpen] = useState<boolean>(false);
   const [isScheduleModalOpen, setIsScheduleModalOpen] = useState<boolean>(false);
   const [refreshTrigger, setRefreshTrigger] = useState<number>(0);
   const router = useRouter();
+  const { theme, toggleTheme } = useContext(ThemeContext);
+  const { language, toggleLanguage, t } = useContext(LanguageContext);
 
   const navItems: NavItem[] = [
-    { name: "Dashboard", href: "/admin", icon: BarChart },
-    { name: "Members", href: "/admin/members", icon: Users },
-    { name: "Classes", href: "/admin/classes", icon: Calendar },
-    { name: "Settings", href: "/admin/settings", icon: Settings },
-    { name: "Logout", icon: LogOut },
+    { name: t.dashboard || 'Dashboard', href: '/admin', icon: BarChart },
+    { name: t.members || 'Members', href: '/admin/members', icon: Users },
+    { name: t.classes || 'Classes', href: '/admin/classes', icon: Calendar },
+    { name: t.settings || 'Settings', href: '/admin/settings', icon: Settings },
+    { name: t.logout || 'Logout', icon: LogOut },
   ];
 
   const toggleSidebar = () => setIsSidebarOpen(!isSidebarOpen);
-  const toggleContrast = () => setIsHighContrast(!isHighContrast);
-  const handleLogout = () => router.push("/");
+  const handleLogout = () => router.push('/');
   const openUploadModal = () => setIsUploadModalOpen(true);
   const closeUploadModal = () => setIsUploadModalOpen(false);
   const openRegisterModal = () => setIsRegisterModalOpen(true);
@@ -63,209 +67,288 @@ export default function GymDashboard() {
 
   return (
     <div
-      className={`flex h-screen ${
-        isHighContrast ? "bg-gray-900 text-white" : "bg-gray-100 text-gray-900"
-      } font-sans transition-colors duration-300`}
+      className={`flex h-screen font-sans transition-colors duration-300 ${
+        theme === 'light' ? 'bg-zinc-100 text-gray-900' : 'bg-zinc-900 text-white'
+      }`}
     >
       {/* Sidebar */}
       <aside
-        className={`fixed inset-y-0 left-0 z-50 w-64 ${
-          isHighContrast ? "bg-gray-800" : "bg-gradient-to-b from-indigo-800 to-indigo-600"
-        } text-white shadow-2xl transform ${
-          isSidebarOpen ? "translate-x-0" : "-translate-x-full"
-        } transition-transform duration-300 ease-in-out`}
+        className={`fixed inset-y-0 left-0 z-50 w-64 shadow-2xl transform transition-transform duration-300 ease-in-out ${
+          theme === 'light'
+            ? 'bg-gradient-to-b from-blue-100 to-purple-100 text-zinc-800'
+            : 'bg-gradient-to-b from-gray-800 to-gray-900 text-white'
+        } ${isSidebarOpen ? 'translate-x-0' : '-translate-x-full'}`}
       >
-        <div className="flex items-center justify-between p-5 border-b border-indigo-500/50">
+        <div
+          className={`flex items-center justify-between p-5 border-b ${
+            theme === 'light' ? 'border-gray-200' : 'border-gray-700'
+          }`}
+        >
           <div className="flex items-center space-x-3">
-            <Dumbbell size={30} className="text-white" />
-            <h1 className="text-xl font-bold tracking-tight">ADMIN DASHBOARD</h1>
+            <Dumbbell
+              size={30}
+              className={theme === 'light' ? 'text-blue-600' : 'text-yellow-400'}
+            />
+            <h1
+              className={`text-xl font-bold tracking-tight ${
+                theme === 'light' ? 'text-zinc-800' : 'text-white'
+              }`}
+            >
+              {t.adminDashboard || 'ADMIN DASHBOARD'}
+            </h1>
           </div>
-          <button className="text-white hover:text-indigo-200" onClick={toggleSidebar}>
+          <button
+            className={theme === 'light' ? 'text-zinc-700 hover:text-zinc-900' : 'text-white hover:text-gray-200'}
+            onClick={toggleSidebar}
+          >
             <XCircle size={24} />
           </button>
         </div>
         <nav className="mt-8 space-y-2 px-3">
           {navItems.map((item) =>
-            item.name === "Logout" ? (
+            item.name === (t.logout || 'Logout') ? (
               <button
                 key={item.name}
                 onClick={handleLogout}
-                className={`flex items-center w-64 px-4 py-3 rounded-lg text-sm font-medium transition-all duration-200 ${
-                  isHighContrast ? "hover:bg-gray-700 hover:text-white" : "hover:bg-indigo-700 hover:text-white"
+                className={`flex items-center w-full px-4 py-3 rounded-lg text-sm font-medium transition-all duration-200 ${
+                  theme === 'light' ? 'hover:bg-blue-100 hover:text-blue-600' : 'hover:bg-gray-700 hover:text-white'
                 }`}
               >
-                <item.icon size={20} className="mr-3" />
+                <item.icon
+                  size={20}
+                  className={`mr-3 ${theme === 'light' ? 'text-blue-600' : 'text-yellow-400'}`}
+                />
                 <span>{item.name}</span>
               </button>
             ) : (
               <Link
                 key={item.name}
-                href={item.href ?? "#"}
+                href={item.href ?? '#'}
                 className={`flex items-center px-4 py-3 rounded-lg text-sm font-medium transition-all duration-200 ${
-                  isHighContrast ? "hover:bg-gray-700 hover:text-white" : "hover:bg-indigo-700 hover:text-white"
+                  theme === 'light' ? 'hover:bg-blue-100 hover:text-blue-600' : 'hover:bg-gray-700 hover:text-white'
                 }`}
               >
-                <item.icon size={20} className="mr-3" />
+                <item.icon
+                  size={20}
+                  className={`mr-3 ${theme === 'light' ? 'text-blue-600' : 'text-yellow-400'}`}
+                />
                 <span>{item.name}</span>
               </Link>
             )
           )}
           <button
-            onClick={toggleContrast}
+            onClick={toggleTheme}
             className={`flex items-center w-full px-4 py-3 rounded-lg text-sm font-medium transition-all duration-200 ${
-              isHighContrast ? "hover:bg-gray-700" : "hover:bg-indigo-700"
+              theme === 'light' ? 'hover:bg-blue-100 hover:text-blue-600' : 'hover:bg-gray-700 hover:text-white'
             }`}
+            aria-label={theme === 'light' ? 'Switch to dark mode' : 'Switch to light mode'}
           >
-            {isHighContrast ? <Sun size={20} className="mr-3" /> : <Moon size={20} className="mr-3" />}
-            <span>{isHighContrast ? "Light Mode" : "High Contrast"}</span>
+            {theme === 'light' ? (
+              <Moon size={20} className="mr-3 text-blue-600" />
+            ) : (
+              <Sun size={20} className="mr-3 text-yellow-400" />
+            )}
+            <span>{t.darkMode || 'Dark Mode'}</span>
+          </button>
+          <button
+            onClick={toggleLanguage}
+            className={`flex items-center w-full px-4 py-3 rounded-lg text-sm font-medium transition-all duration-200 ${
+              theme === 'light' ? 'hover:bg-blue-100 hover:text-blue-600' : 'hover:bg-gray-700 hover:text-white'
+            }`}
+            aria-label={language === 'en' ? 'Switch to Amharic' : 'Switch to English'}
+          >
+            <Globe size={20} className={`mr-3 ${theme === 'light' ? 'text-blue-600' : 'text-yellow-400'}`}/>
+            <span>{language === 'en' ? 'አማርኛ' : 'English'}</span>
           </button>
         </nav>
       </aside>
 
       {/* Main Content */}
-      <div className={`flex-1 flex flex-col transition-all duration-300 ${isSidebarOpen ? "ml-64" : "ml-0"}`}>
+      <div
+        className={`flex-1 flex flex-col transition-all duration-300 ${isSidebarOpen ? 'ml-64' : 'ml-0'}`}
+      >
         {/* Header */}
         <header
-          className={`${
-            isHighContrast ? "bg-gray-800 text-white" : "bg-white text-gray-900"
-          } shadow-md p-5 flex items-center justify-between sticky top-0 z-40 transition-colors duration-300`}
+          className={`shadow-md p-5 flex items-center justify-between sticky top-0 z-40 transition-colors duration-300 ${
+            theme === 'light'
+              ? 'bg-gradient-to-r from-blue-100 to-purple-100 text-zinc-800'
+              : 'bg-gradient-to-r from-gray-800 to-gray-900 text-white'
+          }`}
         >
           <div className="flex items-center">
             <button
-              className={`mr-4 ${
-                isHighContrast ? "text-gray-300 hover:text-white" : "text-indigo-600 hover:text-indigo-800"
-              }`}
+              className={theme === 'light' ? 'text-blue-600 hover:text-blue-800 mr-4' : 'text-yellow-400 hover:text-yellow-300 mr-4'}
               onClick={toggleSidebar}
             >
               {isSidebarOpen ? <XCircle size={24} /> : <Menu size={24} />}
             </button>
-            <h2 className="text-2xl font-semibold tracking-tight">ADMIN DASHBOARD</h2>
+            <h2
+              className={`text-2xl font-semibold tracking-tight ${
+                theme === 'light' ? 'text-zinc-800' : 'text-white'
+              }`}
+            >
+              {t.adminDashboard || 'ADMIN DASHBOARD'}
+            </h2>
           </div>
           <div className="flex items-center space-x-6">
             <Notifications
-              isHighContrast={isHighContrast}
               notificationCount={notifications}
               setNotificationCount={setNotifications}
+              theme={theme}
+              t={t}
             />
             <Messages
-              isHighContrast={isHighContrast}
               messageCount={messages}
               setMessageCount={setMessages}
+              theme={theme}
+              t={t}
             />
             <button
               onClick={openUploadModal}
               className={`flex items-center px-4 py-2 rounded-lg font-medium transition-colors duration-200 ${
-                isHighContrast ? "bg-gray-600 text-white hover:bg-gray-500" : "bg-indigo-600 text-white hover:bg-indigo-700"
+                theme === 'light' ? 'bg-blue-600 hover:bg-blue-700 text-white' : 'bg-gray-700 hover:bg-gray-600 text-white'
               }`}
             >
               <Upload size={20} className="mr-2" />
-              Upload Video
+              {t.uploadVideo || 'Upload Video'}
             </button>
             <button
               onClick={openRegisterModal}
               className={`flex items-center px-4 py-2 rounded-lg font-medium transition-colors duration-200 ${
-                isHighContrast ? "bg-gray-600 text-white hover:bg-gray-500" : "bg-indigo-600 text-white hover:bg-indigo-700"
+                theme === 'light' ? 'bg-blue-600 hover:bg-blue-700 text-white' : 'bg-gray-700 hover:bg-gray-600 text-white'
               }`}
             >
               <UserPlus size={20} className="mr-2" />
-              Register Member
+              {t.registerMember || 'Register Member'}
             </button>
             <button
               onClick={openScheduleModal}
               className={`flex items-center px-4 py-2 rounded-lg font-medium transition-colors duration-200 ${
-                isHighContrast ? "bg-gray-600 text-white hover:bg-gray-500" : "bg-indigo-600 text-white hover:bg-indigo-700"
+                theme === 'light' ? 'bg-blue-600 hover:bg-blue-700 text-white' : 'bg-gray-700 hover:bg-gray-600 text-white'
               }`}
             >
               <Calendar size={20} className="mr-2" />
-              Upload Schedule
+              {t.uploadSchedule || 'Upload Schedule'}
+            </button>
+            <button
+              onClick={toggleTheme}
+              className={`p-2 rounded-lg transition-all ${
+                theme === 'light' ? 'text-blue-600 hover:bg-blue-200/50' : 'text-yellow-400 hover:bg-gray-700/50'
+              }`}
+              aria-label={theme === 'light' ? 'Switch to dark mode' : 'Switch to light mode'}
+            >
+              {theme === 'light' ? <Moon className="w-5 h-5" /> : <Sun className="w-5 h-5" />}
+            </button>
+            <button
+              onClick={toggleLanguage}
+              className={`p-2 rounded-lg transition-all ${
+                theme === 'light' ? 'text-blue-600 hover:bg-blue-200/50' : 'text-yellow-400 hover:bg-gray-700/50'
+              }`}
+              aria-label={language === 'en' ? 'Switch to Amharic' : 'Switch to English'}
+            >
+              <Globe className="w-5 h-5" />
             </button>
           </div>
         </header>
 
         {/* Video Upload Modal */}
-        <VideoUploadModal isOpen={isUploadModalOpen} onClose={closeUploadModal} isHighContrast={isHighContrast} />
+        <VideoUploadModal isOpen={isUploadModalOpen} onClose={closeUploadModal} theme={theme} t={t} />
 
         {/* Register Member Modal */}
-        <RegisterMember isOpen={isRegisterModalOpen} onClose={closeRegisterModal} isHighContrast={isHighContrast} />
+        <RegisterMember isOpen={isRegisterModalOpen} onClose={closeRegisterModal} theme={theme} t={t} />
 
         {/* Schedule Upload Modal */}
-        <UploadSchedule isOpen={isScheduleModalOpen} onClose={closeScheduleModal} isHighContrast={isHighContrast} />
+        <UploadSchedule isOpen={isScheduleModalOpen} onClose={closeScheduleModal} theme={theme} t={t} />
 
         {/* Main Content Area */}
-        <main className="flex-1 p-8 overflow-y-auto">
+        <main
+          className={`flex-1 p-8 overflow-y-auto ${
+            theme === 'light' ? 'bg-gradient-to-br from-blue-50 to-purple-50 text-gray-900' : 'bg-gradient-to-br from-gray-800 to-gray-900 text-white'
+          }`}
+        >
           {/* Search Component */}
-          <SearchComponent
-            searchQuery={searchQuery}
-            setSearchQuery={setSearchQuery}
-            isHighContrast={isHighContrast}
-          />
+          <SearchComponent searchQuery={searchQuery} setSearchQuery={setSearchQuery} theme={theme} t={t} />
 
           {/* Stats Cards */}
           <div
             className={`grid ${
-              isSidebarOpen ? "grid-cols-1 sm:grid-cols-2 lg:grid-cols-3" : "grid-cols-1 sm:grid-cols-2 lg:grid-cols-4"
+              isSidebarOpen ? 'grid-cols-1 sm:grid-cols-2 lg:grid-cols-3' : 'grid-cols-1 sm:grid-cols-2 lg:grid-cols-4'
             } gap-6 mb-10 transition-all duration-300`}
           >
             {[
-              { title: "Active Members", value: "1,567", change: "+12% this month" },
-              { title: "Classes Today", value: "24", change: "+3 from yesterday" },
-              { title: "New Signups", value: "45", change: "+15% this week" },
-              { title: "Revenue", value: "$8,920", change: "+7% this month" },
+              { title: t.activeMembers || 'Active Members', value: '1,567', change: t.changeMembers || '+12% this month' },
+              { title: t.classesToday || 'Classes Today', value: '24', change: t.changeClasses || '+3 from yesterday' },
+              { title: t.newSignups || 'New Signups', value: '45', change: t.changeSignups || '+15% this week' },
+              { title: t.revenue || 'Revenue', value: '$8,920', change: t.changeRevenue || '+7% this month' },
             ].map((stat, index) => (
               <div
                 key={index}
-                className={`${
-                  isHighContrast ? "bg-gray-800 text-white border-gray-600" : "bg-white text-gray-900 border-gray-200"
-                } rounded-xl shadow-lg p-6 hover:shadow-xl transform hover:-translate-y-1 transition-all duration-300 border`}
+                className={`rounded-xl shadow-lg p-6 hover:shadow-xl transform hover:-translate-y-1 transition-all duration-300 border ${
+                  theme === 'light'
+                    ? 'bg-white text-gray-900 border-gray-200'
+                    : 'bg-gray-800 text-white border-gray-700'
+                }`}
               >
-                <h3 className="text-lg font-semibold">{stat.title}</h3>
+                <h3 className={`text-lg font-semibold ${theme === 'light' ? 'text-zinc-800' : 'text-white'}`}>
+                  {stat.title}
+                </h3>
                 <p
-                  className={`text-3xl font-bold mt-2 ${isHighContrast ? "text-indigo-300" : "text-indigo-600"}`}
+                  className={`text-3xl font-bold mt-2 ${
+                    theme === 'light' ? 'text-blue-600' : 'text-yellow-400'
+                  }`}
                 >
                   {stat.value}
                 </p>
-                <p className="text-sm text-gray-500 mt-1">{stat.change}</p>
+                <p className={`text-sm mt-1 ${theme === 'light' ? 'text-gray-500' : 'text-gray-300'}`}>
+                  {stat.change}
+                </p>
               </div>
             ))}
           </div>
 
           {/* Workout Schedule */}
           <div
-            className={`${
-              isHighContrast ? "bg-gray-800 text-white border-gray-600" : "bg-white text-gray-900 border-gray-200"
-            } rounded-xl shadow-lg p-6 mb-10 transition-colors duration-300 border`}
+            className={`rounded-xl shadow-lg p-6 mb-10 border ${
+              theme === 'light' ? 'bg-white text-gray-900 border-gray-200' : 'bg-gray-800 text-white border-gray-700'
+            }`}
           >
-            <h3 className="text-xl font-semibold mb-6">Today's Workout Schedule</h3>
+            <h3 className={`text-xl font-semibold mb-6 ${theme === 'light' ? 'text-zinc-800' : 'text-white'}`}>
+              {t.todaysSchedule || 'Today\'s Workout Schedule'}
+            </h3>
             <div
               className={`grid ${
-                isSidebarOpen ? "grid-cols-1 sm:grid-cols-2" : "grid-cols-1 sm:grid-cols-2 lg:grid-cols-3"
+                isSidebarOpen ? 'grid-cols-1 sm:grid-cols-2' : 'grid-cols-1 sm:grid-cols-2 lg:grid-cols-3'
               } gap-4 transition-all duration-300`}
             >
               {[
-                { title: "Yoga Class", time: "9:00 AM - 10:00 AM", instructor: "Sarah Johnson" },
-                { title: "Strength Training", time: "11:00 AM - 12:00 PM", instructor: "Mike Brown" },
-                { title: "Spin Class", time: "6:00 PM - 7:00 PM", instructor: "Emily Davis" },
+                { title: t.yogaClass || 'Yoga Class', time: '9:00 AM - 10:00 AM', instructor: t.instructorSarah || 'Sarah Johnson' },
+                { title: t.strengthTraining || 'Strength Training', time: '11:00 AM - 12:00 PM', instructor: t.instructorMike || 'Mike Brown' },
+                { title: t.spinClass || 'Spin Class', time: '6:00 PM - 7:00 PM', instructor: t.instructorEmily || 'Emily Davis' },
               ].map((schedule, index) => (
                 <div
                   key={index}
-                  className={`${
-                    isHighContrast ? "border-gray-600" : "border-gray-200"
-                  } border rounded-lg p-5 hover:bg-opacity-10 hover:bg-indigo-500 transition-all duration-200`}
+                  className={`border rounded-lg p-5 transition-all duration-200 ${
+                    theme === 'light'
+                      ? 'border-gray-200 hover: bg-blue-50'
+                      : 'border-gray-600 hover:bg-gray-700'
+                  }`}
                 >
-                  <h4 className="font-semibold text-lg">{schedule.title}</h4>
-                  <p className="text-sm text-gray-500">{schedule.time}</p>
-                  <p className="text-sm text-gray-600">Instructor: {schedule.instructor}</p>
+                  <h4 className={`font-semibold text-lg ${theme === 'light' ? 'text-zinc-800' : 'text-white'}`}>
+                    {schedule.title}
+                  </h4>
+                  <p className={`text-sm ${theme === 'light' ? 'text-gray-500' : 'text-gray-300'}`}>
+                    {schedule.time}
+                  </p>
+                  <p className={`text-sm ${theme === 'light' ? 'text-gray-600' : 'text-gray-200'}`}>
+                    {t.instructor || 'Instructor'}: {schedule.instructor}
+                  </p>
                 </div>
               ))}
             </div>
           </div>
 
           {/* Member Tables */}
-          <DataFetcher
-            refreshTrigger={refreshTrigger}
-            searchQuery={searchQuery}
-            isHighContrast={isHighContrast}
-          />
+          <DataFetcher refreshTrigger={refreshTrigger} searchQuery={searchQuery} theme={theme} t={t} />
         </main>
       </div>
     </div>

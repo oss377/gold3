@@ -1,109 +1,110 @@
 "use client";
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useContext } from 'react';
 import { useForm } from 'react-hook-form';
 import { ToastContainer, toast } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
-import { Listbox } from '@headlessui/react';
 import { collection, addDoc } from 'firebase/firestore';
 import { signInWithEmailAndPassword, createUserWithEmailAndPassword, onAuthStateChanged } from 'firebase/auth';
 import { db, auth } from '../../../app/fconfig';
 import { useRouter } from 'next/navigation';
 import { ChevronLeftIcon, ChevronRightIcon, CheckCircleIcon } from '@heroicons/react/24/solid';
+import { ThemeContext } from '../../../context/ThemeContext';
+import { LanguageContext } from '../../../context/LanguageContext';
 
-// Cloudinary configuration
-const CLOUDINARY_UPLOAD_PRESET = 'promotionvideo';
-const CLOUDINARY_CLOUD_NAME = 'dkifgcmpy';
-const CLOUDINARY_FOLDER = 'earobics_photos';
+// Cloudinary configuration (use environment variables for security)
+const CLOUDINARY_UPLOAD_PRESET = process.env.NEXT_PUBLIC_CLOUDINARY_UPLOAD_PRESET || 'promotionvideo';
+const CLOUDINARY_CLOUD_NAME = process.env.NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME || 'dkifgcmpy';
+const CLOUDINARY_FOLDER = process.env.NEXT_PUBLIC_CLOUDINARY_FOLDER || 'video/promotionvideo';
 
-export default function EarobicsRegistrationForm() {
+export default function GymRegistrationForm() {
   const router = useRouter();
+  const { t } = useContext(LanguageContext);
+  const context = useContext(ThemeContext);
+  const { theme } = context || { theme: 'light' }; // Fallback to light theme
   const { register, handleSubmit, formState: { errors }, setValue, watch } = useForm({
     defaultValues: {
-      role: 'user'
+      firstName: '',
+      lastName: '',
+      phoneNumber: '',
+      photo: null,
+      address: '',
+      city: '',
+      country: '',
+      jobType: '',
+      email: '',
+      password: '',
+      gender: '',
+      height: '',
+      weight: '',
+      age: '',
+      bmi: '',
+      bloodType: '',
+      goalWeight: '',
+      emergencyName: '',
+      emergencyPhone: '',
+      relationship: '',
+      medicalConditions: '',
+      hasMedicalConditions: false,
+      membershipType: '',
+      startDate: '',
+      signature: '',
+      role: 'user',
     }
   });
-  const [membershipType, setMembershipType] = useState('Basic');
-  const [exerciseDays, setExerciseDays] = useState([]);
-  const [exerciseTime, setExerciseTime] = useState('Mornings');
-  const [startMonth, setStartMonth] = useState('September');
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [formErrors, setFormErrors] = useState({});
   const [currentStep, setCurrentStep] = useState(0);
   const [isSubmitted, setIsSubmitted] = useState(false);
-  const [photo, setPhoto] = useState(null);
-  const [bmi, setBmi] = useState(null);
   const [isUploading, setIsUploading] = useState(false);
-
-  const membershipOptions = ['Basic', 'Premium', 'Pro'];
-  const days = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
-  const times = ['Early Mornings', 'Mornings', 'Early Afternoons', 'Afternoons', 'Evenings'];
-  const months = ['September', 'October', 'November', 'December', 'January', 'February', 'March', 'April', 'May', 'June', 'July', 'August'];
-  const reasons = ['Stress', 'Depression', 'Boredom', 'Happiness', 'Habit', 'Annoyance'];
-  const goals = ['Development of muscles', 'Reducing the stress', 'Losing body fat', 'Increasing the motivation', 'Training for an event/specific sport', 'Other'];
+  const [photoPreview, setPhotoPreview] = useState(null);
 
   const steps = [
-    { name: 'Personal Info', fields: ['firstName', 'lastName', 'birthDate', 'email', 'password', 'role'] },
-    { name: 'Contact Info', fields: ['streetAddress', 'streetAddress2', 'city', 'state', 'zipCode', 'phoneNumber', 'emergencyName', 'emergencyPhone'] },
-    { name: 'Health Info', fields: ['height', 'weight', 'goalWeight', 'bloodType', 'healthIssues', 'medications', 'smoke', 'surgery', 'alcohol', 'supplements', 'foodTracking', 'proSport', 'exercisePain', 'nightEating', 'breakfastFrequency', 'nutritionRating', 'photo'] },
-    { name: 'Preferences', fields: ['exerciseDays', 'exerciseTime', 'trainingGoals', 'eatingReasons', 'membershipType', 'exerciseDuration', 'startMonth'] },
-    { name: 'Review & Submit', fields: ['signature'] },
+    { name: t.personalInfo || 'Personal Info', fields: ['firstName', 'lastName', 'phoneNumber', 'photo', 'address', 'city', 'country', 'jobType', 'email', 'password', 'gender'] },
+    { name: t.healthInfo || 'Health Info', fields: ['height', 'weight', 'age', 'bmi', 'bloodType', 'goalWeight'] },
+    { name: t.emergencyContact || 'Emergency Contact', fields: ['emergencyName', 'emergencyPhone', 'relationship', 'hasMedicalConditions', 'medicalConditions'] },
+    { name: t.membership || 'Membership', fields: ['membershipType', 'startDate', 'signature'] },
+    { name: t.review || 'Review', fields: [] },
   ];
+
+  // Watch height and weight for BMI calculation
+  const height = watch('height');
+  const weight = watch('weight');
+
+  useEffect(() => {
+    if (height && weight && !isNaN(height) && !isNaN(weight) && height > 0 && weight > 0) {
+      const heightInMeters = parseFloat(height) / 100;
+      const weightInKg = parseFloat(weight);
+      const bmi = (weightInKg / (heightInMeters * heightInMeters)).toFixed(2);
+      setValue('bmi', bmi);
+    } else {
+      setValue('bmi', '');
+    }
+  }, [height, weight, setValue]);
 
   useEffect(() => {
     if (!auth || !db) {
-      setFormErrors({ global: 'Firebase services are not initialized.' });
+      setFormErrors({ global: t.firebaseError || 'Firebase services are not initialized.' });
       setIsLoading(false);
       return;
     }
 
-    let mounted = true;
-
-    const initializeAuth = async () => {
-      try {
-        const unsubscribe = onAuthStateChanged(auth, (user) => {
-          if (!mounted) return;
-          if (user) {
-            setIsAuthenticated(true);
-            setIsLoading(false);
-          } else {
-            setIsAuthenticated(false);
-            setIsLoading(false);
-          }
-        });
-        return () => {
-          mounted = false;
-          unsubscribe();
-        };
-      } catch (err) {
-        if (mounted) {
-          setFormErrors({ global: `Authentication setup failed: ${err.message || 'Unknown error'}` });
-          setIsLoading(false);
-        }
+    const unsubscribe = onAuthStateChanged(auth, (user) => {
+      setIsAuthenticated(!!user);
+      setIsLoading(false);
+    }, (error) => {
+      console.error('Auth state error:', error);
+      if (error.code === 'auth/invalid-api-key') {
+        setFormErrors({ global: t.firebaseApiKeyError || 'Invalid Firebase API key. Please contact support.' });
+      } else {
+        setFormErrors({ global: t.authError || 'Authentication error occurred.' });
       }
-    };
+      setIsLoading(false);
+    });
 
-    initializeAuth();
-    return () => {
-      mounted = false;
-    };
-  }, []);
-
-  // Calculate BMI when height or weight changes
-  useEffect(() => {
-    const height = watch('height');
-    const weight = watch('weight');
-    if (height && weight && height > 0 && weight > 0) {
-      const heightInMeters = height / 100;
-      const calculatedBmi = (weight / (heightInMeters * heightInMeters)).toFixed(2);
-      setBmi(calculatedBmi);
-      setValue('bmi', calculatedBmi);
-    } else {
-      setBmi(null);
-      setValue('bmi', null);
-    }
-  }, [watch('height'), watch('weight'), setValue]);
+    return () => unsubscribe();
+  }, [t]);
 
   const handleAuth = async (email, password, isSignUp = false) => {
     try {
@@ -114,34 +115,30 @@ export default function EarobicsRegistrationForm() {
       }
     } catch (err) {
       let errorMessage = err.message;
-      if (err.code === 'auth/wrong-password') errorMessage = 'Incorrect password.';
-      if (err.code === 'auth/user-not-found') errorMessage = 'No account found with this email.';
-      if (err.code === 'auth/email-already-in-use') errorMessage = 'Email already in use.';
-      if (err.code === 'auth/invalid-email') errorMessage = 'Invalid email format.';
+      if (err.code === 'auth/wrong-password') errorMessage = t.wrongPassword || 'Incorrect password.';
+      if (err.code === 'auth/user-not-found') errorMessage = t.userNotFound || 'No account found with this email. Please sign up.';
+      if (err.code === 'auth/email-already-in-use') errorMessage = t.emailInUse || 'Email already in use.';
+      if (err.code === 'auth/invalid-email') errorMessage = t.invalidEmail || 'Invalid email format.';
+      if (err.code === 'auth/weak-password') errorMessage = t.weakPassword || 'Password must be at least 6 characters.';
+      if (err.code === 'auth/invalid-api-key') errorMessage = t.firebaseApiKeyError || 'Invalid Firebase API key. Please contact support.';
       throw new Error(errorMessage);
     }
   };
 
-  const handlePhotoChange = (e) => {
-    const file = e.target.files[0];
-    if (file) {
-      if (file.size > 5 * 1024 * 1024) {
-        toast.error('Photo size must be less than 5MB');
-        return;
-      }
-      if (!['image/jpeg', 'image/png'].includes(file.type)) {
-        toast.error('Only JPEG or PNG images are allowed');
-        return;
-      }
-      setPhoto(file);
-      setValue('photo', file.name);
-    }
-  };
-
   const uploadToCloudinary = async (file) => {
+    if (!file) return null;
+    const maxSize = 5 * 1024 * 1024; // 5MB
+    if (file.size > maxSize) {
+      toast.error(t.fileSizeError || 'File size exceeds 5MB limit.');
+      return null;
+    }
+    if (!file.type.startsWith('image/')) {
+      toast.error(t.fileTypeError || 'Please upload a valid image file.');
+      return null;
+    }
     setIsUploading(true);
     try {
-      let formData = new FormData();
+      const formData = new FormData();
       formData.append('file', file);
       formData.append('upload_preset', CLOUDINARY_UPLOAD_PRESET);
       formData.append('folder', CLOUDINARY_FOLDER);
@@ -153,88 +150,98 @@ export default function EarobicsRegistrationForm() {
           body: formData,
         }
       );
-
       const responseJson = await response.json();
       setIsUploading(false);
-
       if (responseJson.secure_url) {
         return responseJson.secure_url;
       } else {
-        toast.error('Failed to upload image.');
+        toast.error(t.uploadError || 'Failed to upload image.');
         return null;
       }
     } catch (error) {
       setIsUploading(false);
-      toast.error('Failed to upload image.');
+      toast.error(t.uploadError || 'Failed to upload image: ' + error.message);
       return null;
+    }
+  };
+
+  const handlePhotoChange = (e) => {
+    const file = e.target.files[0];
+    if (file) {
+      setValue('photo', e.target.files);
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        setPhotoPreview(reader.result);
+      };
+      reader.readAsDataURL(file);
+    } else {
+      setPhotoPreview(null);
     }
   };
 
   const onSubmit = async (data) => {
     setFormErrors({});
-    if (!isAuthenticated || !auth.currentUser) {
-      try {
-        await handleAuth(data.email, data.password, true);
-      } catch (err) {
-        toast.error(err.message);
-        setFormErrors({ global: err.message });
-        return;
-      }
-    }
-
     try {
-      let photoUrl = null;
-      if (photo) {
-        photoUrl = await uploadToCloudinary(photo);
-        if (!photoUrl) {
-          throw new Error('Image upload failed.');
+      if (!isAuthenticated) {
+        await handleAuth(data.email, data.password, true);
+        if (!auth.currentUser) {
+          throw new Error(t.authError || 'Authentication failed. Please try again.');
         }
       }
 
-      await addDoc(collection(db, 'earobics'), {
+      if (!db) throw new Error(t.firestoreError || 'Firestore database is not initialized.');
+
+      let photoURL = '';
+      if (data.photo && data.photo[0]) {
+        photoURL = await uploadToCloudinary(data.photo[0]);
+        if (!photoURL) {
+          throw new Error(t.uploadError || 'Image upload failed.');
+        }
+      }
+
+      await addDoc(collection(db, 'gym'), {
         ...data,
-        bmi,
-        photoUrl,
-        exerciseDays,
-        exerciseTime,
-        membershipType,
-        startMonth,
+        photo: null,
+        photoURL,
         role: 'user',
         userId: auth.currentUser.uid,
         createdAt: new Date(),
       });
-      toast.success('Registration successful!');
+      toast.success(t.successMessage || 'Registration successful!');
       setIsSubmitted(true);
     } catch (err) {
-      let errorMessage = err.message;
+      let errorMessage = err.message || t.unexpectedError || 'An unexpected error occurred.';
       if (err.code === 'permission-denied') {
-        errorMessage = 'Permission denied: Unable to save data.';
+        errorMessage = t.permissionError || 'Permission denied: Unable to save data.';
       } else if (err.code === 'unavailable') {
-        errorMessage = 'Firestore service is unavailable.';
-      } else if (err.message) {
-        errorMessage = `Error: ${err.message}`;
+        errorMessage = t.firestoreError || 'Firestore service is unavailable.';
+      } else if (err.code === 'auth/invalid-api-key') {
+        errorMessage = t.firebaseApiKeyError || 'Invalid Firebase API key. Please contact support.';
       }
       toast.error(errorMessage);
       setFormErrors({ global: errorMessage });
     }
   };
 
-  const nextStep = () => {
+  const nextStep = async () => {
     if (currentStep < steps.length - 1) {
       const currentFields = steps[currentStep].fields;
       const hasErrors = currentFields.some((field) => errors[field]);
       if (!hasErrors) {
         if (currentStep === 0 && !isAuthenticated) {
           const { email, password } = watch();
-          handleAuth(email, password, true).catch((err) => {
+          try {
+            await handleAuth(email, password, true);
+            setCurrentStep(currentStep + 1);
+          } catch (err) {
             toast.error(err.message);
             setFormErrors({ global: err.message });
-          });
+          }
         } else {
           setCurrentStep(currentStep + 1);
         }
       } else {
-        toast.error('Please fix errors before proceeding.');
+        toast.error(t.validationError || 'Please fix errors before proceeding.');
       }
     }
   };
@@ -244,30 +251,30 @@ export default function EarobicsRegistrationForm() {
   };
 
   const handleGoToHome = () => {
-    window.location.href = 'http://localhost:3000/';
+    router.push('/');
   };
 
   const formData = watch();
 
   if (isLoading) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gradient-to-r from-blue-100 to-indigo-100">
-        <div className="text-2xl font-semibold text-gray-700 animate-pulse">Loading...</div>
+      <div className={`min-h-screen flex items-center justify-center ${theme === 'dark' ? 'bg-gradient-to-r from-gray-700 to-gray-800' : 'bg-gradient-to-r from-blue-50 to-purple-50'}`}>
+        <div className={`text-2xl font-semibold ${theme === 'dark' ? 'text-gray-300' : 'text-gray-700'} animate-pulse`}>{t.loading || 'Loading...'}</div>
       </div>
     );
   }
 
   if (isSubmitted) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gradient-to-r from-blue-100 to-indigo-100">
-        <div className="max-w-4xl w-full bg-white p-8 rounded-xl shadow-2xl text-center">
-          <h2 className="text-3xl font-extrabold text-gray-900 mb-6">Registration Complete!</h2>
-          <p className="text-gray-600 mb-8">Thank you for registering with Aerobics Fitness. Your information has been successfully saved.</p>
+      <div className={`min-h-screen flex items-center justify-center ${theme === 'dark' ? 'bg-gradient-to-r from-gray-700 to-gray-800' : 'bg-gradient-to-r from-blue-50 to-purple-50'}`}>
+        <div className={`max-w-4xl w-full ${theme === 'dark' ? 'bg-gray-800 border-gray-600' : 'bg-white border-gray-200'} p-8 rounded-xl shadow-2xl text-center border`}>
+          <h2 className={`text-3xl font-extrabold ${theme === 'dark' ? 'text-white' : 'text-gray-900'} mb-6`}>{t.registrationComplete || 'Registration Complete!'}</h2>
+          <p className={`${theme === 'dark' ? 'text-gray-300' : 'text-gray-600'} mb-8`}>{t.successMessage || 'Thank you for registering with the Gym. Your information has been successfully saved.'}</p>
           <button
             onClick={handleGoToHome}
-            className="px-6 py-3 rounded-lg text-sm font-medium bg-indigo-600 text-white hover:bg-indigo-700 focus:ring-2 focus:ring-indigo-500 transition-all duration-300"
+            className={`px-6 py-3 rounded-lg text-sm font-medium ${theme === 'dark' ? 'bg-gray-700 text-white hover:bg-gray-600 focus:ring-2 focus:ring-yellow-400' : 'bg-blue-600 text-white hover:bg-blue-700 focus:ring-2 focus:ring-blue-500'} transition-all duration-300`}
           >
-            Go to Home Page
+            {t.goToHome || 'Go to Home Page'}
           </button>
         </div>
       </div>
@@ -275,559 +282,447 @@ export default function EarobicsRegistrationForm() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-r from-blue-100 to-indigo-100 flex items-center justify-center py-12 px-4 sm:px-6 lg:px-8">
-      <div className="max-w-4xl w-full bg-white p-8 rounded-xl shadow-2xl">
-        <h2 className="text-3xl font-extrabold text-center text-gray-900 mb-8">Aerobics Fitness Registration</h2>
+    <>
+      <div className={`min-h-screen flex items-center justify-center py-12 px-4 sm:px-6 lg:px-8 ${theme === 'dark' ? 'bg-gradient-to-r from-gray-700 to-gray-800' : 'bg-gradient-to-r from-blue-50 to-purple-50'}`}>
+        <div className={`max-w-4xl w-full ${theme === 'dark' ? 'bg-gray-800 border-gray-600' : 'bg-white border-gray-200'} p-8 rounded-xl shadow-2xl border`}>
+          <h2 className={`text-3xl font-extrabold text-center ${theme === 'dark' ? 'text-white' : 'text-gray-900'} mb-8`}>{t.title || 'Gym Registration Form'}</h2>
 
-        {/* Stepper */}
-        <div className="flex justify-between mb-8">
-          {steps.map((step, index) => (
-            <div key={step.name} className="flex-1 text-center">
-              <div className={`w-10 h-10 mx-auto rounded-full flex items-center justify-center ${index <= currentStep ? 'bg-indigo-600 text-white' : 'bg-gray-200 text-gray-600'}`}>
-                {index < currentStep ? <CheckCircleIcon className="w-6 h-6" /> : index + 1}
+          <div className="flex justify-between mb-8">
+            {steps.map((step, index) => (
+              <div key={step.name} className="flex-1 text-center">
+                <div className={`w-10 h-10 mx-auto rounded-full flex items-center justify-center ${index <= currentStep ? (theme === 'dark' ? 'bg-gray-700 text-white' : 'bg-blue-600 text-white') : (theme === 'dark' ? 'bg-gray-600 text-gray-300' : 'bg-gray-200 text-gray-600')}`}>
+                  {index < currentStep ? <CheckCircleIcon className={`w-6 h-6 ${theme === 'dark' ? 'text-yellow-400' : 'text-blue-600'}`} /> : index + 1}
+                </div>
+                <p className={`mt-2 text-sm font-medium ${theme === 'dark' ? 'text-gray-300' : 'text-gray-700'}`}>{step.name}</p>
               </div>
-              <p className="mt-2 text-sm font-medium text-gray-700">{step.name}</p>
-            </div>
-          ))}
-        </div>
+            ))}
+          </div>
 
-        {formErrors.global && (
-          <p className="text-red-500 text-center mb-6 bg-red-50 p-3 rounded-md">{formErrors.global}</p>
-        )}
-
-        <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
-          {/* Step 1: Personal Information */}
-          {currentStep === 0 && (
-            <div className="space-y-6 animate-fade-in">
-              <h3 className="text-xl font-semibold text-gray-800">Personal Information</h3>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700">First Name</label>
-                  <input
-                    {...register('firstName', { required: 'First name is required' })}
-                    className="mt-1 block w-full px-4 py-3 border border-gray-300 rounded-lg shadow-sm focus:ring-indigo-500 focus:border-indigo-500 transition-all duration-300"
-                    placeholder="Enter your first name"
-                  />
-                  {errors.firstName && <p className="text-red-500 text-xs mt-1">{errors.firstName.message}</p>}
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700">Last Name</label>
-                  <input
-                    {...register('lastName', { required: 'Last name is required' })}
-                    className="mt-1 block w-full px-4 py-3 border border-gray-300 rounded-lg shadow-sm focus:ring-indigo-500 focus:border-indigo-500 transition-all duration-300"
-                    placeholder="Enter your last name"
-                  />
-                  {errors.lastName && <p className="text-red-500 text-xs mt-1">{errors.lastName.message}</p>}
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700">Birth Date</label>
-                  <input
-                    type="date"
-                    {...register('birthDate', { required: 'Birth date is required' })}
-                    className="mt-1 block w-full pxヶ4 py-3 border border-gray-300 rounded-lg shadow-sm focus:ring-indigo-500 focus:border-indigo-500 transition-all duration-300"
-                    placeholder="Select your birth date"
-                  />
-                  {errors.birthDate && <p className="text-red-500 text-xs mt-1">{errors.birthDate.message}</p>}
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700">Email</label>
-                  <input
-                    type="email"
-                    {...register('email', { required: 'Email is required', pattern: { value: /^\S+@\S+\.\S+$/, message: 'Invalid email' } })}
-                    className="mt-1 block w-full px-4 py-3 border border-gray-300 rounded-lg shadow-sm focus:ring-indigo-500 focus:border-indigo-500 transition-all duration-300"
-                    placeholder="Enter your email"
-                  />
-                  {errors.email && <p className="text-red-500 text-xs mt-1">{errors.email.message}</p>}
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700">Password</label>
-                  <input
-                    type="password"
-                    {...register('password', { 
-                      required: 'Password is required', 
-                      minLength: { value: 6, message: 'Password must be at least 6 characters' } 
-                    })}
-                    className="mt-1 block w-full px-4 py-3 border border-gray-300 rounded-lg shadow-sm focus:ring-indigo-500 focus:border-indigo-500 transition-all duration-300"
-                    placeholder="Enter your password"
-                  />
-                  {errors.password && <p className="text-red-500 text-xs mt-1">{errors.password.message}</p>}
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700">Role</label>
-                  <input
-                    {...register('role')}
-                    className="mt-1 block w-full px-4 py-3 border border-gray-300 rounded-lg shadow-sm focus:ring-indigo-500 focus:border-indigo-500 transition-all duration-300"
-                    placeholder="User role"
-                    readOnly
-                  />
-                </div>
-              </div>
-            </div>
+          {formErrors.global && (
+            <p className={`text-center mb-6 ${theme === 'dark' ? 'bg-red-900/50 text-red-400' : 'bg-red-50 text-red-500'} p-3 rounded-md`}>{formErrors.global}</p>
           )}
 
-          {/* Step 2: Contact Information */}
-          {currentStep === 1 && (
-            <div className="space-y-6 animate-fade-in">
-              <h3 className="text-xl font-semibold text-gray-800">Contact Information</h3>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700">Street Address</label>
-                  <input
-                    {...register('streetAddress', { required: 'Street address is required' })}
-                    className="mt-1 block w-full px-4 py-3 border border-gray-300 rounded-lg shadow-sm focus:ring-indigo-500 focus:border-indigo-500 transition-all duration-300"
-                    placeholder="Enter your street address"
-                  />
-                  {errors.streetAddress && <p className="text-red-500 text-xs mt-1">{errors.streetAddress.message}</p>}
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700">Street Address 2</label>
-                  <input
-                    {...register('streetAddress2')}
-                    className="mt-1 block w-full px-4 py-3 border border-gray-300 rounded-lg shadow-sm focus:ring-indigo-500 focus:border-indigo-500 transition-all duration-300"
-                    placeholder="Apartment, suite, etc. (optional)"
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700">City</label>
-                  <input
-                    {...register('city', { required: 'City is required' })}
-                    className="mt-1 block w-full px-4 py-3 border border-gray-300 rounded-lg shadow-sm focus:ring-indigo-500 focus:border-indigo-500 transition-all duration-300"
-                    placeholder="Enter your city"
-                  />
-                  {errors.city && <p className="text-red-500 text-xs mt-1">{errors.city.message}</p>}
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700">State/Province</label>
-                  <input
-                    {...register('state', { required: 'State is required' })}
-                    className="mt-1 block w-full px-4 py-3 border border-gray-300 rounded-lg shadow-sm focus:ring-indigo-500 focus:border-indigo-500 transition-all duration-300"
-                    placeholder="Enter your state"
-                  />
-                  {errors.state && <p className="text-red-500 text-xs mt-1">{errors.state.message}</p>}
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700">Zip Code</label>
-                  <input
-                    {...register('zipCode', { required: 'Zip code is required' })}
-                    className="mt-1 block w-full px-4 py-3 border border-gray-300 rounded-lg shadow-sm focus:ring-indigo-500 focus:border-indigo-500 transition-all duration-300"
-                    placeholder="Enter your zip code"
-                  />
-                  {errors.zipCode && <p className="text-red-500 text-xs mt-1">{errors.zipCode.message}</p>}
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700">Phone Number</label>
-                  <input
-                    type="tel"
-                    {...register('phoneNumber', { required: 'Phone number is required', pattern: { value: /^\+?[\d\s-]{10,}$/, message: 'Invalid phone number' } })}
-                    className="mt-1 block w-full px-4 py-3 border border-gray-300 rounded-lg shadow-sm focus:ring-indigo-500 focus:border-indigo-500 transition-all duration-300"
-                    placeholder="Enter your phone number"
-                  />
-                  {errors.phoneNumber && <p className="text-red-500 text-xs mt-1">{errors.phoneNumber.message}</p>}
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700">Emergency Contact Name</label>
-                  <input
-                    {...register('emergencyName', { required: 'Emergency contact name is required' })}
-                    className="mt-1 block w-full px-4 py-3 border border-gray-300 rounded-lg shadow-sm focus:ring-indigo-500 focus:border-indigo-500 transition-all duration-300"
-                    placeholder="Enter emergency contact name"
-                  />
-                  {errors.emergencyName && <p className="text-red-500 text-xs mt-1">{errors.emergencyName.message}</p>}
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700">Emergency Contact Phone</label>
-                  <input
-                    type="tel"
-                    {...register('emergencyPhone', { required: 'Emergency phone is required', pattern: { value: /^\+?[\d\s-]{10,}$/, message: 'Invalid phone number' } })}
-                    className="mt-1 block w-full px-4 py-3 border border-gray-300 rounded-lg shadow-sm focus:ring-indigo-500 focus:border-indigo-500 transition-all duration-300"
-                    placeholder="Enter emergency contact phone"
-                  />
-                  {errors.emergencyPhone && <p className="text-red-500 text-xs mt-1">{errors.emergencyPhone.message}</p>}
-                </div>
-              </div>
-            </div>
-          )}
-
-          {/* Step 3: Health Information */}
-          {currentStep === 2 && (
-            <div className="space-y-6 animate-fade-in">
-              <h3 className="text-xl font-semibold text-gray-800">Health Information</h3>
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-6">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700">Height (cm)</label>
-                  <input
-                    type="number"
-                    {...register('height', { required: 'Height is required', min: { value: 0, message: 'Height must be positive' } })}
-                    className="mt-1 block w-full px-4 py-3 border border-gray-300 rounded-lg shadow-sm focus:ring-indigo-500 focus:border-indigo-500 transition-all duration-300"
-                    placeholder="Enter height in cm"
-                  />
-                  {errors.height && <p className="text-red-500 text-xs mt-1">{errors.height.message}</p>}
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700">Weight (kg)</label>
-                  <input
-                    type="number"
-                    {...register('weight', { required: 'Weight is required', min: { value: 0, message: 'Weight must be positive' } })}
-                    className="mt-1 block w-full px-4 py-3 border border-gray-300 rounded-lg shadow-sm focus:ring-indigo-500 focus:border-indigo-500 transition-all duration-300"
-                    placeholder="Enter weight in kg"
-                  />
-                  {errors.weight && <p className="text-red-500 text-xs mt-1">{errors.weight.message}</p>}
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700">BMI</label>
-                  <input
-                    type="text"
-                    value={bmi || ''}
-                    readOnly
-                    className="mt-1 block w-full px-4 py-3 border border-gray-300 rounded-lg shadow-sm bg-gray-100"
-                    placeholder="Calculated BMI"
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700">Goal Weight (kg)</label>
-                  <input
-                    type="number"
-                    {...register('goalWeight', { min: { value: 0, message: 'Goal weight must be positive' } })}
-                    className="mt-1 block w-full px-4 py-3 border border-gray-300 rounded-lg shadow-sm focus:ring-indigo-500 focus:border-indigo-500 transition-all duration-300"
-                    placeholder="Enter goal weight"
-                  />
-                  {errors.goalWeight && <p className="text-red-500 text-xs mt-1">{errors.goalWeight.message}</p>}
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700">Profile Photo</label>
-                  <input
-                    type="file"
-                    accept="image/jpeg,image/png"
-                    onChange={handlePhotoChange}
-                    className="mt-1 block w-full px-4 py-3 border border-gray-300 rounded-lg shadow-sm focus:ring-indigo-500 focus:border-indigo-500 transition-all duration-300"
-                  />
-                  {photo && <p className="text-sm text-gray-600 mt-1">Selected: {photo.name}</p>}
-                  {isUploading && <p className="text-blue-500 text-xs mt-1">Uploading image...</p>}
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700">Blood Type</label>
-                  <input
-                    {...register('bloodType')}
-                    className="mt-1 block w-full px-4 py-3 border border-gray-300 rounded-lg shadow-sm focus:ring-indigo-500 focus:border-indigo-500 transition-all duration-300"
-                    placeholder="Enter your blood type"
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700">Health Issues</label>
-                  <textarea
-                    {...register('healthIssues')}
-                    className="mt-1 block w-full px-4 py-3 border border-gray-300 rounded-lg shadow-sm focus:ring-indigo-500 focus:border-indigo-500 transition-all duration-300"
-                    rows="4"
-                    placeholder="Describe any health issues"
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700">Medications</label>
-                  <textarea
-                    {...register('medications')}
-                    className="mt-1 block w-full px-4 py-3 border border-gray-300 rounded-lg shadow-sm focus:ring-indigo-500 focus:border-indigo-500 transition-all duration-300"
-                    rows="4"
-                    placeholder="List any medications"
-                  />
-                </div>
-              </div>
-              <div className="space-y-4">
-                <h3 className="text-lg font-medium text-gray-800">Health & Lifestyle</h3>
-                {[
-                  { label: 'Do you smoke?', name: 'smoke' },
-                  { label: 'Had surgery in the last year?', name: 'surgery' },
-                  { label: 'Do you drink alcohol?', name: 'alcohol' },
-                  { label: 'Using vitamins/supplements?', name: 'supplements' },
-                  { label: 'Tracking daily food intake?', name: 'foodTracking' },
-                  { label: 'Done sport professionally?', name: 'proSport' },
-                  { label: 'Feel pain during exercise?', name: 'exercisePain' },
-                ].map((q) => (
-                  <div key={q.name} className="flex items-center space-x-4">
-                    <label className="text-sm font-medium text-gray-700">{q.label}</label>
+          <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
+            {currentStep === 0 && (
+              <div className="space-y-6 animate-fade-in">
+                <h3 className={`text-xl font-semibold ${theme === 'dark' ? 'text-white' : 'text-gray-800'}`}>{t.personalInfo || 'Personal Information'}</h3>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
+                  <div>
+                    <label className={`block text-sm font-medium ${theme === 'dark' ? 'text-gray-300' : 'text-gray-700'}`}>{t.firstName || 'First Name'}</label>
                     <input
-                      type="checkbox"
-                      {...register(q.name)}
-                      className="h-5 w-5 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded"
+                      {...register('firstName', { required: t.firstNameError || 'First name is required' })}
+                      className={`mt-1 block w-full px-4 py-3 border ${theme === 'dark' ? 'bg-gray-700 border-gray-600 focus:ring-yellow-400 focus:border-yellow-400' : 'bg-white border-gray-300 focus:ring-blue-500 focus:border-blue-500'} rounded-lg shadow-sm transition-all duration-300`}
+                      placeholder={t.firstNamePlaceholder || 'Enter your first name'}
+                      aria-label="First Name"
+                      aria-describedby={errors.firstName ? 'firstName-error' : undefined}
+                    />
+                    {errors.firstName && <p id="firstName-error" className={`text-xs mt-1 ${theme === 'dark' ? 'text-red-400' : 'text-red-500'}`}>{errors.firstName.message}</p>}
+                  </div>
+                  <div>
+                    <label className={`block text-sm font-medium ${theme === 'dark' ? 'text-gray-300' : 'text-gray-700'}`}>{t.lastName || 'Last Name'}</label>
+                    <input
+                      {...register('lastName', { required: t.lastNameError || 'Last name is required' })}
+                      className={`mt-1 block w-full px-4 py-3 border ${theme === 'dark' ? 'bg-gray-700 border-gray-600 focus:ring-yellow-400 focus:border-yellow-400' : 'bg-white border-gray-300 focus:ring-blue-500 focus:border-blue-500'} rounded-lg shadow-sm transition-all duration-300`}
+                      placeholder={t.lastNamePlaceholder || 'Enter your last name'}
+                      aria-label="Last Name"
+                      aria-describedby={errors.lastName ? 'lastName-error' : undefined}
+                    />
+                    {errors.lastName && <p id="lastName-error" className={`text-xs mt-1 ${theme === 'dark' ? 'text-red-400' : 'text-red-500'}`}>{errors.lastName.message}</p>}
+                  </div>
+                  <div>
+                    <label className={`block text-sm font-medium ${theme === 'dark' ? 'text-gray-300' : 'text-gray-700'}`}>{t.phoneNumber || 'Phone Number'}</label>
+                    <input
+                      type="tel"
+                      {...register('phoneNumber', { required: t.phoneNumberError || 'Phone number is required', pattern: { value: /^\+?[\d\s-]{10,}$/, message: t.phoneNumberInvalid || 'Invalid phone number' } })}
+                      className={`mt-1 block w-full px-4 py-3 border ${theme === 'dark' ? 'bg-gray-700 border-gray-600 focus:ring-yellow-400 focus:border-yellow-400' : 'bg-white border-gray-300 focus:ring-blue-500 focus:border-blue-500'} rounded-lg shadow-sm transition-all duration-300`}
+                      placeholder={t.phoneNumberPlaceholder || 'Enter your phone number'}
+                      aria-label="Phone Number"
+                      aria-describedby={errors.phoneNumber ? 'phoneNumber-error' : undefined}
+                    />
+                    {errors.phoneNumber && <p id="phoneNumber-error" className={`text-xs mt-1 ${theme === 'dark' ? 'text-red-400' : 'text-red-500'}`}>{errors.phoneNumber.message}</p>}
+                  </div>
+                  <div>
+                    <label className={`block text-sm font-medium ${theme === 'dark' ? 'text-gray-300' : 'text-gray-700'}`}>{t.photo || 'Photo'}</label>
+                    <input
+                      type="file"
+                      accept="image/*"
+                      {...register('photo')}
+                      onChange={handlePhotoChange}
+                      className={`mt-1 block w-full text-sm ${theme === 'dark' ? 'text-gray-300 file:bg-gray-600 file:text-yellow-400 hover:file:bg-gray-500' : 'text-gray-500 file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100'} file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-sm file:font-semibold transition-all duration-300`}
+                      aria-label="Photo Upload"
+                    />
+                    {photoPreview && (
+                      <img src={photoPreview} alt={t.photoPreview || 'Photo preview'} className="mt-2 w-32 h-32 object-cover rounded-lg" />
+                    )}
+                    {isUploading && <p className={`text-xs mt-1 ${theme === 'dark' ? 'text-yellow-400' : 'text-blue-500'}`}>{t.uploading || 'Uploading image...'}</p>}
+                  </div>
+                  <div className="sm:col-span-2">
+                    <label className={`block text-sm font-medium ${theme === 'dark' ? 'text-gray-300' : 'text-gray-700'}`}>{t.address || 'Address'}</label>
+                    <input
+                      {...register('address', { required: t.addressError || 'Address is required' })}
+                      className={`mt-1 block w-full px-4 py-3 border ${theme === 'dark' ? 'bg-gray-700 border-gray-600 focus:ring-yellow-400 focus:border-yellow-400' : 'bg-white border-gray-300 focus:ring-blue-500 focus:border-blue-500'} rounded-lg shadow-sm transition-all duration-300`}
+                      placeholder={t.addressPlaceholder || 'Enter your address'}
+                      aria-label="Address"
+                      aria-describedby={errors.address ? 'address-error' : undefined}
+                    />
+                    {errors.address && <p id="address-error" className={`text-xs mt-1 ${theme === 'dark' ? 'text-red-400' : 'text-red-500'}`}>{errors.address.message}</p>}
+                  </div>
+                  <div>
+                    <label className={`block text-sm font-medium ${theme === 'dark' ? 'text-gray-300' : 'text-gray-700'}`}>{t.city || 'City'}</label>
+                    <input
+                      {...register('city', { required: t.cityError || 'City is required' })}
+                      className={`mt-1 block w-full px-4 py-3 border ${theme === 'dark' ? 'bg-gray-700 border-gray-600 focus:ring-yellow-400 focus:border-yellow-400' : 'bg-white border-gray-300 focus:ring-blue-500 focus:border-blue-500'} rounded-lg shadow-sm transition-all duration-300`}
+                      placeholder={t.cityPlaceholder || 'Enter your city'}
+                      aria-label="City"
+                      aria-describedby={errors.city ? 'city-error' : undefined}
+                    />
+                    {errors.city && <p id="city-error" className={`text-xs mt-1 ${theme === 'dark' ? 'text-red-400' : 'text-red-500'}`}>{errors.city.message}</p>}
+                  </div>
+                  <div>
+                    <label className={`block text-sm font-medium ${theme === 'dark' ? 'text-gray-300' : 'text-gray-700'}`}>{t.country || 'Country'}</label>
+                    <input
+                      {...register('country', { required: t.countryError || 'Country is required' })}
+                      className={`mt-1 block w-full px-4 py-3 border ${theme === 'dark' ? 'bg-gray-700 border-gray-600 focus:ring-yellow-400 focus:border-yellow-400' : 'bg-white border-gray-300 focus:ring-blue-500 focus:border-blue-500'} rounded-lg shadow-sm transition-all duration-300`}
+                      placeholder={t.countryPlaceholder || 'Enter your country'}
+                      aria-label="Country"
+                      aria-describedby={errors.country ? 'country-error' : undefined}
+                    />
+                    {errors.country && <p id="country-error" className={`text-xs mt-1 ${theme === 'dark' ? 'text-red-400' : 'text-red-500'}`}>{errors.country.message}</p>}
+                  </div>
+                  <div>
+                    <label className={`block text-sm font-medium ${theme === 'dark' ? 'text-gray-300' : 'text-gray-700'}`}>{t.jobType || 'Job Type'}</label>
+                    <input
+                      {...register('jobType')}
+                      className={`mt-1 block w-full px-4 py-3 border ${theme === 'dark' ? 'bg-gray-700 border-gray-600 focus:ring-yellow-400 focus:border-yellow-400' : 'bg-white border-gray-300 focus:ring-blue-500 focus:border-blue-500'} rounded-lg shadow-sm transition-all duration-300`}
+                      placeholder={t.jobTypePlaceholder || 'Enter your job type'}
+                      aria-label="Job Type"
                     />
                   </div>
-                ))}
-              </div>
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-6">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700">Night Eating Frequency (0-5)</label>
-                  <input
-                    type="number"
-                    min="0"
-                    max="5"
-                    {...register('nightEating', { required: 'Required', min: { value: 0, message: 'Must be at least 0' }, max: { value: 5, message: 'Must be at most 5' } })}
-                    className="mt-1 block w-full px-4 py-3 border border-gray-300 rounded-lg shadow-sm focus:ring-indigo-500 focus:border-indigo-500 transition-all duration-300"
-                    placeholder="Enter 0-5"
-                  />
-                  {errors.nightEating && <p className="text-red-500 text-xs mt-1">{errors.nightEating.message}</p>}
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700">Breakfast Frequency (0-5)</label>
-                  <input
-                    type="number"
-                    min="0"
-                    max="5"
-                    {...register('breakfastFrequency', { required: 'Required', min: { value: 0, message: 'Must be at least 0' }, max: { value: 5, message: 'Must be at most 5' } })}
-                    className="mt-1 block w-full px-4 py-3 border border-gray-300 rounded-lg shadow-sm focus:ring-indigo-500 focus:border-indigo-500 transition-all duration-300"
-                    placeholder="Enter 0-5"
-                  />
-                  {errors.breakfastFrequency && <p className="text-red-500 text-xs mt-1">{errors.breakfastFrequency.message}</p>}
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700">Nutrition Rating (0-5)</label>
-                  <input
-                    type="number"
-                    min="0"
-                    max="5"
-                    {...register('nutritionRating', { required: 'Required', min: { value: 0, message: 'Must be at least 0' }, max: { value: 5, message: 'Must be at most 5' } })}
-                    className="mt-1 block w-full px-4 py-3 border border-gray-300 rounded-lg shadow-sm focus:ring-indigo-500 focus:border-indigo-500 transition-all duration-300"
-                    placeholder="Enter 0-5"
-                  />
-                  {errors.nutritionRating && <p className="text-red-500 text-xs mt-1">{errors.nutritionRating.message}</p>}
-                </div>
-              </div>
-            </div>
-          )}
-
-          {/* Step 4: Preferences */}
-          {currentStep === 3 && (
-            <div className="space-y-6 animate-fade-in">
-              <h3 className="text-xl font-semibold text-gray-800">Preferences</h3>
-              <div>
-                <label className="block text-sm font-medium text-gray-700">Exercise Days</label>
-                <div className="flex flex-wrap gap-4 mt-2">
-                  {days.map((day) => (
-                    <div key={day} className="flex items-center">
-                      <input
-                        type="checkbox"
-                        value={day}
-                        onChange={(e) => {
-                          const updatedDays = e.target.checked
-                            ? [...exerciseDays, day]
-                            : exerciseDays.filter((d) => d !== day);
-                          setExerciseDays(updatedDays);
-                          setValue('exerciseDays', updatedDays);
-                        }}
-                        className="form-checkbox h-5 w-5 text-indigo-600"
-                      />
-                      <span className="ml-2 text-gray-700">{day}</span>
-                    </div>
-                  ))}
-                </div>
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700">Preferred Exercise Time</label>
-                <Listbox value={exerciseTime} onChange={(value) => { setExerciseTime(value); setValue('exerciseTime', value); }}>
-                  <Listbox.Button className="mt-1 block w-full px-4 py-3 border border-gray-300 rounded-lg shadow-sm focus:ring-indigo-500 focus:border-indigo-500 transition-all duration-300 text-left">
-                    {exerciseTime}
-                  </Listbox.Button>
-                  <Listbox.Options className="mt-1 bg-white border rounded-lg shadow-lg max-h-60 overflow-auto">
-                    {times.map((time) => (
-                      <Listbox.Option key={time} value={time} className="p-3 hover:bg-indigo-100 cursor-pointer">
-                        {time}
-                      </Listbox.Option>
-                    ))}
-                  </Listbox.Options>
-                </Listbox>
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700">Training Goals</label>
-                <div className="flex flex-wrap gap-4 mt-2">
-                  {goals.map((goal) => (
-                    <div key={goal} className="flex items-center">
-                      <input
-                        type="checkbox"
-                        {...register('trainingGoals')}
-                        value={goal}
-                        className="form-checkbox h-5 w-5 text-indigo-600"
-                      />
-                      <span className="ml-2 text-gray-700">{goal}</span>
-                    </div>
-                  ))}
-                </div>
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700">Reasons for Eating (Besides Hunger)</label>
-                <div className="flex flex-wrap gap-4 mt-2">
-                  {reasons.map((reason) => (
-                    <div key={reason} className="flex items-center">
-                      <input
-                        type="checkbox"
-                        {...register('eatingReasons')}
-                        value={reason}
-                        className="form-checkbox h-5 w-5 text-indigo-600"
-                      />
-                      <span className="ml-2 text-gray-700">{reason}</span>
-                    </div>
-                  ))}
-                </div>
-              </div>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700">Membership Type</label>
-                  <Listbox value={membershipType} onChange={(value) => { setMembershipType(value); setValue('membershipType', value); }}>
-                    <Listbox.Button className="mt-1 block w-full px-4 py-3 border border-gray-300 rounded-lg shadow-sm focus:ring-indigo-500 focus:border-indigo-500 transition-all duration-300 text-left">
-                      {membershipType}
-                    </Listbox.Button>
-                    <Listbox.Options className="mt-1 bg-white border rounded-lg shadow-lg">
-                      {membershipOptions.map((option) => (
-                        <Listbox.Option key={option} value={option} className="p-3 hover:bg-indigo-100 cursor-pointer">
-                          {option}
-                        </Listbox.Option>
+                  <div>
+                    <label className={`block text-sm font-medium ${theme === 'dark' ? 'text-gray-300' : 'text-gray-700'}`}>{t.email || 'Email'}</label>
+                    <input
+                      type="email"
+                      {...register('email', { required: t.emailError || 'Email is required', pattern: { value: /^\S+@\S+\.\S+$/, message: t.emailInvalid || 'Invalid email' } })}
+                      className={`mt-1 block w-full px-4 py-3 border ${theme === 'dark' ? 'bg-gray-700 border-gray-600 focus:ring-yellow-400 focus:border-yellow-400' : 'bg-white border-gray-300 focus:ring-blue-500 focus:border-blue-500'} rounded-lg shadow-sm transition-all duration-300`}
+                      placeholder={t.emailPlaceholder || 'Enter your email'}
+                      aria-label="Email"
+                      aria-describedby={errors.email ? 'email-error' : undefined}
+                    />
+                    {errors.email && <p id="email-error" className={`text-xs mt-1 ${theme === 'dark' ? 'text-red-400' : 'text-red-500'}`}>{errors.email.message}</p>}
+                  </div>
+                  <div>
+                    <label className={`block text-sm font-medium ${theme === 'dark' ? 'text-gray-300' : 'text-gray-700'}`}>{t.password || 'Password'}</label>
+                    <input
+                      type="password"
+                      {...register('password', { required: t.passwordError || 'Password is required', minLength: { value: 6, message: t.passwordLength || 'Password must be at least 6 characters' } })}
+                      className={`mt-1 block w-full px-4 py-3 border ${theme === 'dark' ? 'bg-gray-700 border-gray-600 focus:ring-yellow-400 focus:border-yellow-400' : 'bg-white border-gray-300 focus:ring-blue-500 focus:border-blue-500'} rounded-lg shadow-sm transition-all duration-300`}
+                      placeholder={t.passwordPlaceholder || 'Enter your password'}
+                      aria-label="Password"
+                      aria-describedby={errors.password ? 'password-error' : undefined}
+                    />
+                    {errors.password && <p id="password-error" className={`text-xs mt-1 ${theme === 'dark' ? 'text-red-400' : 'text-red-500'}`}>{errors.password.message}</p>}
+                  </div>
+                  <div className="sm:col-span-2">
+                    <label className={`block text-sm font-medium ${theme === 'dark' ? 'text-gray-300' : 'text-gray-700'}`}>{t.gender || 'Gender'}</label>
+                    <div className="mt-2 flex space-x-4">
+                      {['Male', 'Female', 'Other'].map((gender) => (
+                        <div key={gender} className="flex items-center">
+                          <input
+                            type="radio"
+                            {...register('gender', { required: t.genderError || 'Gender is required' })}
+                            value={gender.toLowerCase()}
+                            className={`h-4 w-4 ${theme === 'dark' ? 'text-yellow-400 focus:ring-yellow-400' : 'text-blue-600 focus:ring-blue-500'} border-gray-300`}
+                            aria-label={t[gender.toLowerCase()] || gender}
+                          />
+                          <label className={`ml-2 block text-sm ${theme === 'dark' ? 'text-gray-300' : 'text-gray-700'}`}>{t[gender.toLowerCase()] || gender}</label>
+                        </div>
                       ))}
-                    </Listbox.Options>
-                  </Listbox>
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700">Exercise Duration (Months)</label>
-                  <input
-                    type="number"
-                    min="1"
-                    max="12"
-                    {...register('exerciseDuration', { required: 'Required', min: { value: 1, message: 'Must be at least 1' }, max: { value: 12, message: 'Must be at most 12' } })}
-                    className="mt-1 block w-full px-4 py-3 border border-gray-300 rounded-lg shadow-sm focus:ring-indigo-500 focus:border-indigo-500 transition-all duration-300"
-                    placeholder="Enter 1-12"
-                  />
-                  {errors.exerciseDuration && <p className="text-red-500 text-xs mt-1">{errors.exerciseDuration.message}</p>}
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700">Start Month</label>
-                  <Listbox
-                    value={startMonth}
-                    onChange={(value) => {
-                      setStartMonth(value);
-                      setValue('startMonth', value);
-                    }}
-                  >
-                    <Listbox.Button className="mt-1 block w-full px-4 py-3 border border-gray-300 rounded-lg shadow-sm focus:ring-indigo-500 focus:border-indigo-500 transition-all duration-300 text-left">
-                      {startMonth}
-                    </Listbox.Button>
-                    <Listbox.Options className="mt-1 bg-white border rounded-lg shadow-lg max-h-60 overflow-auto">
-                      {months.map((month) => (
-                        <Listbox.Option key={month} value={month} className="p-3 hover:bg-indigo-100 cursor-pointer">
-                          {month}
-                        </Listbox.Option>
-                      ))}
-                    </Listbox.Options>
-                  </Listbox>
+                    </div>
+                    {errors.gender && <p id="gender-error" className={`text-xs mt-1 ${theme === 'dark' ? 'text-red-400' : 'text-red-500'}`}>{errors.gender.message}</p>}
+                  </div>
                 </div>
               </div>
-            </div>
-          )}
+            )}
 
-          {/* Step 5: Review & Submit */}
-          {currentStep === 4 && (
-            <div className="space-y-6 animate-fade-in">
-              <h3 className="text-xl font-semibold text-gray-800">Review Your Information</h3>
-              <div className="bg-gray-50 p-4 rounded-lg space-y-4">
-                <div>
-                  <h4 className="text-sm font-semibold text-gray-700">Personal Information</h4>
-                  <p>First Name: {formData.firstName || 'Not provided'}</p>
-                  <p>Last Name: {formData.lastName || 'Not provided'}</p>
-                  <p>Birth Date: {formData.birthDate || 'Not provided'}</p>
-                  <p>Email: {formData.email || 'Not provided'}</p>
-                  <p>Role: {formData.role || 'user'}</p>
-                </div>
-                <div>
-                  <h4 className="text-sm font-semibold text-gray-700">Contact Information</h4>
-                  <p>Street Address: {formData.streetAddress || 'Not provided'}</p>
-                  <p>Street Address 2: {formData.streetAddress2 || 'Not provided'}</p>
-                  <p>City: {formData.city || 'Not provided'}</p>
-                  <p>State: {formData.state || 'Not provided'}</p>
-                  <p>Zip Code: {formData.zipCode || 'Not provided'}</p>
-                  <p>Phone Number: {formData.phoneNumber || 'Not provided'}</p>
-                  <p>Emergency Contact: {formData.emergencyName || 'Not provided'} - {formData.emergencyPhone || 'Not provided'}</p>
-                </div>
-                <div>
-                  <h4 className="text-sm font-semibold text-gray-700">Health Information</h4>
-                  <p>Height: {formData.height || 'Not provided'} cm</p>
-                  <p>Weight: {formData.weight || 'Not provided'} kg</p>
-                  <p>BMI: {bmi || 'Not calculated'}</p>
-                  <p>Goal Weight: {formData.goalWeight || 'Not provided'} kg</p>
-                  <p>Profile Photo: {photo ? photo.name : 'Not uploaded'}</p>
-                  <p>Blood Type: {formData.bloodType || 'Not provided'}</p>
-                  <p>Health Issues: {formData.healthIssues || 'Not provided'}</p>
-                  <p>Medications: {formData.medications || 'Not provided'}</p>
-                  <p>Health & Lifestyle: {[
-                    formData.smoke && 'Smokes',
-                    formData.surgery && 'Recent Surgery',
-                    formData.alcohol && 'Drinks Alcohol',
-                    formData.supplements && 'Uses Supplements',
-                    formData.foodTracking && 'Tracks Food',
-                    formData.proSport && 'Professional Sport',
-                    formData.exercisePain && 'Exercise Pain',
-                  ].filter(Boolean).join(', ') || 'None'}</p>
-                  <p>Night Eating Frequency: {formData.nightEating || 'Not provided'}</p>
-                  <p>Breakfast Frequency: {formData.breakfastFrequency || 'Not provided'}</p>
-                  <p>Nutrition Rating: {formData.nutritionRating || 'Not provided'}</p>
-                </div>
-                <div>
-                  <h4 className="text-sm font-semibold text-gray-700">Preferences</h4>
-                  <p>Exercise Days: {exerciseDays.length > 0 ? exerciseDays.join(', ') : 'Not provided'}</p>
-                  <p>Exercise Time: {exerciseTime}</p>
-                  <p>Training Goals: {formData.trainingGoals?.join(', ') || 'Not provided'}</p>
-                  <p>Eating Reasons: {formData.eatingReasons?.join(', ') || 'Not provided'}</p>
-                  <p>Membership Type: {membershipType}</p>
-                  <p>Exercise Duration: {formData.exerciseDuration || 'Not provided'} months</p>
-                  <p>Start Month: {startMonth}</p>
+            {currentStep === 1 && (
+              <div className="space-y-6 animate-fade-in">
+                <h3 className={`text-xl font-semibold ${theme === 'dark' ? 'text-white' : 'text-gray-800'}`}>{t.healthInfo || 'Health Information'}</h3>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
+                  <div>
+                    <label className={`block text-sm font-medium ${theme === 'dark' ? 'text-gray-300' : 'text-gray-700'}`}>{t.height || 'Height (cm)'}</label>
+                    <input
+                      type="number"
+                      {...register('height', { required: t.heightError || 'Height is required', min: { value: 0, message: t.heightPositive || 'Height must be positive' } })}
+                      className={`mt-1 block w-full px-4 py-3 border ${theme === 'dark' ? 'bg-gray-700 border-gray-600 focus:ring-yellow-400 focus:border-yellow-400' : 'bg-white border-gray-300 focus:ring-blue-500 focus:border-blue-500'} rounded-lg shadow-sm transition-all duration-300`}
+                      placeholder={t.heightPlaceholder || 'Enter height in cm'}
+                      aria-label="Height"
+                      aria-describedby={errors.height ? 'height-error' : undefined}
+                    />
+                    {errors.height && <p id="height-error" className={`text-xs mt-1 ${theme === 'dark' ? 'text-red-400' : 'text-red-500'}`}>{errors.height.message}</p>}
+                  </div>
+                  <div>
+                    <label className={`block text-sm font-medium ${theme === 'dark' ? 'text-gray-300' : 'text-gray-700'}`}>{t.weight || 'Weight (kg)'}</label>
+                    <input
+                      type="number"
+                      {...register('weight', { required: t.weightError || 'Weight is required', min: { value: 0, message: t.weightPositive || 'Weight must be positive' } })}
+                      className={`mt-1 block w-full px-4 py-3 border ${theme === 'dark' ? 'bg-gray-700 border-gray-600 focus:ring-yellow-400 focus:border-yellow-400' : 'bg-white border-gray-300 focus:ring-blue-500 focus:border-blue-500'} rounded-lg shadow-sm transition-all duration-300`}
+                      placeholder={t.weightPlaceholder || 'Enter weight in kg'}
+                      aria-label="Weight"
+                      aria-describedby={errors.weight ? 'weight-error' : undefined}
+                    />
+                    {errors.weight && <p id="weight-error" className={`text-xs mt-1 ${theme === 'dark' ? 'text-red-400' : 'text-red-500'}`}>{errors.weight.message}</p>}
+                  </div>
+                  <div>
+                    <label className={`block text-sm font-medium ${theme === 'dark' ? 'text-gray-300' : 'text-gray-700'}`}>{t.age || 'Age'}</label>
+                    <input
+                      type="number"
+                      {...register('age', { required: t.ageError || 'Age is required', min: { value: 0, message: t.agePositive || 'Age must be positive' }, max: { value: 150, message: t.ageReasonable || 'Age must be reasonable' } })}
+                      className={`mt-1 block w-full px-4 py-3 border ${theme === 'dark' ? 'bg-gray-700 border-gray-600 focus:ring-yellow-400 focus:border-yellow-400' : 'bg-white border-gray-300 focus:ring-blue-500 focus:border-blue-500'} rounded-lg shadow-sm transition-all duration-300`}
+                      placeholder={t.agePlaceholder || 'Enter your age'}
+                      aria-label="Age"
+                      aria-describedby={errors.age ? 'age-error' : undefined}
+                    />
+                    {errors.age && <p id="age-error" className={`text-xs mt-1 ${theme === 'dark' ? 'text-red-400' : 'text-red-500'}`}>{errors.age.message}</p>}
+                  </div>
+                  <div>
+                    <label className={`block text-sm font-medium ${theme === 'dark' ? 'text-gray-300' : 'text-gray-700'}`}>{t.bmi || 'BMI'}</label>
+                    <input
+                      type="number"
+                      {...register('bmi')}
+                      readOnly
+                      className={`mt-1 block w-full px-4 py-3 border ${theme === 'dark' ? 'bg-gray-700 border-gray-600' : 'bg-gray-100 border-gray-300'} rounded-lg shadow-sm`}
+                      placeholder={t.bmiPlaceholder || 'Calculated BMI'}
+                      aria-label="BMI"
+                    />
+                  </div>
+                  <div>
+                    <label className={`block text-sm font-medium ${theme === 'dark' ? 'text-gray-300' : 'text-gray-700'}`}>{t.bloodType || 'Blood Type'}</label>
+                    <select
+                      {...register('bloodType', { required: t.bloodTypeError || 'Blood type is required' })}
+                      className={`mt-1 block w-full px-4 py-3 border ${theme === 'dark' ? 'bg-gray-700 border-gray-600 focus:ring-yellow-400 focus:border-yellow-400' : 'bg-white border-gray-300 focus:ring-blue-500 focus:border-blue-500'} rounded-lg shadow-sm transition-all duration-300`}
+                      aria-label="Blood Type"
+                      aria-describedby={errors.bloodType ? 'bloodType-error' : undefined}
+                    >
+                      <option value="">{t.bloodTypePlaceholder || 'Select Blood Type'}</option>
+                      <option value="A+">A+</option>
+                      <option value="A-">A-</option>
+                      <option value="B+">B+</option>
+                      <option value="B-">B-</option>
+                      <option value="AB+">AB+</option>
+                      <option value="AB-">AB-</option>
+                      <option value="O+">O+</option>
+                      <option value="O-">O-</option>
+                    </select>
+                    {errors.bloodType && <p id="bloodType-error" className={`text-xs mt-1 ${theme === 'dark' ? 'text-red-400' : 'text-red-500'}`}>{errors.bloodType.message}</p>}
+                  </div>
+                  <div>
+                    <label className={`block text-sm font-medium ${theme === 'dark' ? 'text-gray-300' : 'text-gray-700'}`}>{t.goalWeight || 'Goal Weight (kg)'}</label>
+                    <input
+                      type="number"
+                      {...register('goalWeight', { required: t.goalWeightError || 'Goal weight is required', min: { value: 0, message: t.goalWeightPositive || 'Goal weight must be positive' } })}
+                      className={`mt-1 block w-full px-4 py-3 border ${theme === 'dark' ? 'bg-gray-700 border-gray-600 focus:ring-yellow-400 focus:border-yellow-400' : 'bg-white border-gray-300 focus:ring-blue-500 focus:border-blue-500'} rounded-lg shadow-sm transition-all duration-300`}
+                      placeholder={t.goalWeightPlaceholder || 'Enter goal weight'}
+                      aria-label="Goal Weight"
+                      aria-describedby={errors.goalWeight ? 'goalWeight-error' : undefined}
+                    />
+                    {errors.goalWeight && <p id="goalWeight-error" className={`text-xs mt-1 ${theme === 'dark' ? 'text-red-400' : 'text-red-500'}`}>{errors.goalWeight.message}</p>}
+                  </div>
                 </div>
               </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700">Signature</label>
-                <input
-                  {...register('signature', { required: 'Signature is required' })}
-                  className="mt-1 block w-full px-4 py-3 border border-gray-300 rounded-lg shadow-sm focus:ring-indigo-500 focus:border-indigo-500 transition-all duration-300"
-                  placeholder="Type your full name as signature"
-                />
-                {errors.signature && <p className="text-red-500 text-xs mt-1">{errors.signature.message}</p>}
-              </div>
-            </div>
-          )}
+            )}
 
-          {/* Navigation Buttons */}
-          <div className="flex justify-between mt-8">
-            <button
-              type="button"
-              onClick={prevStep}
-              disabled={currentStep === 0}
-              className={`px-6 py-3 rounded-lg text-sm font-medium transition-all蓷all duration-300 ${
-                currentStep === 0
-                  ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
-                  : 'bg-gray-600 text-white hover:bg-gray-700 focus:ring-2 focus:ring-gray-500'
-              }`}
-            >
-              Previous
-            </button>
-            {currentStep < steps.length - 1 ? (
+            {currentStep === 2 && (
+              <div className="space-y-6 animate-fade-in">
+                <h3 className={`text-xl font-semibold ${theme === 'dark' ? 'text-white' : 'text-gray-800'}`}>{t.emergencyContact || 'Emergency Contact Information'}</h3>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
+                  <div>
+                    <label className={`block text-sm font-medium ${theme === 'dark' ? 'text-gray-300' : 'text-gray-700'}`}>{t.emergencyName || 'Emergency Contact Name'}</label>
+                    <input
+                      {...register('emergencyName', { required: t.emergencyNameError || 'Emergency contact name is required' })}
+                      className={`mt-1 block w-full px-4 py-3 border ${theme === 'dark' ? 'bg-gray-700 border-gray-600 focus:ring-yellow-400 focus:border-yellow-400' : 'bg-white border-gray-300 focus:ring-blue-500 focus:border-blue-500'} rounded-lg shadow-sm transition-all duration-300`}
+                      placeholder={t.emergencyNamePlaceholder || 'Enter emergency contact name'}
+                      aria-label="Emergency Contact Name"
+                      aria-describedby={errors.emergencyName ? 'emergencyName-error' : undefined}
+                    />
+                    {errors.emergencyName && <p id="emergencyName-error" className={`text-xs mt-1 ${theme === 'dark' ? 'text-red-400' : 'text-red-500'}`}>{errors.emergencyName.message}</p>}
+                  </div>
+                  <div>
+                    <label className={`block text-sm font-medium ${theme === 'dark' ? 'text-gray-300' : 'text-gray-700'}`}>{t.emergencyPhone || 'Emergency Phone Number'}</label>
+                    <input
+                      type="tel"
+                      {...register('emergencyPhone', { required: t.emergencyPhoneError || 'Emergency phone is required', pattern: { value: /^\+?[\d\s-]{10,}$/, message: t.emergencyPhoneInvalid || 'Invalid phone number' } })}
+                      className={`mt-1 block w-full px-4 py-3 border ${theme === 'dark' ? 'bg-gray-700 border-gray-600 focus:ring-yellow-400 focus:border-yellow-400' : 'bg-white border-gray-300 focus:ring-blue-500 focus:border-blue-500'} rounded-lg shadow-sm transition-all duration-300`}
+                      placeholder={t.emergencyPhonePlaceholder || 'Enter emergency phone'}
+                      aria-label="Emergency Phone Number"
+                      aria-describedby={errors.emergencyPhone ? 'emergencyPhone-error' : undefined}
+                    />
+                    {errors.emergencyPhone && <p id="emergencyPhone-error" className={`text-xs mt-1 ${theme === 'dark' ? 'text-red-400' : 'text-red-500'}`}>{errors.emergencyPhone.message}</p>}
+                  </div>
+                  <div>
+                    <label className={`block text-sm font-medium ${theme === 'dark' ? 'text-gray-300' : 'text-gray-700'}`}>{t.relationship || 'Relationship'}</label>
+                    <input
+                      {...register('relationship', { required: t.relationshipError || 'Relationship is required' })}
+                      className={`mt-1 block w-full px-4 py-3 border ${theme === 'dark' ? 'bg-gray-700 border-gray-600 focus:ring-yellow-400 focus:border-yellow-400' : 'bg-white border-gray-300 focus:ring-blue-500 focus:border-blue-500'} rounded-lg shadow-sm transition-all duration-300`}
+                      placeholder={t.relationshipPlaceholder || 'Enter relationship'}
+                      aria-label="Relationship"
+                      aria-describedby={errors.relationship ? 'relationship-error' : undefined}
+                    />
+                    {errors.relationship && <p id="relationship-error" className={`text-xs mt-1 ${theme === 'dark' ? 'text-red-400' : 'text-red-500'}`}>{errors.relationship.message}</p>}
+                  </div>
+                </div>
+                <div>
+                  <label className={`block text-sm font-medium ${theme === 'dark' ? 'text-gray-300' : 'text-gray-700'}`}>{t.medicalConditionsQuestion || 'Do you have any medical conditions or allergies?'}</label>
+                  <div className="mt-2 flex items-center">
+                    <input
+                      type="checkbox"
+                      {...register('hasMedicalConditions')}
+                      className={`h-5 w-5 ${theme === 'dark' ? 'text-yellow-400 focus:ring-yellow-400' : 'text-blue-600 focus:ring-blue-500'} border-gray-300 rounded`}
+                      aria-label="Has Medical Conditions"
+                    />
+                    <label className={`ml-2 text-sm ${theme === 'dark' ? 'text-gray-300' : 'text-gray-700'}`}>{t.yes || 'Yes'}</label>
+                  </div>
+                  {formData.hasMedicalConditions && (
+                    <div className="mt-4">
+                      <label className={`block text-sm font-medium ${theme === 'dark' ? 'text-gray-300' : 'text-gray-700'}`}>{t.medicalConditionsDetails || 'Please provide details'}</label>
+                      <textarea
+                        {...register('medicalConditions', { required: t.medicalConditionsError || 'Medical condition details are required' })}
+                        className={`mt-1 block w-full px-4 py-3 border ${theme === 'dark' ? 'bg-gray-700 border-gray-600 focus:ring-yellow-400 focus:border-yellow-400' : 'bg-white border-gray-300 focus:ring-blue-500 focus:border-blue-500'} rounded-lg shadow-sm transition-all duration-300`}
+                        rows="4"
+                        placeholder={t.medicalConditionsPlaceholder || 'Describe any medical conditions or allergies'}
+                        aria-label="Medical Conditions"
+                        aria-describedby={errors.medicalConditions ? 'medicalConditions-error' : undefined}
+                      />
+                      {errors.medicalConditions && <p id="medicalConditions-error" className={`text-xs mt-1 ${theme === 'dark' ? 'text-red-400' : 'text-red-500'}`}>{errors.medicalConditions.message}</p>}
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+
+            {currentStep === 3 && (
+              <div className="space-y-6 animate-fade-in">
+                <h3 className={`text-xl font-semibold ${theme === 'dark' ? 'text-white' : 'text-gray-800'}`}>{t.membership || 'Membership Information'}</h3>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
+                  <div>
+                    <label className={`block text-sm font-medium ${theme === 'dark' ? 'text-gray-300' : 'text-gray-700'}`}>{t.membershipType || 'Membership Type'}</label>
+                    <select
+                      {...register('membershipType', { required: t.membershipTypeError || 'Membership type is required' })}
+                      className={`mt-1 block w-full px-4 py-3 border ${theme === 'dark' ? 'bg-gray-700 border-gray-600 focus:ring-yellow-400 focus:border-yellow-400' : 'bg-white border-gray-300 focus:ring-blue-500 focus:border-blue-500'} rounded-lg shadow-sm transition-all duration-300`}
+                      aria-label="Membership Type"
+                      aria-describedby={errors.membershipType ? 'membershipType-error' : undefined}
+                    >
+                      <option value="">{t.select || 'Select...'}</option>
+                      <option value="monthly">{t.monthlyMembership || 'Monthly Membership'}</option>
+                      <option value="annual">{t.annualMembership || 'Annual Membership'}</option>
+                      <option value="day">{t.dayPass || 'Day Pass'}</option>
+                    </select>
+                    {errors.membershipType && <p id="membershipType-error" className={`text-xs mt-1 ${theme === 'dark' ? 'text-red-400' : 'text-red-500'}`}>{errors.membershipType.message}</p>}
+                  </div>
+                  <div>
+                    <label className={`block text-sm font-medium ${theme === 'dark' ? 'text-gray-300' : 'text-gray-700'}`}>{t.startDate || 'Preferred Start Date'}</label>
+                    <input
+                      type="date"
+                      {...register('startDate', { required: t.startDateError || 'Start date is required' })}
+                      className={`mt-1 block w-full px-4 py-3 border ${theme === 'dark' ? 'bg-gray-700 border-gray-600 focus:ring-yellow-400 focus:border-yellow-400' : 'bg-white border-gray-300 focus:ring-blue-500 focus:border-blue-500'} rounded-lg shadow-sm transition-all duration-300`}
+                      aria-label="Start Date"
+                      aria-describedby={errors.startDate ? 'startDate-error' : undefined}
+                    />
+                    {errors.startDate && <p id="startDate-error" className={`text-xs mt-1 ${theme === 'dark' ? 'text-red-400' : 'text-red-500'}`}>{errors.startDate.message}</p>}
+                  </div>
+                  <div className="sm:col-span-2">
+                    <label className={`block text-sm font-medium ${theme === 'dark' ? 'text-gray-300' : 'text-gray-700'}`}>{t.signature || 'Client Signature'}</label>
+                    <input
+                      {...register('signature', { required: t.signatureError || 'Signature is required' })}
+                      className={`mt-1 block w-full px-4 py-3 border ${theme === 'dark' ? 'bg-gray-700 border-gray-600 focus:ring-yellow-400 focus:border-yellow-400' : 'bg-white border-gray-300 focus:ring-blue-500 focus:border-blue-500'} rounded-lg shadow-sm transition-all duration-300`}
+                      placeholder={t.signaturePlaceholder || 'Type your full name as signature'}
+                      aria-label="Signature"
+                      aria-describedby={errors.signature ? 'signature-error' : undefined}
+                    />
+                    {errors.signature && <p id="signature-error" className={`text-xs mt-1 ${theme === 'dark' ? 'text-red-400' : 'text-red-500'}`}>{errors.signature.message}</p>}
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {currentStep === 4 && (
+              <div className="space-y-6 animate-fade-in">
+                <h3 className={`text-xl font-semibold ${theme === 'dark' ? 'text-white' : 'text-gray-800'}`}>{t.review || 'Review Your Information'}</h3>
+                <div className={`p-4 rounded-lg space-y-4 ${theme === 'dark' ? 'bg-gray-800' : 'bg-gray-50'}`}>
+                  <div>
+                    <h4 className={`text-sm font-semibold ${theme === 'dark' ? 'text-gray-300' : 'text-gray-700'}`}>{t.personalInfo || 'Personal Information'}</h4>
+                    <p className={`text-sm ${theme === 'dark' ? 'text-gray-300' : 'text-gray-600'}`}>
+                      {t.name || 'Name'}: {formData.firstName || t.notProvided || 'Not provided'} {formData.lastName || t.notProvided || 'Not provided'}<br />
+                      {t.phoneNumber || 'Phone'}: {formData.phoneNumber || t.notProvided || 'Not provided'}<br />
+                      {t.email || 'Email'}: {formData.email || t.notProvided || 'Not provided'}<br />
+                      {t.address || 'Address'}: {formData.address || t.notProvided || 'Not provided'}, {formData.city || t.notProvided || 'Not provided'}, {formData.country || t.notProvided || 'Not provided'}<br />
+                      {t.jobType || 'Job Type'}: {formData.jobType || t.notProvided || 'Not provided'}<br />
+                      {t.gender || 'Gender'}: {formData.gender ? (t[formData.gender] || formData.gender.charAt(0).toUpperCase() + formData.gender.slice(1)) : t.notProvided || 'Not provided'}
+                    </p>
+                  </div>
+                  <div>
+                    <h4 className={`text-sm font-semibold ${theme === 'dark' ? 'text-gray-300' : 'text-gray-700'}`}>{t.healthInfo || 'Health Information'}</h4>
+                    <p className={`text-sm ${theme === 'dark' ? 'text-gray-300' : 'text-gray-600'}`}>
+                      {t.height || 'Height'}: {formData.height || t.notProvided || 'Not provided'} cm<br />
+                      {t.weight || 'Weight'}: {formData.weight || t.notProvided || 'Not provided'} kg<br />
+                      {t.age || 'Age'}: {formData.age || t.notProvided || 'Not provided'}<br />
+                      {t.bmi || 'BMI'}: {formData.bmi || t.notProvided || 'Not provided'}<br />
+                      {t.bloodType || 'Blood Type'}: {formData.bloodType || t.notProvided || 'Not provided'}<br />
+                      {t.goalWeight || 'Goal Weight'}: {formData.goalWeight || t.notProvided || 'Not provided'} kg
+                    </p>
+                  </div>
+                  <div>
+                    <h4 className={`text-sm font-semibold ${theme === 'dark' ? 'text-gray-300' : 'text-gray-700'}`}>{t.emergencyContact || 'Emergency Contact'}</h4>
+                    <p className={`text-sm ${theme === 'dark' ? 'text-gray-300' : 'text-gray-600'}`}>
+                      {t.emergencyName || 'Name'}: {formData.emergencyName || t.notProvided || 'Not provided'}<br />
+                      {t.emergencyPhone || 'Phone'}: {formData.emergencyPhone || t.notProvided || 'Not provided'}<br />
+                      {t.relationship || 'Relationship'}: {formData.relationship || t.notProvided || 'Not provided'}<br />
+                      {t.medicalConditions || 'Medical Conditions'}: {formData.hasMedicalConditions ? (formData.medicalConditions || t.notProvided || 'Not provided') : t.none || 'None'}
+                    </p>
+                  </div>
+                  <div>
+                    <h4 className={`text-sm font-semibold ${theme === 'dark' ? 'text-gray-300' : 'text-gray-700'}`}>{t.membership || 'Membership Information'}</h4>
+                    <p className={`text-sm ${theme === 'dark' ? 'text-gray-300' : 'text-gray-600'}`}>
+                      {t.membershipType || 'Membership Type'}: {formData.membershipType ? (t[formData.membershipType] || formData.membershipType.charAt(0).toUpperCase() + formData.membershipType.slice(1)) : t.notProvided || 'Not provided'}<br />
+                      {t.startDate || 'Start Date'}: {formData.startDate || t.notProvided || 'Not provided'}<br />
+                      {t.signature || 'Signature'}: {formData.signature || t.notProvided || 'Not provided'}
+                    </p>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            <div className="flex justify-between mt-8">
               <button
                 type="button"
-                onClick={nextStep}
-                className="px-6 py-3 rounded-lg text-sm font-medium bg-indigo-600 text-white hover:bg-indigo-700 focus:ring-2 focus:ring-indigo-500 transition-all duration-300"
+                onClick={prevStep}
+                disabled={currentStep === 0}
+                className={`px-6 py-3 rounded-lg text-sm font-medium transition-all duration-300 ${currentStep === 0 ? (theme === 'dark' ? 'bg-gray-600 text-gray-400 cursor-not-allowed' : 'bg-gray-300 text-gray-500 cursor-not-allowed') : (theme === 'dark' ? 'bg-gray-700 text-white hover:bg-gray-600 focus:ring-2 focus:ring-yellow-400' : 'bg-gray-600 text-white hover:bg-gray-700 focus:ring-2 focus:ring-gray-500')}`}
               >
-                Next
+                <ChevronLeftIcon className="w-5 h-5 inline mr-1" /> {t.previous || 'Previous'}
               </button>
-            ) : (
-              <button
-                type="submit"
-                disabled={!isAuthenticated || isUploading}
-                className={`px-6 py-3 rounded-lg text-sm font-medium text-white transition-all duration-300 ${
-                  isAuthenticated && !isUploading
-                    ? 'bg-indigo-600 hover:bg-indigo-700 focus:ring-2 focus:ring-indigo-500'
-                    : 'bg-gray-400 cursor-not-allowed'
-                }`}
-              >
-                Submit
-              </button>
-            )}
-          </div>
-        </form>
-        <ToastContainer position="top-right" autoClose={3000} />
+              {currentStep < steps.length - 1 ? (
+                <button
+                  type="button"
+                  onClick={nextStep}
+                  className={`px-6 py-3 rounded-lg text-sm font-medium ${theme === 'dark' ? 'bg-gray-700 text-white hover:bg-gray-600 focus:ring-2 focus:ring-yellow-400' : 'bg-blue-600 text-white hover:bg-blue-700 focus:ring-2 focus:ring-blue-500'} transition-all duration-300`}
+                >
+                  {t.next || 'Next'} <ChevronRightIcon className="w-5 h-5 inline ml-1" />
+                </button>
+              ) : (
+                <button
+                  type="submit"
+                  disabled={!isAuthenticated || isUploading}
+                  className={`px-6 py-3 rounded-lg text-sm font-medium transition-all duration-300 ${isAuthenticated && !isUploading ? (theme === 'dark' ? 'bg-gray-700 text-white hover:bg-gray-600 focus:ring-2 focus:ring-yellow-400' : 'bg-blue-600 text-white hover:bg-blue-700 focus:ring-2 focus:ring-blue-500') : (theme === 'dark' ? 'bg-gray-600 text-gray-400 cursor-not-allowed' : 'bg-gray-400 text-gray-500 cursor-not-allowed')}`}
+                >
+                  {t.submit || 'Submit'}
+                </button>
+              )}
+            </div>
+          </form>
+          <ToastContainer position="top-right" autoClose={3000} theme={theme} />
+        </div>
       </div>
 
-      {/* Custom CSS for animations */}
       <style jsx>{`
         .animate-fade-in {
           animation: fadeIn 0.5s ease-in;
@@ -837,6 +732,6 @@ export default function EarobicsRegistrationForm() {
           to { opacity: 1; transform: translateY(0); }
         }
       `}</style>
-    </div>
+    </>
   );
 }

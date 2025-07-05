@@ -1,825 +1,880 @@
-
 "use client";
 
-import { useState, useEffect } from 'react';
-import { useRouter } from 'next/navigation';
-import Head from 'next/head';
+import React, { useState, useEffect, useContext } from 'react';
+import { useForm } from 'react-hook-form';
 import { ToastContainer, toast } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
 import { collection, addDoc } from 'firebase/firestore';
-import { signInAnonymously, onAuthStateChanged } from 'firebase/auth';
-import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
-import { db, auth, storage } from '../fconfig';
+import { onAuthStateChanged } from 'firebase/auth';
+import { auth, db } from '../fconfig';
+import { LanguageContext } from '../../context/LanguageContext';
+import { ThemeContext } from '../../context/ThemeContext';
+import { ChevronLeftIcon, ChevronRightIcon, CheckCircleIcon } from '@heroicons/react/24/solid';
 
-export default function PersonalTrainingForm() {
-  const router = useRouter();
-  const [formData, setFormData] = useState({
-    firstName: '',
-    lastName: '',
-    phoneNumber: '',
-    photo: null,
-    address: '',
-    city: '',
-    country: '',
-    jobType: '',
-    email: '',
-    emergencyName: '',
-    emergencyPhone: '',
-    gender: '',
-    height: '',
-    weight: '',
-    age: '',
-    bmi: '',
-    bloodType: '',
-    goalWeight: '',
-    relationship: '',
-    healthIssues: '',
-    medications: '',
-    workSchedule: '',
-    travelFrequency: '',
-    physicalActivities: '',
-    medicalConditions: '',
-    medicalConditionsDetails: '',
-    dietType: '',
-    trainingGoal: '',
-    goalReason: '',
-    goalTimeline: '',
-    previousTraining: '',
-    trainingType: '',
-    preferredTrainingTime: [],
-    trainerExpectations: '',
-    agreeTerms: false,
-    preferredStartDate: '',
-    signature: '',
+// Cloudinary configuration
+const CLOUDINARY_UPLOAD_PRESET = process.env.NEXT_PUBLIC_CLOUDINARY_UPLOAD_PRESET || 'promotionvideo';
+const CLOUDINARY_CLOUD_NAME = process.env.NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME || 'dkifgcmpy';
+const CLOUDINARY_FOLDER = process.env.NEXT_PUBLIC_CLOUDINARY_FOLDER || 'video/promotionvideo';
+
+const PersonalTrainingForm = () => {
+  const { t } = useContext(LanguageContext);
+  const { theme } = useContext(ThemeContext) || { theme: 'light' };
+  const { register, handleSubmit, formState: { errors }, setValue, watch } = useForm({
+    defaultValues: {
+      firstName: '',
+      lastName: '',
+      phoneNumber: '',
+      photo: null,
+      address: '',
+      city: '',
+      country: '',
+      jobType: '',
+      email: '',
+      emergencyName: '',
+      emergencyPhone: '',
+      gender: '',
+      height: '',
+      weight: '',
+      age: '',
+      bmi: '',
+      bloodType: '',
+      goalWeight: '',
+      relationship: '',
+      healthIssues: '',
+      medications: '',
+      workSchedule: '',
+      travelFrequency: '',
+      physicalActivities: '',
+      medicalConditions: '',
+      medicalConditionsDetails: '',
+      dietType: '',
+      trainingGoal: '',
+      goalReason: '',
+      goalTimeline: '',
+      previousTraining: '',
+      trainingType: '',
+      preferredTrainingTime: '',
+      trainerExpectations: '',
+      agreeTerms: false,
+      preferredStartDate: '',
+      signature: '',
+    },
   });
-  const [errors, setErrors] = useState({});
-  const [uploading, setUploading] = useState(false);
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [formErrors, setFormErrors] = useState({});
-  const [currentStep, setCurrentStep] = useState(1);
+  const [currentStep, setCurrentStep] = useState(0);
+  const [isSubmitted, setIsSubmitted] = useState(false);
+  const [isUploading, setIsUploading] = useState(false);
+  const [photoPreview, setPhotoPreview] = useState(null);
 
   const steps = [
-    { id: 1, title: 'Personal Information' },
-    { id: 2, title: 'Health Information' },
-    { id: 3, title: 'Lifestyle' },
-    { id: 4, title: 'Training Goals' },
+    {
+      name: t.personalInfo || 'Personal Info',
+      fields: ['firstName', 'lastName', 'phoneNumber', 'email', 'address', 'city', 'country', 'jobType', 'emergencyName', 'emergencyPhone', 'gender'],
+    },
+    {
+      name: t.healthInfo || 'Health Info',
+      fields: ['height', 'weight', 'age', 'bmi', 'bloodType', 'goalWeight', 'medicalConditions', 'medicalConditionsDetails', 'healthIssues', 'medications'],
+    },
+    {
+      name: t.lifestyle || 'Lifestyle',
+      fields: ['workSchedule', 'travelFrequency', 'physicalActivities', 'dietType', 'relationship'],
+    },
+    {
+      name: t.trainingGoals || 'Training Goals',
+      fields: ['trainingGoal', 'goalReason', 'goalTimeline', 'previousTraining', 'trainingType', 'preferredTrainingTime', 'trainerExpectations'],
+    },
+    {
+      name: t.review || 'Review',
+      fields: ['photo', 'preferredStartDate', 'signature', 'agreeTerms'],
+    },
   ];
 
-  const handleChange = (e) => {
-    const { name, value, type, checked, files } = e.target;
-    if (type === 'checkbox' && name === 'preferredTrainingTime') {
-      setFormData({
-        ...formData,
-        preferredTrainingTime: checked
-          ? [...formData.preferredTrainingTime, value]
-          : formData.preferredTrainingTime.filter((t) => t !== value),
-      });
-    } else {
-      setFormData({
-        ...formData,
-        [name]: type === 'checkbox' ? checked : type === 'file' ? files[0] : value,
-      });
-    }
-  };
-
-  const calculateBMI = () => {
-    const heightInMeters = parseFloat(formData.height) / 100;
-    const weight = parseFloat(formData.weight);
-    if (heightInMeters > 0 && weight > 0) {
-      const bmi = weight / (heightInMeters * heightInMeters);
-      setFormData({ ...formData, bmi: bmi.toFixed(1) });
-    } else {
-      setFormData({ ...formData, bmi: '' });
-    }
-  };
-
-  const validateStep = (step) => {
-    const newErrors = {};
-    if (step === 1) {
-      if (!formData.firstName.trim()) newErrors.firstName = 'First name is required';
-      if (!formData.lastName.trim()) newErrors.lastName = 'Last name is required';
-      if (!formData.email || !/\S+@\S+\.\S+/.test(formData.email)) newErrors.email = 'Valid email is required';
-      if (!formData.phoneNumber.trim()) newErrors.phoneNumber = 'Phone number is required';
-    } else if (step === 2) {
-      if (formData.height && isNaN(formData.height)) newErrors.height = 'Height must be a number';
-      if (formData.weight && isNaN(formData.weight)) newErrors.weight = 'Weight must be a number';
-      if (formData.age && isNaN(formData.age)) newErrors.age = 'Age must be a number';
-      if (formData.goalWeight && isNaN(formData.goalWeight)) newErrors.goalWeight = 'Goal weight must be a number';
-    } else if (step === 4) {
-      if (!formData.agreeTerms) newErrors.agreeTerms = 'You must agree to terms';
-    }
-    setErrors(newErrors);
-    return Object.keys(newErrors).length === 0;
-  };
+  // Watch height and weight for BMI calculation
+  const height = watch('height');
+  const weight = watch('weight');
 
   useEffect(() => {
-    if (!auth || !db || !storage) {
-      setFormErrors({ global: 'Firebase services are not initialized.' });
+    if (height && weight && !isNaN(height) && !isNaN(weight) && height > 0 && weight > 0) {
+      const heightInMeters = parseFloat(height) / 100;
+      const weightInKg = parseFloat(weight);
+      const bmi = (weightInKg / (heightInMeters * heightInMeters)).toFixed(2);
+      setValue('bmi', bmi);
+    } else {
+      setValue('bmi', '');
+    }
+  }, [height, weight, setValue]);
+
+  // Validate Firebase services
+  useEffect(() => {
+    if (!auth || !db) {
+      setFormErrors({ global: t.serviceError || 'Firebase services are not initialized.' });
       setIsLoading(false);
       return;
     }
 
-    let mounted = true;
-    let retryCount = 0;
-    const maxRetries = 3;
-    const retryDelay = 1000;
-
-    const attemptSignIn = async () => {
-      try {
-        await signInAnonymously(auth);
-        if (mounted) console.log('Signed in anonymously');
-      } catch (err) {
-        if (mounted) {
-          if (retryCount < maxRetries) {
-            retryCount++;
-            setTimeout(attemptSignIn, retryDelay);
-          } else {
-            setFormErrors({ global: `Authentication failed: ${err.message || 'Unknown error'}` });
-            setIsLoading(false);
-          }
-        }
+    const unsubscribe = onAuthStateChanged(auth, (user) => {
+      setIsAuthenticated(!!user);
+      setIsLoading(false);
+    }, (error) => {
+      console.error('Auth state error:', error);
+      if (error.code === 'auth/invalid-api-key') {
+        setFormErrors({ global: t.serviceError || 'Invalid Firebase API key. Please contact support.' });
+      } else {
+        setFormErrors({ global: t.authError || 'Authentication error occurred.' });
       }
-    };
+      setIsLoading(false);
+    });
 
-    const initializeAuth = async () => {
-      try {
-        const unsubscribe = onAuthStateChanged(auth, (user) => {
-          if (!mounted) return;
-          if (user) {
-            setIsAuthenticated(true);
-            setIsLoading(false);
-          } else {
-            attemptSignIn();
-          }
-        });
-        return () => {
-          mounted = false;
-          unsubscribe();
-        };
-      } catch (err) {
-        if (mounted) {
-          setFormErrors({ global: `Authentication setup failed: ${err.message || 'Unknown error'}` });
-          setIsLoading(false);
+    return () => unsubscribe();
+  }, [t]);
+
+  const uploadToCloudinary = async (file) => {
+    if (!file) return null;
+    const maxSize = 5 * 1024 * 1024; // 5MB
+    if (file.size > maxSize) {
+      toast.error(t.fileSizeError || 'File size exceeds 5MB limit.');
+      return null;
+    }
+    if (!file.type.startsWith('image/')) {
+      toast.error(t.fileTypeError || 'Please upload a valid image file.');
+      return null;
+    }
+    setIsUploading(true);
+    try {
+      const formData = new FormData();
+      formData.append('file', file);
+      formData.append('upload_preset', CLOUDINARY_UPLOAD_PRESET);
+      formData.append('folder', CLOUDINARY_FOLDER);
+
+      const response = await fetch(
+        `https://api.cloudinary.com/v1_1/${CLOUDINARY_CLOUD_NAME}/image/upload`,
+        {
+          method: 'POST',
+          body: formData,
         }
+      );
+      const responseJson = await response.json();
+      setIsUploading(false);
+      if (responseJson.secure_url) {
+        return responseJson.secure_url;
+      } else {
+        toast.error(t.storageError || 'Failed to upload image.');
+        return null;
       }
-    };
+    } catch (error) {
+      setIsUploading(false);
+      toast.error(t.storageError || `Failed to upload image: ${error.message}`);
+      return null;
+    }
+  };
 
-    initializeAuth();
-    return () => {
-      mounted = false;
-    };
-  }, []);
+  const handlePhotoChange = (e) => {
+    const file = e.target.files[0];
+    if (file) {
+      setValue('photo', e.target.files);
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        setPhotoPreview(reader.result);
+      };
+      reader.readAsDataURL(file);
+    } else {
+      setPhotoPreview(null);
+    }
+  };
 
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-    if (!validateStep(currentStep)) return;
-
-    if (!isAuthenticated || !auth.currentUser) {
-      toast.error('User is not authenticated.');
+  const onSubmit = async (data) => {
+    setFormErrors({});
+    if (!isAuthenticated) {
+      setFormErrors({ global: t.authError || 'You must be logged in to submit the form.' });
+      toast.error(t.authError || 'You must be logged in to submit the form.');
+      return;
+    }
+    if (!db) {
+      setFormErrors({ global: t.serviceError || 'Firestore database is not initialized.' });
+      toast.error(t.serviceError || 'Firestore database is not initialized.');
       return;
     }
 
-    setUploading(true);
-    setFormErrors({});
-    let photoUrl = '';
-
     try {
-      if (!db || !storage) throw new Error('Firebase Firestore or Storage is not initialized.');
-
-      if (formData.photo) {
-        const photoRef = ref(storage, `photos/${formData.email}_${formData.photo.name}`);
-        await uploadBytes(photoRef, formData.photo);
-        photoUrl = await getDownloadURL(photoRef);
+      let photoURL = '';
+      if (data.photo && data.photo[0]) {
+        photoURL = await uploadToCloudinary(data.photo[0]);
+        if (!photoURL) {
+          throw new Error(t.storageError || 'Image upload failed.');
+        }
       }
 
-      const sanitizedData = Object.fromEntries(
-        Object.entries(formData).map(([key, value]) => [
-          key,
-          key === 'preferredTrainingTime' ? value : value ?? ''
-        ])
-      );
-
-      if (!sanitizedData.bmi) calculateBMI();
-
-      const dataToStore = {
-        ...sanitizedData,
-        photo: null,
-        photoUrl,
-        bmi: sanitizedData.bmi || formData.bmi,
-        preferredTrainingTime: sanitizedData.preferredTrainingTime || [],
-        uid: auth.currentUser.uid,
-        createdAt: new Date().toISOString(),
-      };
-
-      const personalTrainingCollectionRef = collection(db, 'personalTraining');
-      await addDoc(personalTrainingCollectionRef, dataToStore);
-
-      toast.success('Registration successful!');
-      router.push('/success');
-    } catch (err) {
-      let errorMessage = 'An error occurred while saving your registration.';
-      if (err.code === 'permission-denied') {
-        errorMessage = 'Permission denied: Unable to save data.';
-      } else if (err.code === 'unavailable') {
-        errorMessage = 'Firebase service is unavailable.';
-      } else if (err.code === 'invalid-argument') {
-        errorMessage = 'Invalid data provided.';
-      } else if (err.code === 'storage/unauthorized') {
-        errorMessage = 'Storage permission denied.';
-      } else if (err.message) {
-        errorMessage = `Error: ${err.message}`;
+      await addDoc(collection(db, 'personalTraining'), {
+        ...data,
+        photo: null, // Store null since we use photoURL
+        photoURL,
+        userId: auth.currentUser.uid,
+        timestamp: new Date(),
+      });
+      toast.success(t.registrationComplete || 'Registration successful!');
+      setIsSubmitted(true);
+    } catch (error) {
+      console.error('Submission error:', error);
+      let errorMessage = error.message || t.saveError || 'An error occurred while saving your data.';
+      if (error.code === 'permission-denied') {
+        errorMessage = t.permissionError || 'Permission denied: Unable to save data.';
+      } else if (error.code === 'unavailable') {
+        errorMessage = t.serviceError || 'Firestore service is unavailable.';
+      } else if (error.code === 'auth/invalid-api-key') {
+        errorMessage = t.serviceError || 'Invalid Firebase API key. Please contact support.';
       }
       toast.error(errorMessage);
       setFormErrors({ global: errorMessage });
-    } finally {
-      setUploading(false);
     }
   };
 
-  const handleNext = () => {
-    if (validateStep(currentStep)) {
-      setCurrentStep((prev) => Math.min(prev + 1, steps.length));
+  const nextStep = async () => {
+    if (currentStep < steps.length - 1) {
+      const currentFields = steps[currentStep].fields;
+      const hasErrors = currentFields.some((field) => errors[field]);
+      if (!hasErrors) {
+        setCurrentStep(currentStep + 1);
+      } else {
+        toast.error(t.validationError || 'Please fix errors before proceeding.');
+      }
     }
   };
 
-  const handlePrevious = () => {
-    setCurrentStep((prev) => Math.max(prev - 1, 1));
+  const prevStep = () => {
+    if (currentStep > 0) setCurrentStep(currentStep - 1);
   };
+
+  const formData = watch();
 
   if (isLoading) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gradient-to-r from-blue-100 to-indigo-100">
-        <div className="text-2xl font-semibold text-gray-700 animate-pulse">Loading...</div>
+      <div className={`min-h-screen flex items-center justify-center ${theme === 'dark' ? 'bg-gradient-to-r from-gray-700 to-gray-800' : 'bg-gradient-to-r from-blue-50 to-purple-50'}`}>
+        <div className={`text-2xl font-semibold ${theme === 'dark' ? 'text-gray-300' : 'text-gray-700'} animate-pulse`}>{t.loading || 'Loading...'}</div>
+      </div>
+    );
+  }
+
+  if (isSubmitted) {
+    return (
+      <div className={`min-h-screen flex items-center justify-center ${theme === 'dark' ? 'bg-gradient-to-r from-gray-700 to-gray-800' : 'bg-gradient-to-r from-blue-50 to-purple-50'}`}>
+        <div className={`max-w-4xl w-full ${theme === 'dark' ? 'bg-gray-800 border-gray-600' : 'bg-white border-gray-200'} p-8 rounded-xl shadow-2xl text-center border`}>
+          <h2 className={`text-3xl font-extrabold ${theme === 'dark' ? 'text-white' : 'text-gray-900'} mb-6`}>{t.registrationComplete || 'Registration Complete!'}</h2>
+          <p className={`${theme === 'dark' ? 'text-gray-300' : 'text-gray-600'} mb-8`}>{t.registrationMessage || 'Thank you for registering with the Gym. Your information has been successfully saved.'}</p>
+          <button
+            onClick={() => window.location.href = '/'}
+            className={`px-6 py-3 rounded-lg text-sm font-medium ${theme === 'dark' ? 'bg-gray-700 text-white hover:bg-gray-600 focus:ring-2 focus:ring-yellow-400' : 'bg-blue-600 text-white hover:bg-blue-700 focus:ring-2 focus:ring-blue-500'} transition-all duration-300`}
+          >
+            {t.goToHome || 'Go to Home Page'}
+          </button>
+        </div>
       </div>
     );
   }
 
   return (
     <>
-      <Head>
-        <title>Personal Training Consultation Form</title>
-      </Head>
-      <div className="min-h-screen bg-gradient-to-r from-blue-100 to-indigo-100 flex items-center justify-center py-12 px-4 sm:px-6 lg:px-8">
-        <div className="max-w-4xl w-full bg-white p-8 rounded-xl shadow-2xl">
-          <h2 className="text-3xl font-extrabold text-center text-gray-900 mb-8">Personal Training Consultation</h2>
-          
-          {/* Stepper */}
+      <div className={`min-h-screen flex items-center justify-center py-12 px-4 sm:px-6 lg:px-8 ${theme === 'dark' ? 'bg-gradient-to-r from-gray-700 to-gray-800' : 'bg-gradient-to-r from-blue-50 to-purple-50'}`}>
+        <div className={`max-w-4xl w-full ${theme === 'dark' ? 'bg-gray-800 border-gray-600' : 'bg-white border-gray-200'} p-8 rounded-xl shadow-2xl border`}>
+          <h2 className={`text-3xl font-extrabold text-center ${theme === 'dark' ? 'text-white' : 'text-gray-900'} mb-8`}>{t.title || 'Personal Training Registration'}</h2>
+
           <div className="flex justify-between mb-8">
-            {steps.map((step) => (
-              <div key={step.id} className="flex-1 text-center">
-                <div className={`w-10 h-10 mx-auto rounded-full flex items-center justify-center ${currentStep >= step.id ? 'bg-indigo-600 text-white' : 'bg-gray-200 text-gray-600'}`}>
-                  {step.id}
+            {steps.map((step, index) => (
+              <div key={step.name} className="flex-1 text-center">
+                <div className={`w-10 h-10 mx-auto rounded-full flex items-center justify-center ${index <= currentStep ? (theme === 'dark' ? 'bg-gray-700 text-white' : 'bg-blue-600 text-white') : (theme === 'dark' ? 'bg-gray-600 text-gray-300' : 'bg-gray-200 text-gray-600')}`}>
+                  {index < currentStep ? <CheckCircleIcon className={`w-6 h-6 ${theme === 'dark' ? 'text-yellow-400' : 'text-blue-600'}`} /> : index + 1}
                 </div>
-                <p className="mt-2 text-sm font-medium text-gray-700">{step.title}</p>
+                <p className={`mt-2 text-sm font-medium ${theme === 'dark' ? 'text-gray-300' : 'text-gray-700'}`}>{step.name}</p>
               </div>
             ))}
           </div>
 
           {formErrors.global && (
-            <p className="text-red-500 text-center mb-6 bg-red-50 p-3 rounded-md">{formErrors.global}</p>
+            <p className={`text-center mb-6 ${theme === 'dark' ? 'bg-red-900/50 text-red-400' : 'bg-red-50 text-red-500'} p-3 rounded-md`}>{formErrors.global}</p>
           )}
 
-          <form onSubmit={handleSubmit} className="space-y-6">
-            {/* Step 1: Personal Information */}
-            {currentStep === 1 && (
+          <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
+            {currentStep === 0 && (
               <div className="space-y-6 animate-fade-in">
-                <h3 className="text-xl font-semibold text-gray-800">Personal Information</h3>
+                <h3 className={`text-xl font-semibold ${theme === 'dark' ? 'text-white' : 'text-gray-800'}`}>{t.personalInfo || 'Personal Information'}</h3>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
                   <div>
-                    <label className="block text-sm font-medium text-gray-700">First Name</label>
+                    <label className={`block text-sm font-medium ${theme === 'dark' ? 'text-gray-300' : 'text-gray-700'}`}>{t.firstName || 'First Name'}</label>
                     <input
-                      type="text"
-                      name="firstName"
-                      value={formData.firstName}
-                      onChange={handleChange}
-                      className="mt-1 block w-full px-4 py-3 border border-gray-300 rounded-lg shadow-sm focus:ring-indigo-500 focus:border-indigo-500 transition-all duration-300"
-                      placeholder="Enter your first name"
+                      {...register('firstName', { required: t.firstNameError || 'First name is required' })}
+                      className={`mt-1 block w-full px-4 py-3 border ${theme === 'dark' ? 'bg-gray-700 border-gray-600 focus:ring-yellow-400 focus:border-yellow-400' : 'bg-white border-gray-300 focus:ring-blue-500 focus:border-blue-500'} rounded-lg shadow-sm transition-all duration-300`}
+                      placeholder={t.firstNamePlaceholder || 'Enter your first name'}
+                      aria-label="First Name"
+                      aria-describedby={errors.firstName ? 'firstName-error' : undefined}
                     />
-                    {errors.firstName && <p className="text-red-500 text-xs mt-1">{errors.firstName}</p>}
+                    {errors.firstName && <p id="firstName-error" className={`text-xs mt-1 ${theme === 'dark' ? 'text-red-400' : 'text-red-500'}`}>{errors.firstName.message}</p>}
                   </div>
                   <div>
-                    <label className="block text-sm font-medium text-gray-700">Last Name</label>
+                    <label className={`block text-sm font-medium ${theme === 'dark' ? 'text-gray-300' : 'text-gray-700'}`}>{t.lastName || 'Last Name'}</label>
                     <input
-                      type="text"
-                      name="lastName"
-                      value={formData.lastName}
-                      onChange={handleChange}
-                      className="mt-1 block w-full px-4 py-3 border border-gray-300 rounded-lg shadow-sm focus:ring-indigo-500 focus:border-indigo-500 transition-all duration-300"
-                      placeholder="Enter your last name"
+                      {...register('lastName', { required: t.lastNameError || 'Last name is required' })}
+                      className={`mt-1 block w-full px-4 py-3 border ${theme === 'dark' ? 'bg-gray-700 border-gray-600 focus:ring-yellow-400 focus:border-yellow-400' : 'bg-white border-gray-300 focus:ring-blue-500 focus:border-blue-500'} rounded-lg shadow-sm transition-all duration-300`}
+                      placeholder={t.lastNamePlaceholder || 'Enter your last name'}
+                      aria-label="Last Name"
+                      aria-describedby={errors.lastName ? 'lastName-error' : undefined}
                     />
-                    {errors.lastName && <p className="text-red-500 text-xs mt-1">{errors.lastName}</p>}
+                    {errors.lastName && <p id="lastName-error" className={`text-xs mt-1 ${theme === 'dark' ? 'text-red-400' : 'text-red-500'}`}>{errors.lastName.message}</p>}
                   </div>
                   <div>
-                    <label className="block text-sm font-medium text-gray-700">Email Address</label>
+                    <label className={`block text-sm font-medium ${theme === 'dark' ? 'text-gray-300' : 'text-gray-700'}`}>{t.phoneNumber || 'Phone Number'}</label>
+                    <input
+                      type="tel"
+                      {...register('phoneNumber', { required: t.phoneNumberError || 'Phone number is required', pattern: { value: /^\+?[\d\s-]{10,}$/, message: t.phoneNumberInvalid || 'Invalid phone number' } })}
+                      className={`mt-1 block w-full px-4 py-3 border ${theme === 'dark' ? 'bg-gray-700 border-gray-600 focus:ring-yellow-400 focus:border-yellow-400' : 'bg-white border-gray-300 focus:ring-blue-500 focus:border-blue-500'} rounded-lg shadow-sm transition-all duration-300`}
+                      placeholder={t.phoneNumberPlaceholder || 'Enter your phone number'}
+                      aria-label="Phone Number"
+                      aria-describedby={errors.phoneNumber ? 'phoneNumber-error' : undefined}
+                    />
+                    {errors.phoneNumber && <p id="phoneNumber-error" className={`text-xs mt-1 ${theme === 'dark' ? 'text-red-400' : 'text-red-500'}`}>{errors.phoneNumber.message}</p>}
+                  </div>
+                  <div>
+                    <label className={`block text-sm font-medium ${theme === 'dark' ? 'text-gray-300' : 'text-gray-700'}`}>{t.email || 'Email'}</label>
                     <input
                       type="email"
-                      name="email"
-                      value={formData.email}
-                      onChange={handleChange}
-                      className="mt-1 block w-full px-4 py-3 border border-gray-300 rounded-lg shadow-sm focus:ring-indigo-500 focus:border-indigo-500 transition-all duration-300"
-                      placeholder="Enter your email"
+                      {...register('email', { required: t.emailError || 'Email is required', pattern: { value: /^\S+@\S+\.\S+$/, message: t.emailInvalid || 'Invalid email' } })}
+                      className={`mt-1 block w-full px-4 py-3 border ${theme === 'dark' ? 'bg-gray-700 border-gray-600 focus:ring-yellow-400 focus:border-yellow-400' : 'bg-white border-gray-300 focus:ring-blue-500 focus:border-blue-500'} rounded-lg shadow-sm transition-all duration-300`}
+                      placeholder={t.emailPlaceholder || 'Enter your email'}
+                      aria-label="Email"
+                      aria-describedby={errors.email ? 'email-error' : undefined}
                     />
-                    {errors.email && <p className="text-red-500 text-xs mt-1">{errors.email}</p>}
+                    {errors.email && <p id="email-error" className={`text-xs mt-1 ${theme === 'dark' ? 'text-red-400' : 'text-red-500'}`}>{errors.email.message}</p>}
+                  </div>
+                  <div className="sm:col-span-2">
+                    <label className={`block text-sm font-medium ${theme === 'dark' ? 'text-gray-300' : 'text-gray-700'}`}>{t.address || 'Address'}</label>
+                    <input
+                      {...register('address', { required: t.addressError || 'Address is required' })}
+                      className={`mt-1 block w-full px-4 py-3 border ${theme === 'dark' ? 'bg-gray-700 border-gray-600 focus:ring-yellow-400 focus:border-yellow-400' : 'bg-white border-gray-300 focus:ring-blue-500 focus:border-blue-500'} rounded-lg shadow-sm transition-all duration-300`}
+                      placeholder={t.addressPlaceholder || 'Enter your address'}
+                      aria-label="Address"
+                      aria-describedby={errors.address ? 'address-error' : undefined}
+                    />
+                    {errors.address && <p id="address-error" className={`text-xs mt-1 ${theme === 'dark' ? 'text-red-400' : 'text-red-500'}`}>{errors.address.message}</p>}
                   </div>
                   <div>
-                    <label className="block text-sm font-medium text-gray-700">Phone Number</label>
+                    <label className={`block text-sm font-medium ${theme === 'dark' ? 'text-gray-300' : 'text-gray-700'}`}>{t.city || 'City'}</label>
+                    <input
+                      {...register('city', { required: t.cityError || 'City is required' })}
+                      className={`mt-1 block w-full px-4 py-3 border ${theme === 'dark' ? 'bg-gray-700 border-gray-600 focus:ring-yellow-400 focus:border-yellow-400' : 'bg-white border-gray-300 focus:ring-blue-500 focus:border-blue-500'} rounded-lg shadow-sm transition-all duration-300`}
+                      placeholder={t.cityPlaceholder || 'Enter your city'}
+                      aria-label="City"
+                      aria-describedby={errors.city ? 'city-error' : undefined}
+                    />
+                    {errors.city && <p id="city-error" className={`text-xs mt-1 ${theme === 'dark' ? 'text-red-400' : 'text-red-500'}`}>{errors.city.message}</p>}
+                  </div>
+                  <div>
+                    <label className={`block text-sm font-medium ${theme === 'dark' ? 'text-gray-300' : 'text-gray-700'}`}>{t.country || 'Country'}</label>
+                    <input
+                      {...register('country', { required: t.countryError || 'Country is required' })}
+                      className={`mt-1 block w-full px-4 py-3 border ${theme === 'dark' ? 'bg-gray-700 border-gray-600 focus:ring-yellow-400 focus:border-yellow-400' : 'bg-white border-gray-300 focus:ring-blue-500 focus:border-blue-500'} rounded-lg shadow-sm transition-all duration-300`}
+                      placeholder={t.countryPlaceholder || 'Enter your country'}
+                      aria-label="Country"
+                      aria-describedby={errors.country ? 'country-error' : undefined}
+                    />
+                    {errors.country && <p id="country-error" className={`text-xs mt-1 ${theme === 'dark' ? 'text-red-400' : 'text-red-500'}`}>{errors.country.message}</p>}
+                  </div>
+                  <div>
+                    <label className={`block text-sm font-medium ${theme === 'dark' ? 'text-gray-300' : 'text-gray-700'}`}>{t.jobType || 'Job Type'}</label>
+                    <input
+                      {...register('jobType')}
+                      className={`mt-1 block w-full px-4 py-3 border ${theme === 'dark' ? 'bg-gray-700 border-gray-600 focus:ring-yellow-400 focus:border-yellow-400' : 'bg-white border-gray-300 focus:ring-blue-500 focus:border-blue-500'} rounded-lg shadow-sm transition-all duration-300`}
+                      placeholder={t.jobTypePlaceholder || 'Enter your job type'}
+                      aria-label="Job Type"
+                    />
+                  </div>
+                  <div>
+                    <label className={`block text-sm font-medium ${theme === 'dark' ? 'text-gray-300' : 'text-gray-700'}`}>{t.emergencyName || 'Emergency Contact Name'}</label>
+                    <input
+                      {...register('emergencyName', { required: t.emergencyNameError || 'Emergency contact name is required' })}
+                      className={`mt-1 block w-full px-4 py-3 border ${theme === 'dark' ? 'bg-gray-700 border-gray-600 focus:ring-yellow-400 focus:border-yellow-400' : 'bg-white border-gray-300 focus:ring-blue-500 focus:border-blue-500'} rounded-lg shadow-sm transition-all duration-300`}
+                      placeholder={t.emergencyNamePlaceholder || 'Enter emergency contact name'}
+                      aria-label="Emergency Contact Name"
+                      aria-describedby={errors.emergencyName ? 'emergencyName-error' : undefined}
+                    />
+                    {errors.emergencyName && <p id="emergencyName-error" className={`text-xs mt-1 ${theme === 'dark' ? 'text-red-400' : 'text-red-500'}`}>{errors.emergencyName.message}</p>}
+                  </div>
+                  <div>
+                    <label className={`block text-sm font-medium ${theme === 'dark' ? 'text-gray-300' : 'text-gray-700'}`}>{t.emergencyPhone || 'Emergency Phone Number'}</label>
                     <input
                       type="tel"
-                      name="phoneNumber"
-                      value={formData.phoneNumber}
-                      onChange={handleChange}
-                      className="mt-1 block w-full px-4 py-3 border border-gray-300 rounded-lg shadow-sm focus:ring-indigo-500 focus:border-indigo-500 transition-all duration-300"
-                      placeholder="Enter your phone number"
+                      {...register('emergencyPhone', { required: t.emergencyPhoneError || 'Emergency phone is required', pattern: { value: /^\+?[\d\s-]{10,}$/, message: t.emergencyPhoneInvalid || 'Invalid phone number' } })}
+                      className={`mt-1 block w-full px-4 py-3 border ${theme === 'dark' ? 'bg-gray-700 border-gray-600 focus:ring-yellow-400 focus:border-yellow-400' : 'bg-white border-gray-300 focus:ring-blue-500 focus:border-blue-500'} rounded-lg shadow-sm transition-all duration-300`}
+                      placeholder={t.emergencyPhonePlaceholder || 'Enter emergency phone'}
+                      aria-label="Emergency Phone Number"
+                      aria-describedby={errors.emergencyPhone ? 'emergencyPhone-error' : undefined}
                     />
-                    {errors.phoneNumber && <p className="text-red-500 text-xs mt-1">{errors.phoneNumber}</p>}
+                    {errors.emergencyPhone && <p id="emergencyPhone-error" className={`text-xs mt-1 ${theme === 'dark' ? 'text-red-400' : 'text-red-500'}`}>{errors.emergencyPhone.message}</p>}
+                  </div>
+                  <div className="sm:col-span-2">
+                    <label className={`block text-sm font-medium ${theme === 'dark' ? 'text-gray-300' : 'text-gray-700'}`}>{t.gender || 'Gender'}</label>
+                    <div className="mt-2 flex space-x-4">
+                      {['Male', 'Female', 'Other'].map((gender) => (
+                        <div key={gender} className="flex items-center">
+                          <input
+                            type="radio"
+                            {...register('gender', { required: t.genderError || 'Gender is required' })}
+                            value={gender}
+                            className={`h-4 w-4 ${theme === 'dark' ? 'text-yellow-400 focus:ring-yellow-400' : 'text-blue-600 focus:ring-blue-500'} border-gray-300`}
+                            aria-label={gender}
+                          />
+                          <label className={`ml-2 block text-sm ${theme === 'dark' ? 'text-gray-300' : 'text-gray-700'}`}>{t[gender.toLowerCase()] || gender}</label>
+                        </div>
+                      ))}
+                    </div>
+                    {errors.gender && <p id="gender-error" className={`text-xs mt-1 ${theme === 'dark' ? 'text-red-400' : 'text-red-500'}`}>{errors.gender.message}</p>}
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {currentStep === 1 && (
+              <div className="space-y-6 animate-fade-in">
+                <h3 className={`text-xl font-semibold ${theme === 'dark' ? 'text-white' : 'text-gray-800'}`}>{t.healthInfo || 'Health Information'}</h3>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
+                  <div>
+                    <label className={`block text-sm font-medium ${theme === 'dark' ? 'text-gray-300' : 'text-gray-700'}`}>{t.height || 'Height (cm)'}</label>
+                    <input
+                      type="number"
+                      {...register('height', { required: t.heightError || 'Height is required', min: { value: 0, message: t.heightPositive || 'Height must be positive' } })}
+                      className={`mt-1 block w-full px-4 py-3 border ${theme === 'dark' ? 'bg-gray-700 border-gray-600 focus:ring-yellow-400 focus:border-yellow-400' : 'bg-white border-gray-300 focus:ring-blue-500 focus:border-blue-500'} rounded-lg shadow-sm transition-all duration-300`}
+                      placeholder={t.heightPlaceholder || 'Enter height in cm'}
+                      aria-label="Height"
+                      aria-describedby={errors.height ? 'height-error' : undefined}
+                    />
+                    {errors.height && <p id="height-error" className={`text-xs mt-1 ${theme === 'dark' ? 'text-red-400' : 'text-red-500'}`}>{errors.height.message}</p>}
                   </div>
                   <div>
-                    <label className="block text-sm font-medium text-gray-700">Photo Upload</label>
+                    <label className={`block text-sm font-medium ${theme === 'dark' ? 'text-gray-300' : 'text-gray-700'}`}>{t.weight || 'Weight (kg)'}</label>
                     <input
-                      type="file"
-                      name="photo"
-                      accept="image/*"
-                      onChange={handleChange}
-                      className="mt-1 block w-full text-sm text-gray-500 file:mr-4 file:py-3 file:px-6 file:rounded-lg file:border-0 file:text-sm file:font-semibold file:bg-indigo-50 file:text-indigo-700 hover:file:bg-indigo-100 transition-all duration-300"
+                      type="number"
+                      {...register('weight', { required: t.weightError || 'Weight is required', min: { value: 0, message: t.weightPositive || 'Weight must be positive' } })}
+                      className={`mt-1 block w-full px-4 py-3 border ${theme === 'dark' ? 'bg-gray-700 border-gray-600 focus:ring-yellow-400 focus:border-yellow-400' : 'bg-white border-gray-300 focus:ring-blue-500 focus:border-blue-500'} rounded-lg shadow-sm transition-all duration-300`}
+                      placeholder={t.weightPlaceholder || 'Enter weight in kg'}
+                      aria-label="Weight"
+                      aria-describedby={errors.weight ? 'weight-error' : undefined}
+                    />
+                    {errors.weight && <p id="weight-error" className={`text-xs mt-1 ${theme === 'dark' ? 'text-red-400' : 'text-red-500'}`}>{errors.weight.message}</p>}
+                  </div>
+                  <div>
+                    <label className={`block text-sm font-medium ${theme === 'dark' ? 'text-gray-300' : 'text-gray-700'}`}>{t.age || 'Age'}</label>
+                    <input
+                      type="number"
+                      {...register('age', { required: t.ageError || 'Age is required', min: { value: 0, message: t.agePositive || 'Age must be positive' }, max: { value: 120, message: t.ageReasonable || 'Age must be reasonable' } })}
+                      className={`mt-1 block w-full px-4 py-3 border ${theme === 'dark' ? 'bg-gray-700 border-gray-600 focus:ring-yellow-400 focus:border-yellow-400' : 'bg-white border-gray-300 focus:ring-blue-500 focus:border-blue-500'} rounded-lg shadow-sm transition-all duration-300`}
+                      placeholder={t.agePlaceholder || 'Enter your age'}
+                      aria-label="Age"
+                      aria-describedby={errors.age ? 'age-error' : undefined}
+                    />
+                    {errors.age && <p id="age-error" className={`text-xs mt-1 ${theme === 'dark' ? 'text-red-400' : 'text-red-500'}`}>{errors.age.message}</p>}
+                  </div>
+                  <div>
+                    <label className={`block text-sm font-medium ${theme === 'dark' ? 'text-gray-300' : 'text-gray-700'}`}>{t.bmi || 'BMI'}</label>
+                    <input
+                      type="number"
+                      {...register('bmi')}
+                      readOnly
+                      className={`mt-1 block w-full px-4 py-3 border ${theme === 'dark' ? 'bg-gray-700 border-gray-600' : 'bg-gray-100 border-gray-300'} rounded-lg shadow-sm`}
+                      placeholder={t.bmiPlaceholder || 'Calculated BMI'}
+                      aria-label="BMI"
                     />
                   </div>
                   <div>
-                    <label className="block text-sm font-medium text-gray-700">Address</label>
-                    <input
-                      type="text"
-                      name="address"
-                      value={formData.address}
-                      onChange={handleChange}
-                      className="mt-1 block w-full px-4 py-3 border border-gray-300 rounded-lg shadow-sm focus:ring-indigo-500 focus:border-indigo-500 transition-all duration-300"
-                      placeholder="Enter your address"
-                    />
+                    <label className={`block text-sm font-medium ${theme === 'dark' ? 'text-gray-300' : 'text-gray-700'}`}>{t.bloodType || 'Blood Type'}</label>
+                    <select
+                      {...register('bloodType')}
+                      className={`mt-1 block w-full px-4 py-3 border ${theme === 'dark' ? 'bg-gray-700 border-gray-600 focus:ring-yellow-400 focus:border-yellow-400' : 'bg-white border-gray-300 focus:ring-blue-500 focus:border-blue-500'} rounded-lg shadow-sm transition-all duration-300`}
+                      aria-label="Blood Type"
+                      aria-describedby={errors.bloodType ? 'bloodType-error' : undefined}
+                    >
+                      <option value="">{t.bloodTypePlaceholder || 'Select Blood Type'}</option>
+                      <option value="A+">A+</option>
+                      <option value="A-">A-</option>
+                      <option value="B+">B+</option>
+                      <option value="B-">B-</option>
+                      <option value="AB+">AB+</option>
+                      <option value="AB-">AB-</option>
+                      <option value="O+">O+</option>
+                      <option value="O-">O-</option>
+                    </select>
+                    {errors.bloodType && <p id="bloodType-error" className={`text-xs mt-1 ${theme === 'dark' ? 'text-red-400' : 'text-red-500'}`}>{errors.bloodType.message}</p>}
                   </div>
                   <div>
-                    <label className="block text-sm font-medium text-gray-700">City</label>
+                    <label className={`block text-sm font-medium ${theme === 'dark' ? 'text-gray-300' : 'text-gray-700'}`}>{t.goalWeight || 'Goal Weight (kg)'}</label>
                     <input
-                      type="text"
-                      name="city"
-                      value={formData.city}
-                      onChange={handleChange}
-                      className="mt-1 block w-full px-4 py-3 border border-gray-300 rounded-lg shadow-sm focus:ring-indigo-500 focus:border-indigo-500 transition-all duration-300"
-                      placeholder="Enter your city"
+                      type="number"
+                      {...register('goalWeight', { min: { value: 0, message: t.goalWeightPositive || 'Goal weight must be positive' } })}
+                      className={`mt-1 block w-full px-4 py-3 border ${theme === 'dark' ? 'bg-gray-700 border-gray-600 focus:ring-yellow-400 focus:border-yellow-400' : 'bg-white border-gray-300 focus:ring-blue-500 focus:border-blue-500'} rounded-lg shadow-sm transition-all duration-300`}
+                      placeholder={t.goalWeightPlaceholder || 'Enter goal weight'}
+                      aria-label="Goal Weight"
+                      aria-describedby={errors.goalWeight ? 'goalWeight-error' : undefined}
+                    />
+                    {errors.goalWeight && <p id="goalWeight-error" className={`text-xs mt-1 ${theme === 'dark' ? 'text-red-400' : 'text-red-500'}`}>{errors.goalWeight.message}</p>}
+                  </div>
+                  <div className="sm:col-span-2">
+                    <label className={`block text-sm font-medium ${theme === 'dark' ? 'text-gray-300' : 'text-gray-700'}`}>{t.medicalConditions || 'Medical Conditions'}</label>
+                    <select
+                      {...register('medicalConditions', { required: t.medicalConditionsError || 'Please specify if you have medical conditions' })}
+                      className={`mt-1 block w-full px-4 py-3 border ${theme === 'dark' ? 'bg-gray-700 border-gray-600 focus:ring-yellow-400 focus:border-yellow-400' : 'bg-white border-gray-300 focus:ring-blue-500 focus:border-blue-500'} rounded-lg shadow-sm transition-all duration-300`}
+                      aria-label="Medical Conditions"
+                      aria-describedby={errors.medicalConditions ? 'medicalConditions-error' : undefined}
+                    >
+                      <option value="">{t.select || 'Select...'}</option>
+                      <option value="Yes">{t.yes || 'Yes'}</option>
+                      <option value="No">{t.no || 'No'}</option>
+                    </select>
+                    {errors.medicalConditions && <p id="medicalConditions-error" className={`text-xs mt-1 ${theme === 'dark' ? 'text-red-400' : 'text-red-500'}`}>{errors.medicalConditions.message}</p>}
+                  </div>
+                  {formData.medicalConditions === 'Yes' && (
+                    <div className="sm:col-span-2">
+                      <label className={`block text-sm font-medium ${theme === 'dark' ? 'text-gray-300' : 'text-gray-700'}`}>{t.medicalConditionsDetails || 'Medical Conditions Details'}</label>
+                      <textarea
+                        {...register('medicalConditionsDetails', { required: t.medicalConditionsDetailsError || 'Medical condition details are required' })}
+                        className={`mt-1 block w-full px-4 py-3 border ${theme === 'dark' ? 'bg-gray-700 border-gray-600 focus:ring-yellow-400 focus:border-yellow-400' : 'bg-white border-gray-300 focus:ring-blue-500 focus:border-blue-500'} rounded-lg shadow-sm transition-all duration-300`}
+                        rows="4"
+                        placeholder={t.medicalConditionsDetailsPlaceholder || 'Describe any medical conditions'}
+                        aria-label="Medical Conditions Details"
+                        aria-describedby={errors.medicalConditionsDetails ? 'medicalConditionsDetails-error' : undefined}
+                      />
+                      {errors.medicalConditionsDetails && <p id="medicalConditionsDetails-error" className={`text-xs mt-1 ${theme === 'dark' ? 'text-red-400' : 'text-red-500'}`}>{errors.medicalConditionsDetails.message}</p>}
+                    </div>
+                  )}
+                  <div className="sm:col-span-2">
+                    <label className={`block text-sm font-medium ${theme === 'dark' ? 'text-gray-300' : 'text-gray-700'}`}>{t.healthIssues || 'Health Issues'}</label>
+                    <textarea
+                      {...register('healthIssues')}
+                      className={`mt-1 block w-full px-4 py-3 border ${theme === 'dark' ? 'bg-gray-700 border-gray-600 focus:ring-yellow-400 focus:border-yellow-400' : 'bg-white border-gray-300 focus:ring-blue-500 focus:border-blue-500'} rounded-lg shadow-sm transition-all duration-300`}
+                      rows="4"
+                      placeholder={t.healthIssuesPlaceholder || 'Describe any health issues'}
+                      aria-label="Health Issues"
                     />
                   </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700">Country</label>
-                    <input
-                      type="text"
-                      name="country"
-                      value={formData.country}
-                      onChange={handleChange}
-                      className="mt-1 block w-full px-4 py-3 border border-gray-300 rounded-lg shadow-sm focus:ring-indigo-500 focus:border-indigo-500 transition-all duration-300"
-                      placeholder="Enter your country"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700">Job Type</label>
-                    <input
-                      type="text"
-                      name="jobType"
-                      value={formData.jobType}
-                      onChange={handleChange}
-                      className="mt-1 block w-full px-4 py-3 border border-gray-300 rounded-lg shadow-sm focus:ring-indigo-500 focus:border-indigo-500 transition-all duration-300"
-                      placeholder="Enter your job type"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700">Emergency Contact Name</label>
-                    <input
-                      type="text"
-                      name="emergencyName"
-                      value={formData.emergencyName}
-                      onChange={handleChange}
-                      className="mt-1 block w-full px-4 py-3 border border-gray-300 rounded-lg shadow-sm focus:ring-indigo-500 focus:border-indigo-500 transition-all duration-300"
-                      placeholder="Enter emergency contact name"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700">Emergency Contact Phone</label>
-                    <input
-                      type="tel"
-                      name="emergencyPhone"
-                      value={formData.emergencyPhone}
-                      onChange={handleChange}
-                      className="mt-1 block w-full px-4 py-3 border border-gray-300 rounded-lg shadow-sm focus:ring-indigo-500 focus:border-indigo-500 transition-all duration-300"
-                      placeholder="Enter emergency contact phone"
+                  <div className="sm:col-span-2">
+                    <label className={`block text-sm font-medium ${theme === 'dark' ? 'text-gray-300' : 'text-gray-700'}`}>{t.medications || 'Medications'}</label>
+                    <textarea
+                      {...register('medications')}
+                      className={`mt-1 block w-full px-4 py-3 border ${theme === 'dark' ? 'bg-gray-700 border-gray-600 focus:ring-yellow-400 focus:border-yellow-400' : 'bg-white border-gray-300 focus:ring-blue-500 focus:border-blue-500'} rounded-lg shadow-sm transition-all duration-300`}
+                      rows="4"
+                      placeholder={t.medicationsPlaceholder || 'List any medications'}
+                      aria-label="Medications"
                     />
                   </div>
                 </div>
               </div>
             )}
 
-            {/* Step 2: Health Information */}
             {currentStep === 2 && (
               <div className="space-y-6 animate-fade-in">
-                <h3 className="text-xl font-semibold text-gray-800">Health Information</h3>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700">Gender</label>
-                  <div className="mt-2 flex space-x-6">
-                    {['Male', 'Female', 'Other'].map((g) => (
-                      <label key={g} className="inline-flex items-center">
-                        <input
-                          type="radio"
-                          name="gender"
-                          value={g.toLowerCase()}
-                          checked={formData.gender === g.toLowerCase()}
-                          onChange={handleChange}
-                          className="form-radio h-5 w-5 text-indigo-600"
-                        />
-                        <span className="ml-2 text-gray-700">{g}</span>
-                      </label>
-                    ))}
-                  </div>
-                </div>
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-6">
+                <h3 className={`text-xl font-semibold ${theme === 'dark' ? 'text-white' : 'text-gray-800'}`}>{t.lifestyle || 'Lifestyle Information'}</h3>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
                   <div>
-                    <label className="block text-sm font-medium text-gray-700">Height (cm)</label>
-                    <input
-                      type="number"
-                      name="height"
-                      value={formData.height}
-                      onChange={handleChange}
-                      onBlur={calculateBMI}
-                      className="mt-1 block w-full px-4 py-3 border border-gray-300 rounded-lg shadow-sm focus:ring-indigo-500 focus:border-indigo-500 transition-all duration-300"
-                      placeholder="Enter height in cm"
-                    />
-                    {errors.height && <p className="text-red-500 text-xs mt-1">{errors.height}</p>}
+                    <label className={`block text-sm font-medium ${theme === 'dark' ? 'text-gray-300' : 'text-gray-700'}`}>{t.workSchedule || 'Work Schedule'}</label>
+                    <select
+                      {...register('workSchedule', { required: t.workScheduleError || 'Work schedule is required' })}
+                      className={`mt-1 block w-full px-4 py-3 border ${theme === 'dark' ? 'bg-gray-700 border-gray-600 focus:ring-yellow-400 focus:border-yellow-400' : 'bg-white border-gray-300 focus:ring-blue-500 focus:border-blue-500'} rounded-lg shadow-sm transition-all duration-300`}
+                      aria-label="Work Schedule"
+                      aria-describedby={errors.workSchedule ? 'workSchedule-error' : undefined}
+                    >
+                      <option value="">{t.workSchedulePlaceholder || 'Select...'}</option>
+                      <option value="Full-time">{t.fullTime || 'Full-time'}</option>
+                      <option value="Part-time">{t.partTime || 'Part-time'}</option>
+                      <option value="Flexible">{t.flexible || 'Flexible'}</option>
+                    </select>
+                    {errors.workSchedule && <p id="workSchedule-error" className={`text-xs mt-1 ${theme === 'dark' ? 'text-red-400' : 'text-red-500'}`}>{errors.workSchedule.message}</p>}
                   </div>
                   <div>
-                    <label className="block text-sm font-medium text-gray-700">Weight (kg)</label>
-                    <input
-                      type="number"
-                      name="weight"
-                      value={formData.weight}
-                      onChange={handleChange}
-                      onBlur={calculateBMI}
-                      className="mt-1 block w-full px-4 py-3 border border-gray-300 rounded-lg shadow-sm focus:ring-indigo-500 focus:border-indigo-500 transition-all duration-300"
-                      placeholder="Enter weight in kg"
-                    />
-                    {errors.weight && <p className="text-red-500 text-xs mt-1">{errors.weight}</p>}
+                    <label className={`block text-sm font-medium ${theme === 'dark' ? 'text-gray-300' : 'text-gray-700'}`}>{t.travelFrequency || 'Travel Frequency'}</label>
+                    <select
+                      {...register('travelFrequency', { required: t.travelFrequencyError || 'Travel frequency is required' })}
+                      className={`mt-1 block w-full px-4 py-3 border ${theme === 'dark' ? 'bg-gray-700 border-gray-600 focus:ring-yellow-400 focus:border-yellow-400' : 'bg-white border-gray-300 focus:ring-blue-500 focus:border-blue-500'} rounded-lg shadow-sm transition-all duration-300`}
+                      aria-label="Travel Frequency"
+                      aria-describedby={errors.travelFrequency ? 'travelFrequency-error' : undefined}
+                    >
+                      <option value="">{t.select || 'Select...'}</option>
+                      <option value="Never">{t.never || 'Never'}</option>
+                      <option value="Occasionally">{t.occasionally || 'Occasionally'}</option>
+                      <option value="Frequently">{t.frequently || 'Frequently'}</option>
+                    </select>
+                    {errors.travelFrequency && <p id="travelFrequency-error" className={`text-xs mt-1 ${theme === 'dark' ? 'text-red-400' : 'text-red-500'}`}>{errors.travelFrequency.message}</p>}
                   </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700">Age</label>
-                    <input
-                      type="number"
-                      name="age"
-                      value={formData.age}
-                      onChange={handleChange}
-                      className="mt-1 block w-full px-4 py-3 border border-gray-300 rounded-lg shadow-sm focus:ring-indigo-500 focus:border-indigo-500 transition-all duration-300"
-                      placeholder="Enter your age"
-                    />
-                    {errors.age && <p className="text-red-500 text-xs mt-1">{errors.age}</p>}
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700">BMI</label>
-                    <input
-                      type="text"
-                      name="bmi"
-                      value={formData.bmi}
-                      readOnly
-                      className="mt-1 block w-full px-4 py-3 border border-gray-300 rounded-lg shadow-sm bg-gray-100"
-                      placeholder="BMI will be calculated"
+                  <div className="sm:col-span-2">
+                    <label className={`block text-sm font-medium ${theme === 'dark' ? 'text-gray-300' : 'text-gray-700'}`}>{t.physicalActivities || 'Physical Activities'}</label>
+                    <textarea
+                      {...register('physicalActivities')}
+                      className={`mt-1 block w-full px-4 py-3 border ${theme === 'dark' ? 'bg-gray-700 border-gray-600 focus:ring-yellow-400 focus:border-yellow-400' : 'bg-white border-gray-300 focus:ring-blue-500 focus:border-blue-500'} rounded-lg shadow-sm transition-all duration-300`}
+                      rows="4"
+                      placeholder={t.physicalActivitiesPlaceholder || 'Describe your physical activities'}
+                      aria-label="Physical Activities"
                     />
                   </div>
                   <div>
-                    <label className="block text-sm font-medium text-gray-700">Blood Type</label>
-                    <input
-                      type="text"
-                      name="bloodType"
-                      value={formData.bloodType}
-                      onChange={handleChange}
-                      className="mt-1 block w-full px-4 py-3 border border-gray-300 rounded-lg shadow-sm focus:ring-indigo-500 focus:border-indigo-500 transition-all duration-300"
-                      placeholder="Enter your blood type"
-                    />
+                    <label className={`block text-sm font-medium ${theme === 'dark' ? 'text-gray-300' : 'text-gray-700'}`}>{t.dietType || 'Diet Type'}</label>
+                    <select
+                      {...register('dietType')}
+                      className={`mt-1 block w-full px-4 py-3 border ${theme === 'dark' ? 'bg-gray-700 border-gray-600 focus:ring-yellow-400 focus:border-yellow-400' : 'bg-white border-gray-300 focus:ring-blue-500 focus:border-blue-500'} rounded-lg shadow-sm transition-all duration-300`}
+                      aria-label="Diet Type"
+                    >
+                      <option value="">{t.dietTypePlaceholder || 'Select...'}</option>
+                      <option value="Omnivore">{t.omnivore || 'Omnivore'}</option>
+                      <option value="Vegetarian">{t.vegetarian || 'Vegetarian'}</option>
+                      <option value="Vegan">{t.vegan || 'Vegan'}</option>
+                      <option value="Other">{t.other || 'Other'}</option>
+                    </select>
                   </div>
                   <div>
-                    <label className="block text-sm font-medium text-gray-700">Goal Weight (kg)</label>
+                    <label className={`block text-sm font-medium ${theme === 'dark' ? 'text-gray-300' : 'text-gray-700'}`}>{t.relationship || 'Relationship'}</label>
                     <input
-                      type="number"
-                      name="goalWeight"
-                      value={formData.goalWeight}
-                      onChange={handleChange}
-                      className="mt-1 block w-full px-4 py-3 border border-gray-300 rounded-lg shadow-sm focus:ring-indigo-500 focus:border-indigo-500 transition-all duration-300"
-                      placeholder="Enter goal weight"
+                      {...register('relationship')}
+                      className={`mt-1 block w-full px-4 py-3 border ${theme === 'dark' ? 'bg-gray-700 border-gray-600 focus:ring-yellow-400 focus:border-yellow-400' : 'bg-white border-gray-300 focus:ring-blue-500 focus:border-blue-500'} rounded-lg shadow-sm transition-all duration-300`}
+                      placeholder={t.relationshipPlaceholder || 'Enter relationship status'}
+                      aria-label="Relationship"
                     />
-                    {errors.goalWeight && <p className="text-red-500 text-xs mt-1">{errors.goalWeight}</p>}
                   </div>
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700">Relationship Status</label>
-                  <input
-                    type="text"
-                    name="relationship"
-                    value={formData.relationship}
-                    onChange={handleChange}
-                    className="mt-1 block w-full px-4 py-3 border border-gray-300 rounded-lg shadow-sm focus:ring-indigo-500 focus:border-indigo-500 transition-all duration-300"
-                    placeholder="Enter relationship status"
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700">Current/Previous Health Issues</label>
-                  <textarea
-                    name="healthIssues"
-                    value={formData.healthIssues}
-                    onChange={handleChange}
-                    className="mt-1 block w-full px-4 py-3 border border-gray-300 rounded-lg shadow-sm focus:ring-indigo-500 focus:border-indigo-500 transition-all duration-300"
-                    rows="4"
-                    placeholder="Describe any health issues"
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700">Medications</label>
-                  <textarea
-                    name="medications"
-                    value={formData.medications}
-                    onChange={handleChange}
-                    className="mt-1 block w-full px-4 py-3 border border-gray-300 rounded-lg shadow-sm focus:ring-indigo-500 focus:border-indigo-500 transition-all duration-300"
-                    rows="4"
-                    placeholder="List any medications"
-                  />
                 </div>
               </div>
             )}
 
-            {/* Step 3: Lifestyle */}
             {currentStep === 3 && (
               <div className="space-y-6 animate-fade-in">
-                <h3 className="text-xl font-semibold text-gray-800">Lifestyle</h3>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700">Work Schedule</label>
-                  <select
-                    name="workSchedule"
-                    value={formData.workSchedule}
-                    onChange={handleChange}
-                    className="mt-1 block w-full px-4 py-3 border border-gray-300 rounded-lg shadow-sm focus:ring-indigo-500 focus:border-indigo-500 transition-all duration-300"
-                  >
-                    <option value="">Select...</option>
-                    <option value="days">Days</option>
-                    <option value="afternoon">Afternoon</option>
-                    <option value="nights">Nights</option>
-                  </select>
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700">Travel Frequency</label>
-                  <div className="mt-2 flex flex-wrap gap-4">
-                    {['Rarely', 'A few times a year', 'A few times a month', 'Weekly'].map((freq) => (
-                      <label key={freq} className="inline-flex items-center">
-                        <input
-                          type="radio"
-                          name="travelFrequency"
-                          value={freq.toLowerCase()}
-                          checked={formData.travelFrequency === freq.toLowerCase()}
-                          onChange={handleChange}
-                          className="form-radio h-5 w-5 text-indigo-600"
-                        />
-                        <span className="ml-2 text-gray-700">{freq}</span>
-                      </label>
-                    ))}
-                  </div>
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700">Physical Activities Outside Gym/Work</label>
-                  <textarea
-                    name="physicalActivities"
-                    value={formData.physicalActivities}
-                    onChange={handleChange}
-                    className="mt-1 block w-full px-4 py-3 border border-gray-300 rounded-lg shadow-sm focus:ring-indigo-500 focus:border-indigo-500 transition-all duration-300"
-                    rows="4"
-                    placeholder="Describe your physical activities"
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700">Medical Conditions (Diabetes, Asthma, Blood Pressure)</label>
-                  <div className="mt-2 flex space-x-6">
-                    {['Yes', 'No'].map((condition) => (
-                      <label key={condition} className="inline-flex items-center">
-                        <input
-                          type="radio"
-                          name="medicalConditions"
-                          value={condition.toLowerCase()}
-                          checked={formData.medicalConditions === condition.toLowerCase()}
-                          onChange={handleChange}
-                          className="form-radio h-5 w-5 text-indigo-600"
-                        />
-                        <span className="ml-2 text-gray-700">{condition}</span>
-                      </label>
-                    ))}
-                  </div>
-                  {formData.medicalConditions === 'yes' && (
+                <h3 className={`text-xl font-semibold ${theme === 'dark' ? 'text-white' : 'text-gray-800'}`}>{t.trainingGoals || 'Training Goals'}</h3>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
+                  <div className="sm:col-span-2">
+                    <label className={`block text-sm font-medium ${theme === 'dark' ? 'text-gray-300' : 'text-gray-700'}`}>{t.trainingGoal || 'Training Goal'}</label>
                     <textarea
-                      name="medicalConditionsDetails"
-                      value={formData.medicalConditionsDetails}
-                      onChange={handleChange}
-                      className="mt-2 block w-full px-4 py-3 border border-gray-300 rounded-lg shadow-sm focus:ring-indigo-500 focus:border-indigo-500 transition-all duration-300"
+                      {...register('trainingGoal', { required: t.trainingGoalError || 'Training goal is required' })}
+                      className={`mt-1 block w-full px-4 py-3 border ${theme === 'dark' ? 'bg-gray-700 border-gray-600 focus:ring-yellow-400 focus:border-yellow-400' : 'bg-white border-gray-300 focus:ring-blue-500 focus:border-blue-500'} rounded-lg shadow-sm transition-all duration-300`}
                       rows="4"
-                      placeholder="List conditions..."
+                      placeholder={t.trainingGoalPlaceholder || 'Describe your training goal'}
+                      aria-label="Training Goal"
+                      aria-describedby={errors.trainingGoal ? 'trainingGoal-error' : undefined}
                     />
+                    {errors.trainingGoal && <p id="trainingGoal-error" className={`text-xs mt-1 ${theme === 'dark' ? 'text-red-400' : 'text-red-500'}`}>{errors.trainingGoal.message}</p>}
+                  </div>
+                  <div className="sm:col-span-2">
+                    <label className={`block text-sm font-medium ${theme === 'dark' ? 'text-gray-300' : 'text-gray-700'}`}>{t.goalReason || 'Reason for Goal'}</label>
+                    <textarea
+                      {...register('goalReason', { required: t.goalReasonError || 'Reason for goal is required' })}
+                      className={`mt-1 block w-full px-4 py-3 border ${theme === 'dark' ? 'bg-gray-700 border-gray-600 focus:ring-yellow-400 focus:border-yellow-400' : 'bg-white border-gray-300 focus:ring-blue-500 focus:border-blue-500'} rounded-lg shadow-sm transition-all duration-300`}
+                      rows="4"
+                      placeholder={t.goalReasonPlaceholder || 'Why do you want to achieve this goal?'}
+                      aria-label="Goal Reason"
+                      aria-describedby={errors.goalReason ? 'goalReason-error' : undefined}
+                    />
+                    {errors.goalReason && <p id="goalReason-error" className={`text-xs mt-1 ${theme === 'dark' ? 'text-red-400' : 'text-red-500'}`}>{errors.goalReason.message}</p>}
+                  </div>
+                  <div>
+                    <label className={`block text-sm font-medium ${theme === 'dark' ? 'text-gray-300' : 'text-gray-700'}`}>{t.goalTimeline || 'Goal Timeline'}</label>
+                    <input
+                      {...register('goalTimeline', { required: t.goalTimelineError || 'Goal timeline is required' })}
+                      className={`mt-1 block w-full px-4 py-3 border ${theme === 'dark' ? 'bg-gray-700 border-gray-600 focus:ring-yellow-400 focus:border-yellow-400' : 'bg-white border-gray-300 focus:ring-blue-500 focus:border-blue-500'} rounded-lg shadow-sm transition-all duration-300`}
+                      placeholder={t.goalTimeline || 'Enter goal timeline'}
+                      aria-label="Goal Timeline"
+                      aria-describedby={errors.goalTimeline ? 'goalTimeline-error' : undefined}
+                    />
+                    {errors.goalTimeline && <p id="goalTimeline-error" className={`text-xs mt-1 ${theme === 'dark' ? 'text-red-400' : 'text-red-500'}`}>{errors.goalTimeline.message}</p>}
+                  </div>
+                  <div>
+                    <label className={`block text-sm font-medium ${theme === 'dark' ? 'text-gray-300' : 'text-gray-700'}`}>{t.previousTraining || 'Previous Training'}</label>
+                    <select
+                      {...register('previousTraining', { required: t.previousTrainingError || 'Please specify if you have previous training' })}
+                      className={`mt-1 block w-full px-4 py-3 border ${theme === 'dark' ? 'bg-gray-700 border-gray-600 focus:ring-yellow-400 focus:border-yellow-400' : 'bg-white border-gray-300 focus:ring-blue-500 focus:border-blue-500'} rounded-lg shadow-sm transition-all duration-300`}
+                      aria-label="Previous Training"
+                      aria-describedby={errors.previousTraining ? 'previousTraining-error' : undefined}
+                    >
+                      <option value="">{t.select || 'Select...'}</option>
+                      <option value="Yes">{t.yes || 'Yes'}</option>
+                      <option value="No">{t.no || 'No'}</option>
+                    </select>
+                    {errors.previousTraining && <p id="previousTraining-error" className={`text-xs mt-1 ${theme === 'dark' ? 'text-red-400' : 'text-red-500'}`}>{errors.previousTraining.message}</p>}
+                  </div>
+                  {formData.previousTraining === 'Yes' && (
+                    <div className="sm:col-span-2">
+                      <label className={`block text-sm font-medium ${theme === 'dark' ? 'text-gray-300' : 'text-gray-700'}`}>{t.trainingType || 'Training Type'}</label>
+                      <textarea
+                        {...register('trainingType', { required: t.trainingTypeError || 'Training type is required' })}
+                        className={`mt-1 block w-full px-4 py-3 border ${theme === 'dark' ? 'bg-gray-700 border-gray-600 focus:ring-yellow-400 focus:border-yellow-400' : 'bg-white border-gray-300 focus:ring-blue-500 focus:border-blue-500'} rounded-lg shadow-sm transition-all duration-300`}
+                        rows="4"
+                        placeholder={t.trainingTypePlaceholder || 'Describe previous training type'}
+                        aria-label="Training Type"
+                        aria-describedby={errors.trainingType ? 'trainingType-error' : undefined}
+                      />
+                      {errors.trainingType && <p id="trainingType-error" className={`text-xs mt-1 ${theme === 'dark' ? 'text-red-400' : 'text-red-500'}`}>{errors.trainingType.message}</p>}
+                    </div>
                   )}
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700">Current Diet</label>
-                  <select
-                    name="dietType"
-                    value={formData.dietType}
-                    onChange={handleChange}
-                    className="mt-1 block w-full px-4 py-3 border border-gray-300 rounded-lg shadow-sm focus:ring-indigo-500 focus:border-indigo-500 transition-all duration-300"
-                  >
-                    <option value="">Select...</option>
-                    <option value="low-fat">Low-fat</option>
-                    <option value="low-carb">Low-carb</option>
-                    <option value="high-protein">High-protein</option>
-                    <option value="vegetarian-vegan">Vegetarian/Vegan</option>
-                    <option value="no-special-diet">No special diet</option>
-                  </select>
+                  <div>
+                    <label className={`block text-sm font-medium ${theme === 'dark' ? 'text-gray-300' : 'text-gray-700'}`}>{t.preferredTrainingTime || 'Preferred Training Time'}</label>
+                    <input
+                      {...register('preferredTrainingTime')}
+                      className={`mt-1 block w-full px-4 py-3 border ${theme === 'dark' ? 'bg-gray-700 border-gray-600 focus:ring-yellow-400 focus:border-yellow-400' : 'bg-white border-gray-300 focus:ring-blue-500 focus:border-blue-500'} rounded-lg shadow-sm transition-all duration-300`}
+                      placeholder={t.preferredTrainingTime || 'Enter preferred training time'}
+                      aria-label="Preferred Training Time"
+                    />
+                  </div>
+                  <div className="sm:col-span-2">
+                    <label className={`block text-sm font-medium ${theme === 'dark' ? 'text-gray-300' : 'text-gray-700'}`}>{t.trainerExpectations || 'Trainer Expectations'}</label>
+                    <textarea
+                      {...register('trainerExpectations', { required: t.trainerExpectationsError || 'Trainer expectations are required' })}
+                      className={`mt-1 block w-full px-4 py-3 border ${theme === 'dark' ? 'bg-gray-700 border-gray-600 focus:ring-yellow-400 focus:border-yellow-400' : 'bg-white border-gray-300 focus:ring-blue-500 focus:border-blue-500'} rounded-lg shadow-sm transition-all duration-300`}
+                      rows="4"
+                      placeholder={t.trainerExpectationsPlaceholder || 'Describe your expectations from the trainer'}
+                      aria-label="Trainer Expectations"
+                      aria-describedby={errors.trainerExpectations ? 'trainerExpectations-error' : undefined}
+                    />
+                    {errors.trainerExpectations && <p id="trainerExpectations-error" className={`text-xs mt-1 ${theme === 'dark' ? 'text-red-400' : 'text-red-500'}`}>{errors.trainerExpectations.message}</p>}
+                  </div>
                 </div>
               </div>
             )}
 
-            {/* Step 4: Training Goals */}
             {currentStep === 4 && (
               <div className="space-y-6 animate-fade-in">
-                <h3 className="text-xl font-semibold text-gray-800">Training Goals</h3>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700">Training Goal</label>
-                  <textarea
-                    name="trainingGoal"
-                    value={formData.trainingGoal}
-                    onChange={handleChange}
-                    className="mt-1 block w-full px-4 py-3 border border-gray-300 rounded-lg shadow-sm focus:ring-indigo-500 focus:border-indigo-500 transition-all duration-300"
-                    rows="4"
-                    placeholder="Describe your training goal"
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700">Why This Goal?</label>
-                  <textarea
-                    name="goalReason"
-                    value={formData.goalReason}
-                    onChange={handleChange}
-                    className="mt-1 block w-full px-4 py-3 border border-gray-300 rounded-lg shadow-sm focus:ring-indigo-500 focus:border-indigo-500 transition-all duration-300"
-                    rows="4"
-                    placeholder="Explain why you chose this goal"
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700">Goal Timeline</label>
-                  <div className="mt-2 flex flex-wrap gap-4">
-                    {['8 weeks', '16 weeks', '24 weeks', '32 weeks', '40 weeks', '1 year'].map((time) => (
-                      <label key={time} className="inline-flex items-center">
-                        <input
-                          type="radio"
-                          name="goalTimeline"
-                          value={time}
-                          checked={formData.goalTimeline === time}
-                          onChange={handleChange}
-                          className="form-radio h-5 w-5 text-indigo-600"
-                        />
-                        <span className="ml-2 text-gray-700">{time}</span>
-                      </label>
-                    ))}
-                  </div>
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700">Previous Training with Personal Trainer</label>
-                  <div className="mt-2 flex space-x-6">
-                    {['Yes', 'No'].map((training) => (
-                      <label key={training} className="inline-flex items-center">
-                        <input
-                          type="radio"
-                          name="previousTraining"
-                          value={training.toLowerCase()}
-                          checked={formData.previousTraining === training.toLowerCase()}
-                          onChange={handleChange}
-                          className="form-radio h-5 w-5 text-indigo-600"
-                        />
-                        <span className="ml-2 text-gray-700">{training}</span>
-                      </label>
-                    ))}
-                  </div>
-                  {formData.previousTraining === 'yes' && (
-                    <textarea
-                      name="trainingType"
-                      value={formData.trainingType}
-                      onChange={handleChange}
-                      className="mt-2 block w-full px-4 py-3 border border-gray-300 rounded-lg shadow-sm focus:ring-indigo-500 focus:border-indigo-500 transition-all duration-300"
-                      rows="4"
-                      placeholder="Describe the type of training..."
-                    />
-                  )}
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700">Preferred Training Time</label>
-                  <div className="mt-2 flex flex-wrap gap-4">
-                    {['Morning', 'Midday', 'Afternoon', 'Evening'].map((time) => (
-                      <label key={time} className="inline-flex items-center">
-                        <input
-                          type="checkbox"
-                          name="preferredTrainingTime"
-                          value={time.toLowerCase()}
-                          checked={formData.preferredTrainingTime.includes(time.toLowerCase())}
-                          onChange={handleChange}
-                          className="form-checkbox h-5 w-5 text-indigo-600"
-                        />
-                        <span className="ml-2 text-gray-700">{time}</span>
-                      </label>
-                    ))}
-                  </div>
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700">Expectations of Personal Trainer</label>
-                  <textarea
-                    name="trainerExpectations"
-                    value={formData.trainerExpectations}
-                    onChange={handleChange}
-                    className="mt-1 block w-full px-4 py-3 border border-gray-300 rounded-lg shadow-sm focus:ring-indigo-500 focus:border-indigo-500 transition-all duration-300"
-                    rows="4"
-                    placeholder="Describe your expectations"
-                  />
-                </div>
-                <div>
-                  <label className="inline-flex items-center">
+                <h3 className={`text-xl font-semibold ${theme === 'dark' ? 'text-white' : 'text-gray-800'}`}>{t.review || 'Review Your Information'}</h3>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
+                  <div>
+                    <label className={`block text-sm font-medium ${theme === 'dark' ? 'text-gray-300' : 'text-gray-700'}`}>{t.photo || 'Photo'}</label>
                     <input
-                      type="checkbox"
-                      name="agreeTerms"
-                      checked={formData.agreeTerms}
-                      onChange={handleChange}
-                      className="form-checkbox h-5 w-5 text-indigo-600"
+                      type="file"
+                      accept="image/*"
+                      {...register('photo')}
+                      onChange={handlePhotoChange}
+                      className={`mt-1 block w-full text-sm ${theme === 'dark' ? 'text-gray-300 file:bg-gray-600 file:text-yellow-400 hover:file:bg-gray-500' : 'text-gray-500 file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100'} file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-sm file:font-semibold transition-all duration-300`}
+                      aria-label="Photo Upload"
                     />
-                    <span className="ml-2 text-gray-700">I agree to the terms & conditions</span>
-                  </label>
-                  {errors.agreeTerms && <p className="text-red-500 text-xs mt-1">{errors.agreeTerms}</p>}
+                    {photoPreview && (
+                      <img src={photoPreview} alt="Photo preview" className="mt-2 w-32 h-32 object-cover rounded-lg" />
+                    )}
+                    {isUploading && <p className={`text-xs mt-1 ${theme === 'dark' ? 'text-yellow-400' : 'text-blue-500'}`}>{t.uploading || 'Uploading image...'}</p>}
+                    {errors.photo && <p id="photo-error" className={`text-xs mt-1 ${theme === 'dark' ? 'text-red-400' : 'text-red-500'}`}>{errors.photo.message}</p>}
+                  </div>
+                  <div>
+                    <label className={`block text-sm font-medium ${theme === 'dark' ? 'text-gray-300' : 'text-gray-700'}`}>{t.preferredStartDate || 'Preferred Start Date'}</label>
+                    <input
+                      type="date"
+                      {...register('preferredStartDate', { required: t.preferredStartDateError || 'Preferred start date is required' })}
+                      className={`mt-1 block w-full px-4 py-3 border ${theme === 'dark' ? 'bg-gray-700 border-gray-600 focus:ring-yellow-400 focus:border-yellow-400' : 'bg-white border-gray-300 focus:ring-blue-500 focus:border-blue-500'} rounded-lg shadow-sm transition-all duration-300`}
+                      aria-label="Preferred Start Date"
+                      aria-describedby={errors.preferredStartDate ? 'preferredStartDate-error' : undefined}
+                    />
+                    {errors.preferredStartDate && <p id="preferredStartDate-error" className={`text-xs mt-1 ${theme === 'dark' ? 'text-red-400' : 'text-red-500'}`}>{errors.preferredStartDate.message}</p>}
+                  </div>
+                  <div className="sm:col-span-2">
+                    <label className={`block text-sm font-medium ${theme === 'dark' ? 'text-gray-300' : 'text-gray-700'}`}>{t.signature || 'Client Signature'}</label>
+                    <input
+                      {...register('signature', { required: t.signatureError || 'Signature is required' })}
+                      className={`mt-1 block w-full px-4 py-3 border ${theme === 'dark' ? 'bg-gray-700 border-gray-600 focus:ring-yellow-400 focus:border-yellow-400' : 'bg-white border-gray-300 focus:ring-blue-500 focus:border-blue-500'} rounded-lg shadow-sm transition-all duration-300`}
+                      placeholder={t.signaturePlaceholder || 'Type your full name as signature'}
+                      aria-label="Signature"
+                      aria-describedby={errors.signature ? 'signature-error' : undefined}
+                    />
+                    {errors.signature && <p id="signature-error" className={`text-xs mt-1 ${theme === 'dark' ? 'text-red-400' : 'text-red-500'}`}>{errors.signature.message}</p>}
+                  </div>
+                  <div className="sm:col-span-2">
+                    <div className="flex items-center">
+                      <input
+                        type="checkbox"
+                        {...register('agreeTerms', { required: t.agreeTermsError || 'You must agree to the terms' })}
+                        className={`h-5 w-5 ${theme === 'dark' ? 'text-yellow-400 focus:ring-yellow-400' : 'text-blue-600 focus:ring-blue-500'} border-gray-300 rounded`}
+                        aria-label="Agree to Terms"
+                      />
+                      <label className={`ml-2 text-sm ${theme === 'dark' ? 'text-gray-300' : 'text-gray-700'}`}>{t.agreeTerms || 'I agree to the terms and conditions'}</label>
+                    </div>
+                    {errors.agreeTerms && <p id="agreeTerms-error" className={`text-xs mt-1 ${theme === 'dark' ? 'text-red-400' : 'text-red-500'}`}>{errors.agreeTerms.message}</p>}
+                  </div>
                 </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700">Preferred Start Date</label>
-                  <input
-                    type="date"
-                    name="preferredStartDate"
-                    value={formData.preferredStartDate}
-                    onChange={handleChange}
-                    className="mt-1 block w-full px-4 py-3 border border-gray-300 rounded-lg shadow-sm focus:ring-indigo-500 focus:border-indigo-500 transition-all duration-300"
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700">Client Signature</label>
-                  <input
-                    type="text"
-                    name="signature"
-                    value={formData.signature}
-                    onChange={handleChange}
-                    className="mt-1 block w-full px-4 py-3 border border-gray-300 rounded-lg shadow-sm focus:ring-indigo-500 focus:border-indigo-500 transition-all duration-300"
-                    placeholder="Type your full name as signature"
-                  />
+                <div className={`p-4 rounded-lg space-y-4 ${theme === 'dark' ? 'bg-gray-800' : 'bg-gray-50'}`}>
+                  <div>
+                    <h4 className={`text-sm font-semibold ${theme === 'dark' ? 'text-gray-300' : 'text-gray-700'}`}>{t.personalInfo || 'Personal Information'}</h4>
+                    <p className={`text-sm ${theme === 'dark' ? 'text-gray-300' : 'text-gray-600'}`}>
+                      {t.firstName || 'First Name'}: {formData.firstName || 'Not provided'}<br />
+                      {t.lastName || 'Last Name'}: {formData.lastName || 'Not provided'}<br />
+                      {t.phoneNumber || 'Phone Number'}: {formData.phoneNumber || 'Not provided'}<br />
+                      {t.email || 'Email'}: {formData.email || 'Not provided'}<br />
+                      {t.address || 'Address'}: {formData.address || 'Not provided'}<br />
+                      {t.city || 'City'}: {formData.city || 'Not provided'}<br />
+                      {t.country || 'Country'}: {formData.country || 'Not provided'}<br />
+                      {t.jobType || 'Job Type'}: {formData.jobType || 'Not provided'}<br />
+                      {t.emergencyName || 'Emergency Contact Name'}: {formData.emergencyName || 'Not provided'}<br />
+                      {t.emergencyPhone || 'Emergency Phone'}: {formData.emergencyPhone || 'Not provided'}<br />
+                      {t.gender || 'Gender'}: {formData.gender || 'Not provided'}
+                    </p>
+                  </div>
+                  <div>
+                    <h4 className={`text-sm font-semibold ${theme === 'dark' ? 'text-gray-300' : 'text-gray-700'}`}>{t.healthInfo || 'Health Information'}</h4>
+                    <p className={`text-sm ${theme === 'dark' ? 'text-gray-300' : 'text-gray-600'}`}>
+                      {t.height || 'Height'}: {formData.height || 'Not provided'} cm<br />
+                      {t.weight || 'Weight'}: {formData.weight || 'Not provided'} kg<br />
+                      {t.age || 'Age'}: {formData.age || 'Not provided'}<br />
+                      {t.bmi || 'BMI'}: {formData.bmi || 'Not provided'}<br />
+                      {t.bloodType || 'Blood Type'}: {formData.bloodType || 'Not provided'}<br />
+                      {t.goalWeight || 'Goal Weight'}: {formData.goalWeight || 'Not provided'} kg<br />
+                      {t.medicalConditions || 'Medical Conditions'}: {formData.medicalConditions || 'Not provided'}<br />
+                      {t.medicalConditionsDetails || 'Medical Conditions Details'}: {formData.medicalConditionsDetails || 'Not provided'}<br />
+                      {t.healthIssues || 'Health Issues'}: {formData.healthIssues || 'Not provided'}<br />
+                      {t.medications || 'Medications'}: {formData.medications || 'Not provided'}
+                    </p>
+                  </div>
+                  <div>
+                    <h4 className={`text-sm font-semibold ${theme === 'dark' ? 'text-gray-300' : 'text-gray-700'}`}>{t.lifestyle || 'Lifestyle'}</h4>
+                    <p className={`text-sm ${theme === 'dark' ? 'text-gray-300' : 'text-gray-600'}`}>
+                      {t.workSchedule || 'Work Schedule'}: {formData.workSchedule || 'Not provided'}<br />
+                      {t.travelFrequency || 'Travel Frequency'}: {formData.travelFrequency || 'Not provided'}<br />
+                      {t.physicalActivities || 'Physical Activities'}: {formData.physicalActivities || 'Not provided'}<br />
+                      {t.dietType || 'Diet Type'}: {formData.dietType || 'Not provided'}<br />
+                      {t.relationship || 'Relationship'}: {formData.relationship || 'Not provided'}
+                    </p>
+                  </div>
+                  <div>
+                    <h4 className={`text-sm font-semibold ${theme === 'dark' ? 'text-gray-300' : 'text-gray-700'}`}>{t.trainingGoals || 'Training Goals'}</h4>
+                    <p className={`text-sm ${theme === 'dark' ? 'text-gray-300' : 'text-gray-600'}`}>
+                      {t.trainingGoal || 'Training Goal'}: {formData.trainingGoal || 'Not provided'}<br />
+                      {t.goalReason || 'Reason for Goal'}: {formData.goalReason || 'Not provided'}<br />
+                      {t.goalTimeline || 'Goal Timeline'}: {formData.goalTimeline || 'Not provided'}<br />
+                      {t.previousTraining || 'Previous Training'}: {formData.previousTraining || 'Not provided'}<br />
+                      {t.trainingType || 'Training Type'}: {formData.trainingType || 'Not provided'}<br />
+                      {t.preferredTrainingTime || 'Preferred Training Time'}: {formData.preferredTrainingTime || 'Not provided'}<br />
+                      {t.trainerExpectations || 'Trainer Expectations'}: {formData.trainerExpectations || 'Not provided'}
+                    </p>
+                  </div>
                 </div>
               </div>
             )}
 
-            {/* Navigation Buttons */}
             <div className="flex justify-between mt-8">
               <button
                 type="button"
-                onClick={handlePrevious}
-                disabled={currentStep === 1}
-                className={`px-6 py-3 rounded-lg text-sm font-medium transition-all duration-300 ${
-                  currentStep === 1
-                    ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
-                    : 'bg-gray-600 text-white hover:bg-gray-700 focus:ring-2 focus:ring-gray-500'
-                }`}
+                onClick={prevStep}
+                disabled={currentStep === 0}
+                className={`px-6 py-3 rounded-lg text-sm font-medium transition-all duration-300 ${currentStep === 0 ? (theme === 'dark' ? 'bg-gray-600 text-gray-400 cursor-not-allowed' : 'bg-gray-300 text-gray-500 cursor-not-allowed') : (theme === 'dark' ? 'bg-gray-700 text-white hover:bg-gray-600 focus:ring-2 focus:ring-yellow-400' : 'bg-gray-600 text-white hover:bg-gray-700 focus:ring-2 focus:ring-gray-500')}`}
               >
-                Previous
+                <ChevronLeftIcon className="w-5 h-5 inline mr-1" /> {t.previous || 'Previous'}
               </button>
-              {currentStep < steps.length ? (
+              {currentStep < steps.length - 1 ? (
                 <button
                   type="button"
-                  onClick={handleNext}
-                  className="px-6 py-3 rounded-lg text-sm font-medium bg-indigo-600 text-white hover:bg-indigo-700 focus:ring-2 focus:ring-indigo-500 transition-all duration-300"
+                  onClick={nextStep}
+                  className={`px-6 py-3 rounded-lg text-sm font-medium ${theme === 'dark' ? 'bg-gray-700 text-white hover:bg-gray-600 focus:ring-2 focus:ring-yellow-400' : 'bg-blue-600 text-white hover:bg-blue-700 focus:ring-2 focus:ring-blue-500'} transition-all duration-300`}
                 >
-                  Next
+                  {t.next || 'Next'} <ChevronRightIcon className="w-5 h-5 inline ml-1" />
                 </button>
               ) : (
                 <button
                   type="submit"
-                  disabled={uploading || !isAuthenticated}
-                  className={`px-6 py-3 rounded-lg text-sm font-medium text-white transition-all duration-300 ${
-                    uploading || !isAuthenticated
-                      ? 'bg-gray-400 cursor-not-allowed'
-                      : 'bg-indigo-600 hover:bg-indigo-700 focus:ring-2 focus:ring-indigo-500'
-                  }`}
+                  disabled={!isAuthenticated || isUploading}
+                  className={`px-6 py-3 rounded-lg text-sm font-medium transition-all duration-300 ${isAuthenticated && !isUploading ? (theme === 'dark' ? 'bg-gray-700 text-white hover:bg-gray-600 focus:ring-2 focus:ring-yellow-400' : 'bg-blue-600 text-white hover:bg-blue-700 focus:ring-2 focus:ring-blue-500') : (theme === 'dark' ? 'bg-gray-600 text-gray-400 cursor-not-allowed' : 'bg-gray-400 text-gray-500 cursor-not-allowed')}`}
                 >
-                  {uploading ? 'Submitting...' : 'Submit'}
+                  {t.submit || 'Submit'}
                 </button>
               )}
             </div>
           </form>
-          <ToastContainer position="top-right" autoClose={3000} />
+          <ToastContainer position="top-right" autoClose={3000} theme={theme} />
         </div>
       </div>
 
-      {/* Custom CSS for animations */}
       <style jsx>{`
         .animate-fade-in {
           animation: fadeIn 0.5s ease-in;
@@ -831,4 +886,6 @@ export default function PersonalTrainingForm() {
       `}</style>
     </>
   );
-}
+};
+
+export default PersonalTrainingForm;
