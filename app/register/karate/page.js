@@ -6,10 +6,14 @@ import { ToastContainer, toast } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
 import { collection, addDoc } from 'firebase/firestore';
 import { signInWithEmailAndPassword, createUserWithEmailAndPassword, onAuthStateChanged } from 'firebase/auth';
-import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
-import { db, auth, storage } from '../../../app/fconfig';
+import { db, auth } from '../../../app/fconfig';
 import { useRouter } from 'next/navigation';
 import { ChevronLeftIcon, ChevronRightIcon, CheckCircleIcon } from '@heroicons/react/24/solid';
+
+// Cloudinary configuration
+const CLOUDINARY_UPLOAD_PRESET = 'promotionvideo';
+const CLOUDINARY_CLOUD_NAME = 'dkifgcmpy';
+const CLOUDINARY_FOLDER = 'video/promotionvideo';
 
 export default function KarataRegistrationForm() {
   const router = useRouter();
@@ -31,6 +35,7 @@ export default function KarataRegistrationForm() {
       height: '',
       weight: '',
       age: '',
+      bmi: '',
       relationship: '',
       yearsTraining: '',
       behavioral: '',
@@ -51,17 +56,47 @@ export default function KarataRegistrationForm() {
   const [isLoading, setIsLoading] = useState(true);
   const [formErrors, setFormErrors] = useState({});
   const [currentStep, setCurrentStep] = useState(0);
+  const [isSubmitted, setIsSubmitted] = useState(false);
+  const [isUploading, setIsUploading] = useState(false);
 
   const steps = [
     { name: 'Personal Info', fields: ['firstName', 'lastName', 'phoneNumber', 'photo', 'address', 'city', 'country', 'jobType', 'email', 'password'] },
     { name: 'Emergency Contact', fields: ['emergencyName', 'emergencyPhone'] },
-    { name: 'Personal Details', fields: ['gender', 'height', 'weight', 'age', 'relationship', 'yearsTraining', 'behavioral', 'healthIssues', 'rank'] },
+    { name: 'Personal Details', fields: ['gender', 'height', 'weight', 'age', 'bmi', 'relationship', 'yearsTraining', 'behavioral', 'healthIssues', 'rank'] },
     { name: 'Health & Lifestyle', fields: ['smoke', 'surgery', 'alcohol', 'heartDisease', 'hearingProblem', 'visionProblem', 'startDate'] },
     { name: 'Signature', fields: ['signature'] },
   ];
 
+  const rankOptions = [
+    'White Belt',
+    'Yellow Belt',
+    'Orange Belt',
+    'Green Belt',
+    'Blue Belt',
+    'Brown Belt',
+    'Black Belt',
+  ];
+
+  // Watch height and weight for BMI calculation
+  const height = watch('height');
+  const weight = watch('weight');
+
   useEffect(() => {
-    if (!auth || !db || !storage) {
+    // Calculate BMI when height or weight changes
+    if (height && weight) {
+      const heightInMeters = parseFloat(height) / 100;
+      const weightInKg = parseFloat(weight);
+      if (heightInMeters > 0) {
+        const bmi = (weightInKg / (heightInMeters * heightInMeters)).toFixed(2);
+        setValue('bmi', bmi);
+      }
+    } else {
+      setValue('bmi', '');
+    }
+  }, [height, weight, setValue]);
+
+  useEffect(() => {
+    if (!auth || !db) {
       setFormErrors({ global: 'Firebase services are not initialized.' });
       setIsLoading(false);
       return;
@@ -117,39 +152,73 @@ export default function KarataRegistrationForm() {
     }
   };
 
+  const uploadToCloudinary = async (file) => {
+    setIsUploading(true);
+    try {
+      let formData = new FormData();
+      formData.append('file', file);
+      formData.append('upload_preset', CLOUDINARY_UPLOAD_PRESET);
+      formData.append('folder', CLOUDINARY_FOLDER);
+
+      const response = await fetch(
+        `https://api.cloudinary.com/v1_1/${CLOUDINARY_CLOUD_NAME}/image/upload`,
+        {
+          method: 'POST',
+          body: formData,
+        }
+      );
+
+      const responseJson = await response.json();
+      setIsUploading(false);
+
+      if (responseJson.secure_url) {
+        return responseJson.secure_url;
+      } else {
+        toast.error('Failed to upload image.');
+        return null;
+      }
+    } catch (error) {
+      setIsUploading(false);
+      toast.error('Failed to upload image.');
+      return null;
+    }
+  };
+
   const onSubmit = async (data) => {
     setFormErrors({});
     if (!isAuthenticated || !auth.currentUser) {
-      toast.error('User is not authenticated.');
-      setFormErrors({ global: 'User is not authenticated.' });
-      return;
+      try {
+        await handleAuth(data.email, data.password, true);
+      } catch (err) {
+        toast.error(err.message);
+        setFormErrors({ global: err.message });
+        return;
+      }
     }
 
     try {
       if (!db) throw new Error('Firestore database is not initialized.');
-      if (!storage) throw new Error('Firebase Storage is not initialized.');
 
       let photoURL = '';
       if (data.photo && data.photo[0]) {
-        const storageRef = ref(storage, `photos/${auth.currentUser.uid}_${Date.now()}_${data.photo[0].name}`);
-        await uploadBytes(storageRef, data.photo[0]);
-        photoURL = await getDownloadURL(storageRef);
+        photoURL = await uploadToCloudinary(data.photo[0]);
+        if (!photoURL) {
+          throw new Error('Image upload failed.');
+        }
       }
 
-      const dataToStore = {
+      await addDoc(collection(db, 'karate'), {
         ...data,
         photo: null,
         photoURL,
-        uid: auth.currentUser.uid,
-        timestamp: new Date().toISOString(),
-      };
-
-      const karateCollectionRef = collection(db, 'karate');
-      await addDoc(karateCollectionRef, dataToStore);
-      toast.success('Registration submitted successfully!');
-      router.push('/success');
+        role: 'user',
+        userId: auth.currentUser.uid,
+        createdAt: new Date(),
+      });
+      toast.success('Registration successful!');
+      setIsSubmitted(true);
     } catch (err) {
-      let errorMessage = 'An error occurred while saving your registration.';
+      let errorMessage = err.message;
       if (err.code === 'permission-denied') {
         errorMessage = 'Permission denied: Unable to save data.';
       } else if (err.code === 'unavailable') {
@@ -186,13 +255,34 @@ export default function KarataRegistrationForm() {
     if (currentStep > 0) setCurrentStep(currentStep - 1);
   };
 
+  const handleGoToHome = () => {
+    window.location.href = 'http://localhost:3000/';
+  };
+
   const formData = watch();
 
   if (isLoading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gradient-to-r from-blue-100 to-indigo-100">
-        <div className="Watkins Family Karatetext-2xl font-semibold text-gray-700 animate-pulse">Loading...</div>
-     </div>
+        <div className="text-2xl font-semibold text-gray-700 animate-pulse">Loading...</div>
+      </div>
+    );
+  }
+
+  if (isSubmitted) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gradient-to-r from-blue-100 to-indigo-100">
+        <div className="max-w-4xl w-full bg-white p-8 rounded-xl shadow-2xl text-center">
+          <h2 className="text-3xl font-extrabold text-gray-900 mb-6">Registration Complete!</h2>
+          <p className="text-gray-600 mb-8">Thank you for registering with 3 JKS Karate. Your information has been successfully saved.</p>
+          <button
+            onClick={handleGoToHome}
+            className="px-6 py-3 rounded-lg text-sm font-medium bg-indigo-600 text-white hover:bg-indigo-700 focus:ring-2 focus:ring-indigo-500 transition-all duration-300"
+          >
+            Go to Home Page
+          </button>
+        </div>
+      </div>
     );
   }
 
@@ -202,7 +292,6 @@ export default function KarataRegistrationForm() {
         <div className="max-w-4xl w-full bg-white p-8 rounded-xl shadow-2xl">
           <h2 className="text-3xl font-extrabold text-center text-gray-900 mb-8">3 JKS Karate Registration Form</h2>
 
-          {/* Stepper */}
           <div className="flex justify-between mb-8">
             {steps.map((step, index) => (
               <div key={step.name} className="flex-1 text-center">
@@ -219,7 +308,6 @@ export default function KarataRegistrationForm() {
           )}
 
           <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
-            {/* Step 1: Personal Information */}
             {currentStep === 0 && (
               <div className="space-y-6 animate-fade-in">
                 <h3 className="text-xl font-semibold text-gray-800">Personal Information</h3>
@@ -227,7 +315,7 @@ export default function KarataRegistrationForm() {
                   <div>
                     <label className="block text-sm font-medium text-gray-700">First Name</label>
                     <input
-                      {...register('firstName', { required: 'First name is required' })}
+                      {...register('firstName')}
                       className="mt-1 block w-full px-4 py-3 border border-gray-300 rounded-lg shadow-sm focus:ring-indigo-500 focus:border-indigo-500 transition-all duration-300"
                       placeholder="Enter your first name"
                     />
@@ -236,7 +324,7 @@ export default function KarataRegistrationForm() {
                   <div>
                     <label className="block text-sm font-medium text-gray-700">Last Name</label>
                     <input
-                      {...register('lastName', { required: 'Last name is required' })}
+                      {...register('lastName')}
                       className="mt-1 block w-full px-4 py-3 border border-gray-300 rounded-lg shadow-sm focus:ring-indigo-500 focus:border-indigo-500 transition-all duration-300"
                       placeholder="Enter your last name"
                     />
@@ -246,7 +334,7 @@ export default function KarataRegistrationForm() {
                     <label className="block text-sm font-medium text-gray-700">Phone Number</label>
                     <input
                       type="tel"
-                      {...register('phoneNumber', { required: 'Phone number is required', pattern: { value: /^\+?[\d\s-]{10,}$/, message: 'Invalid phone number' } })}
+                      {...register('phoneNumber')}
                       className="mt-1 block w-full px-4 py-3 border border-gray-300 rounded-lg shadow-sm focus:ring-indigo-500 focus:border-indigo-500 transition-all duration-300"
                       placeholder="Enter your phone number"
                     />
@@ -260,11 +348,12 @@ export default function KarataRegistrationForm() {
                       {...register('photo')}
                       className="mt-1 block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-sm file:font-semibold file:bg-indigo-50 file:text-indigo-700 hover:file:bg-indigo-100 transition-all duration-300"
                     />
+                    {isUploading && <p className="text-blue-500 text-xs mt-1">Uploading image...</p>}
                   </div>
                   <div className="sm:col-span-2">
                     <label className="block text-sm font-medium text-gray-700">Address</label>
                     <input
-                      {...register('address', { required: 'Address is required' })}
+                      {...register('address')}
                       className="mt-1 block w-full px-4 py-3 border border-gray-300 rounded-lg shadow-sm focus:ring-indigo-500 focus:border-indigo-500 transition-all duration-300"
                       placeholder="Enter your address"
                     />
@@ -273,7 +362,7 @@ export default function KarataRegistrationForm() {
                   <div>
                     <label className="block text-sm font-medium text-gray-700">City</label>
                     <input
-                      {...register('city', { required: 'City is required' })}
+                      {...register('city')}
                       className="mt-1 block w-full px-4 py-3 border border-gray-300 rounded-lg shadow-sm focus:ring-indigo-500 focus:border-indigo-500 transition-all duration-300"
                       placeholder="Enter your city"
                     />
@@ -282,7 +371,7 @@ export default function KarataRegistrationForm() {
                   <div>
                     <label className="block text-sm font-medium text-gray-700">Country</label>
                     <input
-                      {...register('country', { required: 'Country is required' })}
+                      {...register('country')}
                       className="mt-1 block w-full px-4 py-3 border border-gray-300 rounded-lg shadow-sm focus:ring-indigo-500 focus:border-indigo-500 transition-all duration-300"
                       placeholder="Enter your country"
                     />
@@ -300,7 +389,7 @@ export default function KarataRegistrationForm() {
                     <label className="block text-sm font-medium text-gray-700">Email</label>
                     <input
                       type="email"
-                      {...register('email', { required: 'Email is required', pattern: { value: /^\S+@\S+\.\S+$/, message: 'Invalid email' } })}
+                      {...register('email')}
                       className="mt-1 block w-full px-4 py-3 border border-gray-300 rounded-lg shadow-sm focus:ring-indigo-500 focus:border-indigo-500 transition-all duration-300"
                       placeholder="Enter your email"
                     />
@@ -310,7 +399,7 @@ export default function KarataRegistrationForm() {
                     <label className="block text-sm font-medium text-gray-700">Password</label>
                     <input
                       type="password"
-                      {...register('password', { required: 'Password is required', minLength: { value: 6, message: 'Password must be at least 6 characters' } })}
+                      {...register('password')}
                       className="mt-1 block w-full px-4 py-3 border border-gray-300 rounded-lg shadow-sm focus:ring-indigo-500 focus:border-indigo-500 transition-all duration-300"
                       placeholder="Enter your password"
                     />
@@ -320,7 +409,6 @@ export default function KarataRegistrationForm() {
               </div>
             )}
 
-            {/* Step 2: Emergency Contact */}
             {currentStep === 1 && (
               <div className="space-y-6 animate-fade-in">
                 <h3 className="text-xl font-semibold text-gray-800">Emergency Contact Information</h3>
@@ -328,7 +416,7 @@ export default function KarataRegistrationForm() {
                   <div>
                     <label className="block text-sm font-medium text-gray-700">Emergency Contact Name</label>
                     <input
-                      {...register('emergencyName', { required: 'Emergency contact name is required' })}
+                      {...register('emergencyName')}
                       className="mt-1 block w-full px-4 py-3 border border-gray-300 rounded-lg shadow-sm focus:ring-indigo-500 focus:border-indigo-500 transition-all duration-300"
                       placeholder="Enter emergency contact name"
                     />
@@ -338,7 +426,7 @@ export default function KarataRegistrationForm() {
                     <label className="block text-sm font-medium text-gray-700">Emergency Contact Phone</label>
                     <input
                       type="tel"
-                      {...register('emergencyPhone', { required: 'Emergency phone is required', pattern: { value: /^\+?[\d\s-]{10,}$/, message: 'Invalid phone number' } })}
+                      {...register('emergencyPhone')}
                       className="mt-1 block w-full px-4 py-3 border border-gray-300 rounded-lg shadow-sm focus:ring-indigo-500 focus:border-indigo-500 transition-all duration-300"
                       placeholder="Enter emergency phone"
                     />
@@ -348,7 +436,6 @@ export default function KarataRegistrationForm() {
               </div>
             )}
 
-            {/* Step 3: Personal Details */}
             {currentStep === 2 && (
               <div className="space-y-6 animate-fade-in">
                 <h3 className="text-xl font-semibold text-gray-800">Personal Details</h3>
@@ -356,7 +443,7 @@ export default function KarataRegistrationForm() {
                   <div>
                     <label className="block text-sm font-medium text-gray-700">Gender</label>
                     <select
-                      {...register('gender', { required: 'Gender is required' })}
+                      {...register('gender')}
                       className="mt-1 block w-full px-4 py-3 border border-gray-300 rounded-lg shadow-sm focus:ring-indigo-500 focus:border-indigo-500 transition-all duration-300"
                     >
                       <option value="">Select Gender</option>
@@ -370,7 +457,7 @@ export default function KarataRegistrationForm() {
                     <label className="block text-sm font-medium text-gray-700">Height (cm)</label>
                     <input
                       type="number"
-                      {...register('height', { required: 'Height is required', min: { value: 0, message: 'Height must be positive' } })}
+                      {...register('height')}
                       className="mt-1 block w-full px-4 py-3 border border-gray-300 rounded-lg shadow-sm focus:ring-indigo-500 focus:border-indigo-500 transition-all duration-300"
                       placeholder="Enter height in cm"
                     />
@@ -380,7 +467,7 @@ export default function KarataRegistrationForm() {
                     <label className="block text-sm font-medium text-gray-700">Weight (kg)</label>
                     <input
                       type="number"
-                      {...register('weight', { required: 'Weight is required', min: { value: 0, message: 'Weight must be positive' } })}
+                      {...register('weight')}
                       className="mt-1 block w-full px-4 py-3 border border-gray-300 rounded-lg shadow-sm focus:ring-indigo-500 focus:border-indigo-500 transition-all duration-300"
                       placeholder="Enter weight in kg"
                     />
@@ -390,11 +477,21 @@ export default function KarataRegistrationForm() {
                     <label className="block text-sm font-medium text-gray-700">Age</label>
                     <input
                       type="number"
-                      {...register('age', { required: 'Age is required', min: { value: 0, message: 'Age must be positive' } })}
+                      {...register('age')}
                       className="mt-1 block w-full px-4 py-3 border border-gray-300 rounded-lg shadow-sm focus:ring-indigo-500 focus:border-indigo-500 transition-all duration-300"
                       placeholder="Enter your age"
                     />
                     {errors.age && <p className="text-red-500 text-xs mt-1">{errors.age.message}</p>}
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700">BMI</label>
+                    <input
+                      type="number"
+                      {...register('bmi')}
+                      readOnly
+                      className="mt-1 block w-full px-4 py-3 border border-gray-300 rounded-lg shadow-sm bg-gray-100"
+                      placeholder="Calculated BMI"
+                    />
                   </div>
                   <div>
                     <label className="block text-sm font-medium text-gray-700">Relationship</label>
@@ -408,7 +505,7 @@ export default function KarataRegistrationForm() {
                     <label className="block text-sm font-medium text-gray-700">Years of Training</label>
                     <input
                       type="number"
-                      {...register('yearsTraining', { min: { value: 0, message: 'Years must be non-negative' } })}
+                      {...register('yearsTraining')}
                       className="mt-1 block w-full px-4 py-3 border border-gray-300 rounded-lg shadow-sm focus:ring-indigo-500 focus:border-indigo-500 transition-all duration-300"
                       placeholder="Enter years of training"
                     />
@@ -435,22 +532,13 @@ export default function KarataRegistrationForm() {
                   <div>
                     <label className="block text-sm font-medium text-gray-700">Rank</label>
                     <select
-                      {...register('rank', { required: 'Rank is required' })}
+                      {...register('rank')}
                       className="mt-1 block w-full px-4 py-3 border border-gray-300 rounded-lg shadow-sm focus:ring-indigo-500 focus:border-indigo-500 transition-all duration-300"
                     >
                       <option value="">Select Rank</option>
-                      <option value="White Belt - No Stripe">White Belt - No Stripe</option>
-                      <option value="Yellow Belt - No Stripe">Yellow Belt - No Stripe</option>
-                      <option value="Yellow Belt - One Stripe">Yellow Belt - One Stripe</option>
-                      <option value="Green Belt - No Stripe">Green Belt - No Stripe</option>
-                      <option value="Green Belt - One Stripe">Green Belt - One Stripe</option>
-                      <option value="Blue Belt - No Stripe">Blue Belt - No Stripe</option>
-                      <option value="Blue Belt - One Stripe">Blue Belt - One Stripe</option>
-                      <option value="Red Belt - No Stripe">Red Belt - No Stripe</option>
-                      <option value="Red Belt - One Stripe">Red Belt - One Stripe</option>
-                      <option value="Brown Belt - No Stripe">Brown Belt - No Stripe</option>
-                      <option value="Brown Belt - One Stripe">Brown Belt - One Stripe</option>
-                      <option value="Black Belt">Black Belt (Any Dan Level)</option>
+                      {rankOptions.map((rank) => (
+                        <option key={rank} value={rank}>{rank}</option>
+                      ))}
                     </select>
                     {errors.rank && <p className="text-red-500 text-xs mt-1">{errors.rank.message}</p>}
                   </div>
@@ -458,33 +546,65 @@ export default function KarataRegistrationForm() {
               </div>
             )}
 
-            {/* Step 4: Health & Lifestyle */}
             {currentStep === 3 && (
               <div className="space-y-6 animate-fade-in">
-                <h3 className="text-xl font-semibold text-gray-800">Health & Lifestyle</h3>
+                <h3 className="text-xl font-semibold text-gray-800">Health & Lifestyle Information</h3>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
-                  {[
-                    { label: 'Do you smoke?', name: 'smoke' },
-                    { label: 'Had surgery in the past year?', name: 'surgery' },
-                    { label: 'Do you drink alcohol?', name: 'alcohol' },
-                    { label: 'Do you have heart disease?', name: 'heartDisease' },
-                    { label: 'Do you have hearing problems?', name: 'hearingProblem' },
-                    { label: 'Do you have vision problems?', name: 'visionProblem' },
-                  ].map((q) => (
-                    <div key={q.name} className="flex items-center space-x-4">
-                      <label className="text-sm font-medium text-gray-700">{q.label}</label>
+                  <div className="space-y-4">
+                    <div className="flex items-center">
                       <input
                         type="checkbox"
-                        {...register(q.name)}
+                        {...register('smoke')}
                         className="h-5 w-5 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded"
                       />
+                      <label className="ml-2 text-sm text-gray-700">Do you smoke?</label>
                     </div>
-                  ))}
+                    <div className="flex items-center">
+                      <input
+                        type="checkbox"
+                        {...register('surgery')}
+                        className="h-5 w-5 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded"
+                      />
+                      <label className="ml-2 text-sm text-gray-700">Have you had surgery in the last 6 months?</label>
+                    </div>
+                    <div className="flex items-center">
+                      <input
+                        type="checkbox"
+                        {...register('alcohol')}
+                        className="h-5 w-5 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded"
+                      />
+                      <label className="ml-2 text-sm text-gray-700">Do you consume alcohol?</label>
+                    </div>
+                    <div className="flex items-center">
+                      <input
+                        type="checkbox"
+                        {...register('heartDisease')}
+                        className="h-5 w-5 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded"
+                      />
+                      <label className="ml-2 text-sm text-gray-700">Do you have heart disease?</label>
+                    </div>
+                    <div className="flex items-center">
+                      <input
+                        type="checkbox"
+                        {...register('hearingProblem')}
+                        className="h-5 w-5 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded"
+                      />
+                      <label className="ml-2 text-sm text-gray-700">Do you have hearing problems?</label>
+                    </div>
+                    <div className="flex items-center">
+                      <input
+                        type="checkbox"
+                        {...register('visionProblem')}
+                        className="h-5 w-5 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded"
+                      />
+                      <label className="ml-2 text-sm text-gray-700">Do you have vision problems?</label>
+                    </div>
+                  </div>
                   <div>
                     <label className="block text-sm font-medium text-gray-700">Preferred Start Date</label>
                     <input
                       type="date"
-                      {...register('startDate', { required: 'Start date is required' })}
+                      {...register('startDate')}
                       className="mt-1 block w-full px-4 py-3 border border-gray-300 rounded-lg shadow-sm focus:ring-indigo-500 focus:border-indigo-500 transition-all duration-300"
                     />
                     {errors.startDate && <p className="text-red-500 text-xs mt-1">{errors.startDate.message}</p>}
@@ -493,68 +613,78 @@ export default function KarataRegistrationForm() {
               </div>
             )}
 
-            {/* Step 5: Signature */}
             {currentStep === 4 && (
               <div className="space-y-6 animate-fade-in">
                 <h3 className="text-xl font-semibold text-gray-800">Signature</h3>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700">Client Signature</label>
-                  <input
-                    {...register('signature', { required: 'Signature is required' })}
-                    className="mt-1 block w-full px-4 py-3 border border-gray-300 rounded-lg shadow-sm focus:ring-indigo-500 focus:border-indigo-500 transition-all duration-300"
-                    placeholder="Type your full name as signature"
-                  />
-                  {errors.signature && <p className="text-red-500 text-xs mt-1">{errors.signature.message}</p>}
+                <div className="grid grid-cols-1 gap-6">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700">Client Signature</label>
+                    <input
+                      {...register('signature')}
+                      className="mt-1 block w-full px-4 py-3 border border-gray-300 rounded-lg shadow-sm focus:ring-indigo-500 focus:border-indigo-500 transition-all duration-300"
+                      placeholder="Type your full name as signature"
+                    />
+                    {errors.signature && <p className="text-red-500 text-xs mt-1">{errors.signature.message}</p>}
+                  </div>
                 </div>
-                <div className="bg-gray-50 p-4 rounded-lg space-y-4">
-                  <div>
-                    <h4 className="text-sm font-semibold text-gray-700">Personal Information</h4>
-                    <p className="text-sm text-gray-600">
-                      Name: {formData.firstName || 'Not provided'} {formData.lastName || 'Not provided'}<br />
-                      Phone: {formData.phoneNumber || 'Not provided'}<br />
-                      Email: {formData.email || 'Not provided'}<br />
-                      Address: {formData.address || 'Not provided'}, {formData.city || 'Not provided'}, {formData.country || 'Not provided'}<br />
-                      Job Type: {formData.jobType || 'Not provided'}
-                    </p>
-                  </div>
-                  <div>
-                    <h4 className="text-sm font-semibold text-gray-700">Emergency Contact</h4>
-                    <p className="text-sm text-gray-600">
-                      Name: {formData.emergencyName || 'Not provided'}<br />
-                      Phone: {formData.emergencyPhone || 'Not provided'}
-                    </p>
-                  </div>
-                  <div>
-                    <h4 className="text-sm font-semibold text-gray-700">Personal Details</h4>
-                    <p className="text-sm text-gray-600">
-                      Gender: {formData.gender ? formData.gender.charAt(0).toUpperCase() + formData.gender.slice(1) : 'Not provided'}<br />
-                      Height: {formData.height || 'Not provided'} cm<br />
-                      Weight: {formData.weight || 'Not provided'} kg<br />
-                      Age: {formData.age || 'Not provided'}<br />
-                      Relationship: {formData.relationship || 'Not provided'}<br />
-                      Years of Training: {formData.yearsTraining || 'Not provided'}<br />
-                      Behavioral Notes: {formData.behavioral || 'Not provided'}<br />
-                      Health Issues: {formData.healthIssues || 'Not provided'}<br />
-                      Rank: {formData.rank || 'Not provided'}
-                    </p>
-                  </div>
-                  <div>
-                    <h4 className="text-sm font-semibold text-gray-700">Health & Lifestyle</h4>
-                    <p className="text-sm text-gray-600">
-                      Smoke: {formData.smoke ? 'Yes' : 'No'}<br />
-                      Surgery: {formData.surgery ? 'Yes' : 'No'}<br />
-                      Alcohol: {formData.alcohol ? 'Yes' : 'No'}<br />
-                      Heart Disease: {formData.heartDisease ? 'Yes' : 'No'}<br />
-                      Hearing Problem: {formData.hearingProblem ? 'Yes' : 'No'}<br />
-                      Vision Problem: {formData.visionProblem ? 'Yes' : 'No'}<br />
-                      Start Date: {formData.startDate || 'Not provided'}
-                    </p>
+                <div className="mt-6">
+                  <h4 className="text-sm font-semibold text-gray-700">Review Your Information</h4>
+                  <div className="bg-gray-50 p-4 rounded-lg space-y-4 mt-2">
+                    <div>
+                      <h5 className="text-sm font-semibold text-gray-700">Personal Information</h5>
+                      <p className="text-sm text-gray-600">
+                        Name: {formData.firstName || 'Not provided'} {formData.lastName || 'Not provided'}<br />
+                        Phone: {formData.phoneNumber || 'Not provided'}<br />
+                        Email: {formData.email || 'Not provided'}<br />
+                        Address: {formData.address || 'Not provided'}, {formData.city || 'Not provided'}, {formData.country || 'Not provided'}<br />
+                        Job Type: {formData.jobType || 'Not provided'}
+                      </p>
+                    </div>
+                    <div>
+                      <h5 className="text-sm font-semibold text-gray-700">Emergency Contact</h5>
+                      <p className="text-sm text-gray-600">
+                        Name: {formData.emergencyName || 'Not provided'}<br />
+                        Phone: {formData.emergencyPhone || 'Not provided'}
+                      </p>
+                    </div>
+                    <div>
+                      <h5 className="text-sm font-semibold text-gray-700">Personal Details</h5>
+                      <p className="text-sm text-gray-600">
+                        Gender: {formData.gender ? formData.gender.charAt(0).toUpperCase() + formData.gender.slice(1) : 'Not provided'}<br />
+                        Height: {formData.height || 'Not provided'} cm<br />
+                        Weight: {formData.weight || 'Not provided'} kg<br />
+                        Age: {formData.age || 'Not provided'}<br />
+                        BMI: {formData.bmi || 'Not provided'}<br />
+                        Relationship: {formData.relationship || 'Not provided'}<br />
+                        Years of Training: {formData.yearsTraining || 'Not provided'}<br />
+                        Behavioral Notes: {formData.behavioral || 'Not provided'}<br />
+                        Health Issues: {formData.healthIssues || 'Not provided'}<br />
+                        Rank: {formData.rank || 'Not provided'}
+                      </p>
+                    </div>
+                    <div>
+                      <h5 className="text-sm font-semibold text-gray-700">Health & Lifestyle</h5>
+                      <p className="text-sm text-gray-600">
+                        Smoke: {formData.smoke ? 'Yes' : 'No'}<br />
+                        Surgery: {formData.surgery ? 'Yes' : 'No'}<br />
+                        Alcohol: {formData.alcohol ? 'Yes' : 'No'}<br />
+                        Heart Disease: {formData.heartDisease ? 'Yes' : 'No'}<br />
+                        Hearing Problem: {formData.hearingProblem ? 'Yes' : 'No'}<br />
+                        Vision Problem: {formData.visionProblem ? 'Yes' : 'No'}<br />
+                        Start Date: {formData.startDate || 'Not provided'}
+                      </p>
+                    </div>
+                    <div>
+                      <h5 className="text-sm font-semibold text-gray-700">Signature</h5>
+                      <p className="text-sm text-gray-600">
+                        Signature: {formData.signature || 'Not provided'}
+                      </p>
+                    </div>
                   </div>
                 </div>
               </div>
             )}
 
-            {/* Navigation Buttons */}
             <div className="flex justify-between mt-8">
               <button
                 type="button"
@@ -579,9 +709,9 @@ export default function KarataRegistrationForm() {
               ) : (
                 <button
                   type="submit"
-                  disabled={!isAuthenticated}
+                  disabled={!isAuthenticated || isUploading}
                   className={`px-6 py-3 rounded-lg text-sm font-medium text-white transition-all duration-300 ${
-                    isAuthenticated
+                    isAuthenticated && !isUploading
                       ? 'bg-indigo-600 hover:bg-indigo-700 focus:ring-2 focus:ring-indigo-500'
                       : 'bg-gray-400 cursor-not-allowed'
                   }`}
@@ -595,7 +725,6 @@ export default function KarataRegistrationForm() {
         </div>
       </div>
 
-      {/* Custom CSS for animations */}
       <style jsx>{`
         .animate-fade-in {
           animation: fadeIn 0.5s ease-in;

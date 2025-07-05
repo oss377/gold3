@@ -1,3 +1,4 @@
+
 "use client";
 import { useState, useCallback } from "react";
 import { useForm } from "react-hook-form";
@@ -7,6 +8,11 @@ import { app } from "../app/fconfig";
 
 // Initialize Firestore
 const db = getFirestore(app);
+
+// Cloudinary configuration
+const CLOUDINARY_UPLOAD_PRESET = 'gold';
+const CLOUDINARY_CLOUD_NAME = 'dnqsoezfo';
+const CLOUDINARY_FOLDER = 'gymVideo';
 
 // TypeScript interface for video form data
 interface VideoFormData {
@@ -27,8 +33,9 @@ export default function VideoUploadModal({ isOpen, onClose, isHighContrast }: Vi
     type: "success" | "error" | "uploading";
     message: string;
     progress?: number;
+    fileName?: string;
   } | null>(null);
-  const [uploadedVideos, setUploadedVideos] = useState<string[]>([]);
+  const [uploadedVideos, setUploadedVideos] = useState<{ url: string; fileName: string }[]>([]);
   const {
     register,
     handleSubmit,
@@ -38,18 +45,36 @@ export default function VideoUploadModal({ isOpen, onClose, isHighContrast }: Vi
 
   const onSubmit = useCallback(
     async (data: VideoFormData) => {
-      setUploadStatus({ type: "uploading", message: "Uploading videos...", progress: 0 });
       const files = Array.from(data.files);
+      // Limit to 5 files
+      if (files.length > 5) {
+        setUploadStatus({
+          type: "error",
+          message: "You can upload a maximum of 5 videos at a time.",
+        });
+        return;
+      }
+
+      setUploadStatus({ type: "uploading", message: "Starting video upload...", progress: 0 });
+      const newUploadedVideos: { url: string; fileName: string }[] = [];
 
       try {
         for (let i = 0; i < files.length; i++) {
           const file = files[i];
+          setUploadStatus({
+            type: "uploading",
+            message: `Uploading ${file.name} (${i + 1} of ${files.length})`,
+            progress: (i / files.length) * 100,
+            fileName: file.name,
+          });
+
           const formData = new FormData();
           formData.append("file", file);
-          formData.append("upload_preset", "gold1");
+          formData.append("upload_preset", CLOUDINARY_UPLOAD_PRESET);
+          formData.append("folder", CLOUDINARY_FOLDER);
           formData.append("resource_type", "video");
 
-          const response = await fetch("https://api.cloudinary.com/v1_1/dnqsoezfo/video/upload", {
+          const response = await fetch(`https://api.cloudinary.com/v1_1/${CLOUDINARY_CLOUD_NAME}/video/upload`, {
             method: "POST",
             body: formData,
           });
@@ -57,7 +82,12 @@ export default function VideoUploadModal({ isOpen, onClose, isHighContrast }: Vi
           const result = await response.json();
 
           if (!response.ok) {
-            throw new Error(result.error?.message || "Upload failed");
+            setUploadStatus({
+              type: "error",
+              message: `Failed to upload ${file.name}: ${result.error?.message || "Upload failed"}`,
+              fileName: file.name,
+            });
+            continue; // Continue with the next file
           }
 
           await addDoc(collection(db, "videos"), {
@@ -65,18 +95,29 @@ export default function VideoUploadModal({ isOpen, onClose, isHighContrast }: Vi
             description: data.description,
             category: data.category,
             videoUrl: result.secure_url,
+            fileName: file.name,
             uploadedAt: new Date(),
           });
 
-          setUploadedVideos((prev) => [...prev, result.secure_url]);
+          newUploadedVideos.push({ url: result.secure_url, fileName: file.name });
+          setUploadedVideos((prev) => [...prev, { url: result.secure_url, fileName: file.name }]);
           setUploadStatus({
             type: "uploading",
-            message: `Uploading video ${i + 1} of ${files.length}`,
+            message: `Uploaded ${file.name} (${i + 1} of ${files.length})`,
             progress: ((i + 1) / files.length) * 100,
+            fileName: file.name,
           });
         }
 
-        setUploadStatus({ type: "success", message: "All videos uploaded successfully!" });
+        if (newUploadedVideos.length === files.length) {
+          setUploadStatus({ type: "success", message: "All videos uploaded successfully!" });
+        } else {
+          setUploadStatus({
+            type: "success",
+            message: `${newUploadedVideos.length} of ${files.length} videos uploaded successfully.`,
+          });
+        }
+
         setTimeout(() => {
           onClose();
           reset();
@@ -84,7 +125,10 @@ export default function VideoUploadModal({ isOpen, onClose, isHighContrast }: Vi
           setUploadedVideos([]);
         }, 2000);
       } catch (error: any) {
-        setUploadStatus({ type: "error", message: error.message || "Failed to upload videos" });
+        setUploadStatus({
+          type: "error",
+          message: `Upload error: ${error.message || "Failed to upload videos"}`,
+        });
       }
     },
     [onClose, reset]
@@ -176,7 +220,7 @@ export default function VideoUploadModal({ isOpen, onClose, isHighContrast }: Vi
             )}
           </div>
           <div>
-            <label className="block text-sm font-medium mb-1">Video Files (Multiple)</label>
+            <label className="block text-sm font-medium mb-1">Video Files (Up to 5)</label>
             <input
               type="file"
               multiple
@@ -190,6 +234,8 @@ export default function VideoUploadModal({ isOpen, onClose, isHighContrast }: Vi
                   sizeLimit: (value) =>
                     Array.from(value).every((file) => file.size <= 1000000000) ||
                     "Each file must be under 1GB",
+                  maxFiles: (value) =>
+                    value.length <= 5 || "You can upload a maximum of 5 videos at a time",
                 },
               })}
               accept="video/mp4,video/mov,video/webm"
@@ -232,10 +278,10 @@ export default function VideoUploadModal({ isOpen, onClose, isHighContrast }: Vi
             <div className="space-y-2">
               <p className="text-sm font-medium">Uploaded Videos:</p>
               <ul className="list-disc pl-5 text-sm">
-                {uploadedVideos.map((url, index) => (
+                {uploadedVideos.map((video, index) => (
                   <li key={index}>
-                    <a href={url} target="_blank" rel="noopener noreferrer" className="text-indigo-500 hover:underline">
-                      Video {index + 1}
+                    <a href={video.url} target="_blank" rel="noopener noreferrer" className="text-indigo-500 hover:underline">
+                      {video.fileName}
                     </a>
                   </li>
                 ))}
