@@ -22,6 +22,6 @@
       "@/*": ["./*"]
     }
   },
-  "include": ["next-env.d.ts", "**/*.ts", "**/*.tsx", ".next/types/**/*.ts", "app/page.js", "app/register/gym/page.js", "app/api/registration/route.js", "app/api/login/route.js", "context/LanguageContext.tsx"],
+  "include": ["next-env.d.ts", "**/*.ts", "**/*.tsx", ".next/types/**/*.ts", "app/page.js", "app/register/gym/page.tsx", "app/api/registration/route.js", "app/api/login/route.tsx", "context/LanguageContext.tsx"],
   "exclude": ["node_modules"]
 }

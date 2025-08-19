@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useContext } from 'react';
+import { useState, useEffect, useContext } from 'react';
 import { useRouter } from 'next/navigation';
 import {
   Menu,
@@ -17,6 +17,7 @@ import {
   Globe,
 } from 'lucide-react';
 import Link from 'next/link';
+import { toast } from 'react-toastify';
 import UserNotification from '../../components/UserNotification';
 import Message from '../../components/Messages';
 import { ThemeContext } from '../../context/ThemeContext';
@@ -28,6 +29,7 @@ export default function UserDashboard() {
   const [messages, setMessages] = useState(5);
   const [searchQuery, setSearchQuery] = useState('');
   const [errorMessage, setErrorMessage] = useState('');
+  const [isAuthorized, setIsAuthorized] = useState(false);
   const router = useRouter();
   const themeContext = useContext(ThemeContext);
   const languageContext = useContext(LanguageContext) || {};
@@ -39,6 +41,31 @@ export default function UserDashboard() {
   const { theme, toggleTheme } = themeContext;
   const { language = 'en', toggleLanguage = () => {}, t = {} } = languageContext;
 
+  useEffect(() => {
+    const validateSession = async () => {
+      try {
+        const response = await fetch("/api/validate", {
+          method: "GET",
+          credentials: "include",
+        });
+
+        if (!response.ok) {
+          const { error } = await response.json();
+          toast.error(error || "Please log in to access this page");
+          router.push("/");
+          return;
+        }
+
+        setIsAuthorized(true);
+      } catch (error: any) {
+        toast.error("Please log in to access this page");
+        router.push("/");
+      }
+    };
+
+    validateSession();
+  }, [router]);
+
   const navItems = [
     { name: t.dashboard || 'Dashboard', icon: BarChart, href: '/user' },
     { name: t.schedules || 'Schedules', icon: Calendar, href: '/user/schedules' },
@@ -48,7 +75,26 @@ export default function UserDashboard() {
   ];
 
   const toggleSidebar = () => setIsSidebarOpen(!isSidebarOpen);
-  const handleLogout = () => router.push('/');
+  const handleLogout = async () => {
+    try {
+      const response = await fetch("/api/logout", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+      });
+
+      if (response.ok) {
+        toast.success("Logged out successfully");
+        router.push("/");
+      } else {
+        toast.error("Logout failed. Please try again.");
+      }
+    } catch (error) {
+      toast.error("An error occurred during logout.");
+      console.error("Logout error:", error);
+    }
+  };
   const handleConsultancy = () => router.push('/consultancy');
   const handleMessageClick = async () => {
     console.log('Message icon clicked! Navigating to messages...');
@@ -56,9 +102,13 @@ export default function UserDashboard() {
       await router.push('/messages');
     } catch (error) {
       setErrorMessage(t.errorMessage || 'Messages page is currently unavailable. Please try again later.');
-      setTimeout(() => setErrorMessage(''), 5000); // Clear error after 5 seconds
+      setTimeout(() => setErrorMessage(''), 5000);
     }
   };
+
+  if (!isAuthorized) {
+    return null;
+  }
 
   return (
     <div
@@ -66,7 +116,6 @@ export default function UserDashboard() {
         theme === 'light' ? 'bg-zinc-100 text-gray-900' : 'bg-zinc-900 text-white'
       }`}
     >
-      {/* Sidebar */}
       <aside
         className={`fixed inset-y-0 left-0 z-50 w-64 shadow-2xl transform transition-transform duration-300 ease-in-out ${
           theme === 'light'
@@ -159,11 +208,9 @@ export default function UserDashboard() {
         </nav>
       </aside>
 
-      {/* Main Content */}
       <div
         className={`flex-1 flex flex-col transition-all duration-300 ${isSidebarOpen ? 'ml-64' : 'ml-0'}`}
       >
-        {/* Header */}
         <header
           className={`shadow-md p-5 flex items-center justify-between sticky top-0 z-40 transition-colors duration-300 ${
             theme === 'light'
@@ -221,7 +268,6 @@ export default function UserDashboard() {
           </div>
         </header>
 
-        {/* Error Message */}
         {errorMessage && (
           <div
             className={`mx-8 mt-4 p-4 rounded-lg ${
@@ -232,13 +278,11 @@ export default function UserDashboard() {
           </div>
         )}
 
-        {/* Main Content Area */}
         <main
           className={`flex-1 p-8 overflow-y-auto ${
             theme === 'light' ? 'bg-gradient-to-br from-blue-50 to-purple-50 text-gray-900' : 'bg-gradient-to-br from-gray-800 to-gray-900 text-white'
           }`}
         >
-          {/* Stats Cards */}
           <div
             className={`grid ${
               isSidebarOpen ? 'grid-cols-1 sm:grid-cols-2 lg:grid-cols-3' : 'grid-cols-1 sm:grid-cols-2 lg:grid-cols-4'
@@ -275,7 +319,6 @@ export default function UserDashboard() {
             ))}
           </div>
 
-          {/* Workout Schedule */}
           <div
             className={`rounded-xl shadow-lg p-6 mb-10 border ${
               theme === 'light' ? 'bg-white text-gray-900 border-gray-200' : 'bg-gray-800 text-white border-gray-700'
@@ -316,7 +359,6 @@ export default function UserDashboard() {
             </div>
           </div>
 
-          {/* Recent Activities */}
           <div
             className={`rounded-xl shadow-lg p-6 border ${
               theme === 'light' ? 'bg-white text-gray-900 border-gray-200' : 'bg-gray-800 text-white border-gray-700'

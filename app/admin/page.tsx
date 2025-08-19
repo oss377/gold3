@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useContext } from 'react';
+import { useState, useEffect, useContext } from 'react';
 import { useRouter } from 'next/navigation';
 import {
   Dumbbell,
@@ -18,6 +18,7 @@ import {
   Globe,
 } from 'lucide-react';
 import Link from 'next/link';
+import { toast } from 'react-toastify';
 import VideoUploadModal from '../../components/VideoUploadModal';
 import RegisterMember from '../../components/RegisterMember';
 import UploadSchedule from '../../components/UploadSchedule';
@@ -43,9 +44,35 @@ export default function GymDashboard() {
   const [isRegisterModalOpen, setIsRegisterModalOpen] = useState<boolean>(false);
   const [isScheduleModalOpen, setIsScheduleModalOpen] = useState<boolean>(false);
   const [refreshTrigger, setRefreshTrigger] = useState<number>(0);
+  const [isAuthorized, setIsAuthorized] = useState<boolean>(false);
   const router = useRouter();
   const { theme, toggleTheme } = useContext(ThemeContext);
   const { language, toggleLanguage, t } = useContext(LanguageContext);
+
+  useEffect(() => {
+    const validateSession = async () => {
+      try {
+        const response = await fetch("/api/adminvaldation", {
+          method: "GET",
+          credentials: "include",
+        });
+
+        if (!response.ok) {
+          const { error } = await response.json();
+          toast.error(error || "Please log in to access this page");
+          router.push("/");
+          return;
+        }
+
+        setIsAuthorized(true);
+      } catch (error: any) {
+        toast.error("Please log in to access this page");
+        router.push("/");
+      }
+    };
+
+    validateSession();
+  }, [router]);
 
   const navItems: NavItem[] = [
     { name: t.dashboard || 'Dashboard', href: '/admin', icon: BarChart },
@@ -56,7 +83,26 @@ export default function GymDashboard() {
   ];
 
   const toggleSidebar = () => setIsSidebarOpen(!isSidebarOpen);
-  const handleLogout = () => router.push('/');
+  const handleLogout = async () => {
+    try {
+      const response = await fetch("/api/logout", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+      });
+
+      if (response.ok) {
+        toast.success("Logged out successfully");
+        router.push("/");
+      } else {
+        toast.error("Logout failed. Please try again.");
+      }
+    } catch (error) {
+      toast.error("An error occurred during logout.");
+      console.error("Logout error:", error);
+    }
+  };
   const openUploadModal = () => setIsUploadModalOpen(true);
   const closeUploadModal = () => setIsUploadModalOpen(false);
   const openRegisterModal = () => setIsRegisterModalOpen(true);
@@ -64,6 +110,10 @@ export default function GymDashboard() {
   const openScheduleModal = () => setIsScheduleModalOpen(true);
   const closeScheduleModal = () => setIsScheduleModalOpen(false);
   const refreshData = () => setRefreshTrigger((prev) => prev + 1);
+
+  if (!isAuthorized) {
+    return null;
+  }
 
   return (
     <div
@@ -157,7 +207,7 @@ export default function GymDashboard() {
             }`}
             aria-label={language === 'en' ? 'Switch to Amharic' : 'Switch to English'}
           >
-            <Globe size={20} className={`mr-3 ${theme === 'light' ? 'text-blue-600' : 'text-yellow-400'}`}/>
+            <Globe size={20} className={`mr-3 ${theme === 'light' ? 'text-blue-600' : 'text-yellow-400'}`} />
             <span>{language === 'en' ? 'አማርኛ' : 'English'}</span>
           </button>
         </nav>
@@ -313,7 +363,7 @@ export default function GymDashboard() {
             }`}
           >
             <h3 className={`text-xl font-semibold mb-6 ${theme === 'light' ? 'text-zinc-800' : 'text-white'}`}>
-              {t.todaysSchedule || 'Today\'s Workout Schedule'}
+              {t.todaysSchedule || "Today's Workout Schedule"}
             </h3>
             <div
               className={`grid ${
@@ -329,7 +379,7 @@ export default function GymDashboard() {
                   key={index}
                   className={`border rounded-lg p-5 transition-all duration-200 ${
                     theme === 'light'
-                      ? 'border-gray-200 hover: bg-blue-50'
+                      ? 'border-gray-200 hover:bg-blue-50'
                       : 'border-gray-600 hover:bg-gray-700'
                   }`}
                 >
