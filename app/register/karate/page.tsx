@@ -44,6 +44,7 @@ interface FormData {
   startDate: string;
   signature: string;
   role: string;
+  category: string;
 }
 
 export default function RegisterForm() {
@@ -79,6 +80,8 @@ export default function RegisterForm() {
     startDate: "",
     signature: "",
     role: "user",
+     category: "karate"
+    
   });
   const [errors, setErrors] = useState<{ general?: string }>({});
   const [isLoading, setIsLoading] = useState<boolean>(false);
@@ -126,6 +129,7 @@ export default function RegisterForm() {
           startDate: formData.startDate.trim(),
           signature: formData.signature.trim(),
           role: formData.role,
+          category: formData.category,
         });
 
         setFormData({
@@ -160,6 +164,7 @@ export default function RegisterForm() {
           startDate: "",
           signature: "",
           role: "user",
+           category: "karate",
         });
         toast.success("Registration successful! Redirecting to login...");
         router.push("/login");

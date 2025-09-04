@@ -51,6 +51,8 @@ interface FormData {
   startMonth: string;
   signature: string;
   role: string;
+  category: string;
+  payment: string;
 }
 
 export default function RegisterForm() {
@@ -93,6 +95,8 @@ export default function RegisterForm() {
     startMonth: "",
     signature: "",
     role: "user",
+    category: "aerobics",
+    payment: "not payed",
   });
   const [errors, setErrors] = useState<{ general?: string }>({});
   const [isLoading, setIsLoading] = useState<boolean>(false);
@@ -107,7 +111,7 @@ export default function RegisterForm() {
 
   // Memoize completeRegistration to prevent unnecessary re-renders
   const completeRegistration = useCallback(
-    async (userId: string) => {
+    async (userId: string, paymentStatus: string) => {
       try {
         await addDoc(collection(db, "GYM"), {
           uid: userId,
@@ -148,8 +152,9 @@ export default function RegisterForm() {
           startMonth: formData.startMonth.trim(),
           signature: formData.signature.trim(),
           role: formData.role,
+          category: formData.category,
+          payment: paymentStatus,
         });
-
         setFormData({
           firstName: "",
           lastName: "",
@@ -189,8 +194,10 @@ export default function RegisterForm() {
           startMonth: "",
           signature: "",
           role: "user",
+          category: "aerobics",
+          payment: "not payed",
         });
-        toast.success("Registration successful! Redirecting to login...");
+        toast.success("Registration and payment successful! Redirecting to login...");
         router.push("/login");
       } catch (error: any) {
         console.error("Firestore error:", error);
@@ -224,7 +231,10 @@ export default function RegisterForm() {
 
     try {
       const userCredential = await createUserWithEmailAndPassword(auth, formData.email.trim(), formData.password);
-      await completeRegistration(userCredential.user.uid);
+      // Store user ID and form data in session storage to persist during payment
+      sessionStorage.setItem("pendingUserId", userCredential.user.uid);
+      sessionStorage.setItem("pendingFormData", JSON.stringify(formData));
+      router.push("/payment");
     } catch (error: any) {
       let errorMessage = "Registration failed. Please try again.";
       if (error.code === "auth/invalid-email") {
@@ -242,7 +252,23 @@ export default function RegisterForm() {
     }
   };
 
-  console.log("handleSubmit defined:", typeof handleSubmit); // Moved after handleSubmit declaration
+  // Handle payment success and redirect to login
+  const handlePaymentSuccess = useCallback(async () => {
+    const userId = sessionStorage.getItem("pendingUserId");
+    const storedFormData = sessionStorage.getItem("pendingFormData");
+    if (userId && storedFormData) {
+      await completeRegistration(userId, "payed");
+      sessionStorage.removeItem("pendingUserId");
+      sessionStorage.removeItem("pendingFormData");
+      router.push("/login"); // Redirect to login page after successful payment
+    } else {
+      setErrors({ general: "Payment data not found. Please try registering again." });
+      toast.error("Payment data not found. Please try registering again.");
+      setIsLoading(false);
+    }
+  }, [completeRegistration, router]);
+
+  console.log("handleSubmit defined:", typeof handleSubmit);
 
   const inputFields = [
     { name: "firstName", type: "text", placeholder: "First Name", icon: User, label: "First Name" },
@@ -385,7 +411,7 @@ export default function RegisterForm() {
                       onChange={(e) => handleInputChange(e, name as keyof FormData)}
                       className={`w-full p-3 border ${
                         theme === "light" ? "border-zinc-200" : "border-zinc-700"
-                      } rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 ${
+                      } rounded faiz-lg focus:outline-none focus:ring-2 focus:ring-blue-500 ${
                         theme === "light" ? "bg-white" : "bg-gray-800"
                       }`}
                     >
@@ -479,10 +505,10 @@ export default function RegisterForm() {
               {isLoading ? (
                 <>
                   <Loader2 className="animate-spin mr-2" size={20} />
-                  Registering...
+                  Processing...
                 </>
               ) : (
-                "Register"
+                "Proceed to Payment"
               )}
             </motion.button>
           </form>

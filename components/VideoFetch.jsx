@@ -449,7 +449,7 @@ export default function VideoFetch({ setWorkouts, setLoading, loading, theme }) 
                               handleFullScreen(video.id, category);
                             }
                           }}
-                          className="text-white p-1 hover:text-gray-300"
+                          className="text-white p-6 hover:text-gray-300"
                         >
                           {isFullScreen ? <FiMinimize size={16} /> : <FiMaximize size={16} />}
                         </button>

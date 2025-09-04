@@ -547,6 +547,16 @@ export default function Home() {
                   >
                     {t.registerKarate || 'Register for Karate'}
                   </button>
+                  
+                   <button
+                    onClick={() => router.push('/register/consultancy')}
+                    className={`w-full py-3 rounded-lg font-medium transition-colors duration-200 ${
+                      theme === 'light' ? 'bg-blue-600 hover:bg-blue-700 text-white' : 'bg-gray-700 hover:bg-gray-600 text-white'
+                    }`}
+                  >
+                    {t.registerconsultancy || 'Register for personal Treaning'}
+                  </button>
+
                   <div className="mt-4 text-center">
                     <p className={theme === 'light' ? 'text-zinc-700' : 'text-zinc-300'}>
                       {t.alreadyAccount || 'Already have an account?'}{' '}

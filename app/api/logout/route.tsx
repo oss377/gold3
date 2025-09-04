@@ -1,28 +1,25 @@
-import { NextResponse } from "next/server";
+import { NextResponse, NextRequest } from "next/server";
+import { getAuth, signOut } from "firebase/auth";
 
-export async function POST(request: Request) {
+export async function POST(request: NextRequest) {
   try {
-    // Create a response that clears the session_token cookie
-    const response = NextResponse.json({ message: "Logout successful" });
+    const auth = getAuth();
+    await signOut(auth);
 
-    // Clear the session_token cookie by setting it to an empty value and expiring it immediately
+    const response = NextResponse.json({ message: "Logged out successfully" }, { status: 200 });
     response.cookies.set("session_token", "", {
       httpOnly: true,
       secure: process.env.NODE_ENV === "production",
-      maxAge: 0, // Expire immediately
+      maxAge: 0, // Expire cookie immediately
       path: "/",
       sameSite: "strict",
     });
 
     return response;
-  } catch (error: any) {
-    console.error("Logout error:", {
-      message: error.message,
-      stack: error.stack,
-    });
-
+  } catch (error: unknown) {
+    console.error("Logout error:", error);
     return NextResponse.json(
-      { error: "Logout failed. Please try again." },
+      { error: "Failed to log out. Please try again." },
       { status: 500 }
     );
   }

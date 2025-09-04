@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { cookies } from "next/headers";
 import jwt from "jsonwebtoken";
 
-const JWT_SECRET = process.env.JWT_SECRET;
+const JWT_SECRET ="vN7tL2mQ9rP3kW8yJ4hB5xC1dT6fM9zR2pK8wN3eJ5uQ4tL";
 
 export async function GET() {
   try {

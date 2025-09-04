@@ -6,9 +6,9 @@ import { ToastContainer, toast } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
 import { collection, addDoc } from 'firebase/firestore';
 import { onAuthStateChanged } from 'firebase/auth';
-import { auth, db } from '../fconfig';
-import { LanguageContext } from '../../context/LanguageContext';
-import { ThemeContext } from '../../context/ThemeContext';
+import { auth, db } from '../../fconfig';
+import { LanguageContext } from '../../../context/LanguageContext';
+import { ThemeContext } from '../../../context/ThemeContext';
 import { ChevronLeftIcon, ChevronRightIcon, CheckCircleIcon } from '@heroicons/react/24/solid';
 
 // Cloudinary configuration

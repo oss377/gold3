@@ -6,8 +6,6 @@ import Link from "next/link";
 import { Loader2, Mail, Lock, Eye, EyeOff, CheckCircle, XCircle } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { ThemeContext } from "../context/ThemeContext";
-import { signInWithEmailAndPassword } from "firebase/auth";
-import { auth } from "../app/fconfig";
 
 // Email validation function
 const validateEmail = (email: string): boolean => {
@@ -33,81 +31,52 @@ export default function LoginPage() {
     e.preventDefault();
     setError("");
 
+    if (!email || !password) {
+      setError("Email and password are required");
+      return;
+    }
+
+    if (!validateEmail(email)) {
+      setError("Invalid email format");
+      return;
+    }
+
+    setLoading(true);
+
     try {
-      if (!email || !password) {
-        setError("Email and password are required");
-        return;
-      }
-
-      if (!validateEmail(email)) {
-        setError("Invalid email format");
-        return;
-      }
-
-      if (!auth) {
-        setError("Authentication service not available. Please try again later.");
-        return;
-      }
-
-      setLoading(true);
-
-      // Authenticate with Firebase Auth
-      const userCredential = await signInWithEmailAndPassword(auth, email, password);
-      const user = userCredential.user;
-      
-      // Get ID token to verify with backend
-      const idToken = await user.getIdToken();
-      
-      // Send to backend for role verification
-      const response = await fetch('/api/login', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ email, idToken }),
+      const response = await fetch("/api/login", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email, password }),
+        credentials: "include",
       });
 
       const data = await response.json();
 
       if (!response.ok) {
-        throw new Error(data.error || 'Login failed');
+        if (response.status === 401) {
+          setError(data.error || "Invalid email or password");
+        } else if (response.status === 403) {
+          setError(data.error || "User not authorized");
+        } else if (response.status === 500) {
+          setError(data.error || "Server error. Please try again later.");
+        } else {
+          setError(data.error || "Login failed");
+        }
+        return;
       }
 
       // Redirect based on role
-      if (data.role === 'admin' || data.role === 'owner') {
-        router.push('/admin');
+      if (data.role === "admin") {
+        router.push("/admin");
+      } else if (data.role === "user") {
+        router.push("/user");
       } else {
-        router.push('/user');
+        setError("Invalid user role");
       }
-
-    } catch (err: any) {
+    } catch (err) {
       console.error("Login error:", err);
-      
-      let errorMessage = "An unexpected error occurred. Please try again.";
-      
-      if (err.code) {
-        switch (err.code) {
-          case 'auth/invalid-credential':
-          case 'auth/wrong-password':
-            errorMessage = "Invalid email or password. Please check your credentials.";
-            break;
-          case 'auth/user-not-found':
-            errorMessage = "No account found with this email.";
-            break;
-          case 'auth/invalid-email':
-            errorMessage = "Invalid email format.";
-            break;
-          case 'auth/too-many-requests':
-            errorMessage = "Too many attempts. Please try again later.";
-            break;
-          default:
-            errorMessage = `Login failed: ${err.message || 'Unknown error'}`;
-        }
-      } else {
-        errorMessage = err.message || errorMessage;
-      }
-      
-      setError(errorMessage);
+      setError("An error occurred. Please check your connection and try again.");
     } finally {
       setLoading(false);
     }
@@ -317,7 +286,7 @@ export default function LoginPage() {
               Forgot Password?
             </Link>
             <p className={`text-sm ${theme === "light" ? "text-zinc-600" : "text-zinc-400"}`}>
-              Don't have an account?{" "}
+              Don&apos;t have an account?{" "}
               <Link
                 href="/signup"
                 className={`underline ${

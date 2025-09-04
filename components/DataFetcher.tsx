@@ -1,4 +1,3 @@
-
 'use client';
 
 import { useState, useEffect, useContext } from 'react';
@@ -22,15 +21,7 @@ interface MemberDetailsModal {
 export default function DataFetcher({ refreshTrigger, searchQuery, theme }: DataFetcherProps) {
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [fetchError, setFetchError] = useState<string | null>(null);
-  const [members, setMembers] = useState<{ [key: string]: Member[] }>({
-    consult: [],
-    gym: [],
-    karate: [],
-    personalTraining: [],
-    registrations: [],
-    videos: [],
-    aerobics: [],
-  });
+  const [members, setMembers] = useState<{ [key: string]: Member[] }>({});
   const [detailsModal, setDetailsModal] = useState<MemberDetailsModal>({ isOpen: false, member: null });
   const context = useContext(ThemeContext);
 
@@ -44,88 +35,79 @@ export default function DataFetcher({ refreshTrigger, searchQuery, theme }: Data
       setIsLoading(true);
       setFetchError(null);
 
-      const collections = ['consult', 'gym', 'karate', 'personalTraining', 'registrations', 'videos', 'aerobics'];
-      const allMembers: { [key: string]: Member[] } = {
-        consult: [],
-        gym: [],
-        karate: [],
-        personalTraining: [],
-        registrations: [],
-        videos: [],
-        aerobics: [],
-      };
+      const querySnapshot = await getDocs(collection(db, 'GYM'));
+      const allMembers: { [key: string]: Member[] } = {};
 
-      await Promise.all(
-        collections.map(async (collectionName) => {
-          try {
-            const querySnapshot = await getDocs(collection(db, collectionName));
-            const memberData = querySnapshot.docs.map((doc) => {
-              const data = doc.data();
-              return {
-                id: doc.id,
-                birthDate: data.birthDate || '',
-                bloodType: data.bloodType || '',
-                breakfastFrequency: data.breakfastFrequency || '',
-                city: data.city || '',
-                createdAt: data.createdAt || { seconds: 0, nanoseconds: 0 },
-                eatingReasons: data.eatingReasons || [],
-                email: data.email || '',
-                emergencyName: data.emergencyName || '',
-                emergencyPhone: data.emergencyPhone || '',
-                exerciseDays: data.exerciseDays || [],
-                exerciseDuration: data.exerciseDuration || '',
-                exercisePain: data.exercisePain || false,
-                exerciseTime: data.exerciseTime || '',
-                firstName: data.firstName || '',
-                foodTracking: data.foodTracking || false,
-                goalWeight: data.goalWeight || '',
-                healthIssues: data.healthIssues || '',
-                height: data.height || '',
-                lastName: data.lastName || '',
-                medications: data.medications || '',
-                membershipType: data.membershipType || '',
-                nightEating: data.nightEating || '',
-                nutritionRating: data.nutritionRating || '',
-                password: data.password || '',
-                phoneNumber: data.phoneNumber || '',
-                proSport: data.proSport || false,
-                role: data.role || '',
-                signature: data.signature || '',
-                smoke: data.smoke || false,
-                startMonth: data.startMonth || '',
-                state: data.state || '',
-                streetAddress: data.streetAddress || '',
-                streetAddress2: data.streetAddress2 || '',
-                supplements: data.supplements || false,
-                surgery: data.surgery || false,
-                trainingGoals: data.trainingGoals || [],
-                userId: data.userId || '',
-                weight: data.weight || '',
-                zipCode: data.zipCode || '',
-                collectionType: collectionName,
-                name: data.name || undefined,
-                membership: data.membership || undefined,
-                status: data.status || undefined,
-                statusColor: data.statusColor || undefined,
-                payed: data.payed || false,
-                actionDelete: data.actionDelete || 'delete',
-                actionDetail: data.actionDetail || 'detail',
-                actionPayed: data.actionPayed || 'payed',
-                ...data,
-              };
-            });
-            allMembers[collectionName] = memberData;
-          } catch (error) {
-            console.error(`Error fetching ${collectionName}:`, error);
-            allMembers[collectionName] = [];
-          }
-        })
-      );
+      const memberData = querySnapshot.docs.map((doc) => {
+        const data = doc.data();
+        return {
+          id: doc.id,
+          birthDate: data.birthDate || '',
+          bloodType: data.bloodType || '',
+          breakfastFrequency: data.breakfastFrequency || '',
+          city: data.city || '',
+          createdAt: data.createdAt || { seconds: 0, nanoseconds: 0 },
+          eatingReasons: data.eatingReasons || [],
+          email: data.email || '',
+          emergencyName: data.emergencyName || '',
+          emergencyPhone: data.emergencyPhone || '',
+          exerciseDays: data.exerciseDays || [],
+          exerciseDuration: data.exerciseDuration || '',
+          exercisePain: data.exercisePain || false,
+          exerciseTime: data.exerciseTime || '',
+          firstName: data.firstName || '',
+          foodTracking: data.foodTracking || false,
+          goalWeight: data.goalWeight || '',
+          healthIssues: data.healthIssues || '',
+          height: data.height || '',
+          lastName: data.lastName || '',
+          medications: data.medications || '',
+          membershipType: data.membershipType || '',
+          nightEating: data.nightEating || '',
+          nutritionRating: data.nutritionRating || '',
+          password: data.password || '',
+          phoneNumber: data.phoneNumber || '',
+          proSport: data.proSport || false,
+          role: data.role || '',
+          signature: data.signature || '',
+          smoke: data.smoke || false,
+          startMonth: data.startMonth || '',
+          state: data.state || '',
+          streetAddress: data.streetAddress || '',
+          streetAddress2: data.streetAddress2 || '',
+          supplements: data.supplements || false,
+          surgery: data.surgery || false,
+          trainingGoals: data.trainingGoals || [],
+          userId: data.userId || '',
+          weight: data.weight || '',
+          zipCode: data.zipCode || '',
+          collectionType: 'GYM',
+          name: data.name || undefined,
+          membership: data.membership || undefined,
+          status: data.status || undefined,
+          statusColor: data.statusColor || undefined,
+          payed: data.payed || false,
+          actionDelete: data.actionDelete || 'delete',
+          actionDetail: data.actionDetail || 'detail',
+          actionPayed: data.actionPayed || 'payed',
+          category: data.category || 'Uncategorized',
+          ...data,
+        };
+      });
+
+      // Group members by category
+      memberData.forEach((member) => {
+        const category = member.category || 'Uncategorized';
+        if (!allMembers[category]) {
+          allMembers[category] = [];
+        }
+        allMembers[category].push(member);
+      });
 
       setMembers(allMembers);
       setFetchError(null);
     } catch (error) {
-      console.error('Error fetching members:', error);
+      console.error('Error fetching GYM members:', error);
       setFetchError('Failed to fetch members. Please try again.');
     } finally {
       setIsLoading(false);
@@ -138,8 +120,7 @@ export default function DataFetcher({ refreshTrigger, searchQuery, theme }: Data
 
   const openDetailsModal = async (member: Member) => {
     try {
-      const collectionType = member.collectionType ?? 'unknown';
-      const memberRef = doc(db, collectionType, member.id);
+      const memberRef = doc(db, 'GYM', member.id);
       const memberSnap = await getDoc(memberRef);
 
       if (memberSnap.exists()) {
@@ -151,16 +132,17 @@ export default function DataFetcher({ refreshTrigger, searchQuery, theme }: Data
           membership: data.membership || 'Unknown',
           status: data.status || 'Unknown',
           statusColor: data.statusColor || 'text-gray-500',
-          collectionType: collectionType,
+          collectionType: 'GYM',
           payed: data.payed || false,
           actionDelete: data.actionDelete || 'delete',
           actionDetail: data.actionDetail || 'detail',
           actionPayed: data.actionPayed || 'payed',
+          category: data.category || 'Uncategorized',
           ...data,
         };
         setDetailsModal({ isOpen: true, member: freshMember });
       } else {
-        console.warn(`Member ${member.id} not found in ${collectionType}`);
+        console.warn(`Member ${member.id} not found in GYM`);
         setDetailsModal({ isOpen: true, member: { ...member, name: member.name || 'Unknown', email: member.email || 'Unknown', payed: member.payed || false, actionPayed: member.actionPayed || 'payed' } });
       }
     } catch (error) {
@@ -173,31 +155,35 @@ export default function DataFetcher({ refreshTrigger, searchQuery, theme }: Data
     setDetailsModal({ isOpen: false, member: null });
   };
 
-  const handleDelete = async (id: string, collectionType: string | undefined) => {
+  const handleDelete = async (id: string) => {
     try {
-      const safeCollectionType = collectionType ?? 'unknown';
-      await deleteDoc(doc(db, safeCollectionType, id));
-      setMembers((prev) => ({
-        ...prev,
-        [safeCollectionType]: prev[safeCollectionType].filter((member) => member.id !== id),
-      }));
+      await deleteDoc(doc(db, 'GYM', id));
+      setMembers((prev) => {
+        const updatedMembers = { ...prev };
+        Object.keys(updatedMembers).forEach((category) => {
+          updatedMembers[category] = updatedMembers[category].filter((member) => member.id !== id);
+          if (updatedMembers[category].length === 0) {
+            delete updatedMembers[category];
+          }
+        });
+        return updatedMembers;
+      });
     } catch (error) {
       console.error('Error deleting member:', error);
       setFetchError('Failed to delete member. Please try again.');
     }
   };
 
-  const handleSetPayed = async (id: string, collectionType: string | undefined, currentPayed: boolean) => {
+  const handleSetPayed = async (id: string, category: string, currentPayed: boolean) => {
     try {
-      const safeCollectionType = collectionType ?? 'unknown';
-      const memberRef = doc(db, safeCollectionType, id);
+      const memberRef = doc(db, 'GYM', id);
       await updateDoc(memberRef, {
         payed: !currentPayed,
       });
 
       setMembers((prev) => ({
         ...prev,
-        [safeCollectionType]: prev[safeCollectionType].map((member) =>
+        [category]: prev[category].map((member) =>
           member.id === id
             ? {
                 ...member,
@@ -212,7 +198,7 @@ export default function DataFetcher({ refreshTrigger, searchQuery, theme }: Data
     }
   };
 
-  const renderTable = (collectionName: string, collectionMembers: Member[]) => (
+  const renderTable = (category: string, collectionMembers: Member[]) => (
     <div
       className={`rounded-xl shadow-lg p-6 mb-10 border ${
         theme === 'light' ? 'bg-white text-gray-900 border-gray-200' : 'bg-gray-800 text-white border-gray-700'
@@ -220,7 +206,7 @@ export default function DataFetcher({ refreshTrigger, searchQuery, theme }: Data
     >
       <div className="flex justify-between items-center mb-6">
         <h3 className={`text-xl font-semibold capitalize ${theme === 'light' ? 'text-zinc-800' : 'text-white'}`}>
-          {collectionName} Members
+          {category} Members
         </h3>
         <button
           onClick={fetchMembers}
@@ -239,7 +225,7 @@ export default function DataFetcher({ refreshTrigger, searchQuery, theme }: Data
 
       {isLoading && (
         <div className={`text-center py-4 ${theme === 'light' ? 'text-gray-600' : 'text-gray-300'}`}>
-          Loading {collectionName} members...
+          Loading {category} members...
         </div>
       )}
 
@@ -247,7 +233,7 @@ export default function DataFetcher({ refreshTrigger, searchQuery, theme }: Data
 
       {!isLoading && collectionMembers.length === 0 && !fetchError && (
         <div className={`text-sm mb-4 ${theme === 'light' ? 'text-gray-500' : 'text-gray-300'}`}>
-          No members found in {collectionName}
+          No members found in {category}
         </div>
       )}
 
@@ -274,7 +260,7 @@ export default function DataFetcher({ refreshTrigger, searchQuery, theme }: Data
                 )
                 .map((member) => (
                   <tr
-                    key={`${member.id}-${member.collectionType ?? 'unknown'}`}
+                    key={`${member.id}-GYM`}
                     className={`border-b ${
                       theme === 'light' ? 'border-gray-200 hover:bg-blue-50' : 'border-gray-600 hover:bg-gray-700'
                     } transition-colors duration-200`}
@@ -296,7 +282,7 @@ export default function DataFetcher({ refreshTrigger, searchQuery, theme }: Data
                         {member.actionDetail}
                       </button>
                       <button
-                        onClick={() => handleSetPayed(member.id, member.collectionType, member.payed)}
+                        onClick={() => handleSetPayed(member.id, member.category || 'Uncategorized', member.payed)}
                         className={`px-3 py-1 rounded-lg text-sm ${
                           theme === 'light'
                             ? 'bg-green-500 text-white hover:bg-green-600'
@@ -307,7 +293,7 @@ export default function DataFetcher({ refreshTrigger, searchQuery, theme }: Data
                         {member.actionPayed}
                       </button>
                       <button
-                        onClick={() => handleDelete(member.id, member.collectionType)}
+                        onClick={() => handleDelete(member.id)}
                         className={`px-3 py-1 rounded-lg text-sm ${
                           theme === 'light'
                             ? 'bg-red-500 text-white hover:bg-red-600'
@@ -329,8 +315,8 @@ export default function DataFetcher({ refreshTrigger, searchQuery, theme }: Data
 
   return (
     <>
-      {['consult', 'gym', 'karate', 'personalTraining', 'registrations', 'videos', 'aerobics'].map((collection) => (
-        <div key={collection}>{renderTable(collection, members[collection])}</div>
+      {Object.keys(members).map((category) => (
+        <div key={category}>{renderTable(category, members[category])}</div>
       ))}
 
       {/* Member Details Modal */}
