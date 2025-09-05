@@ -1,4 +1,3 @@
-
 'use client';
 
 import { useState, useEffect, useRef, useContext } from 'react';
@@ -7,15 +6,7 @@ import { collection, getDocs } from 'firebase/firestore';
 import { FiPlay, FiPause, FiVolume2, FiVolumeX, FiMaximize, FiMinimize, FiArrowRight, FiArrowLeft, FiMonitor } from 'react-icons/fi';
 import { ThemeContext } from '../context/ThemeContext';
 
-/**
- * @typedef {Object} VideoFetchProps
- * @property {(workouts: any) => void} setWorkouts
- * @property {(loading: boolean) => void} setLoading
- * @property {boolean} loading
- * @property {'light' | 'dark'} theme
- */
-
-export default function VideoFetch({ setWorkouts, setLoading, loading, theme }) {
+export default function VideoFetch({ setWorkouts, setLoading, loading }) {
   const [videos, setVideos] = useState({});
   const [playing, setPlaying] = useState({});
   const [volume, setVolume] = useState({});
@@ -27,11 +18,7 @@ export default function VideoFetch({ setWorkouts, setLoading, loading, theme }) 
   const [isFullScreen, setIsFullScreen] = useState(false);
   const [isSmallScreen, setIsSmallScreen] = useState(false);
   const videoRefs = useRef({});
-  const context = useContext(ThemeContext);
-
-  if (!context) {
-    throw new Error('VideoFetch must be used within a ThemeProvider');
-  }
+  const { theme } = useContext(ThemeContext);
 
   const getRandomViews = () => {
     const views = Math.floor(Math.random() * 1000000) + 1000;
@@ -274,44 +261,49 @@ export default function VideoFetch({ setWorkouts, setLoading, loading, theme }) 
   };
 
   return (
-    <div className={`space-y-12 px-4 py-8 max-w-7xl mx-auto ${theme === 'light' ? 'bg-zinc-100' : 'bg-zinc-900'}`}>
+    <div className={`space-y-10 px-6 py-8 max-w-7xl mx-auto ${
+      theme === 'light' 
+        ? 'bg-gradient-to-br from-blue-50 to-purple-50 text-gray-900' 
+        : 'bg-gradient-to-br from-gray-800 to-gray-900 text-white'
+    }`}>
       {Object.keys(videos).map((category) => (
-        <section key={category} className="mb-12">
-          <div className="flex justify-between items-center mb-6">
+        <section key={category} className="mb-10">
+          <div className="flex justify-between items-center mb-4">
             <h2
-              className={`text-3xl font-bold flex items-center ${
-                theme === 'light' ? 'text-gray-900' : 'text-white'
+              className={`text-2xl font-semibold flex items-center ${
+                theme === 'light' ? 'text-zinc-800' : 'text-white'
               }`}
             >
-              <span className="text-2xl mr-3">🎥</span>
               {category.charAt(0).toUpperCase() + category.slice(1)} Workouts
             </h2>
             <a
               href="#"
-              className={`font-medium transition ${
-                theme === 'light' ? 'text-blue-600 hover:text-blue-800' : 'text-yellow-400 hover:text-yellow-300'
+              className={`text-sm font-medium transition ${
+                theme === 'light' ? 'text-blue-600 hover:text-blue-800' : 'text-blue-400 hover:text-blue-300'
               }`}
             >
-              View All
+              See All
             </a>
           </div>
           {loading ? (
-            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-6">
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
               {[1, 2, 3, 4].map((i) => (
                 <div
                   key={i}
-                  className={`rounded-xl shadow-sm overflow-hidden hover:shadow-md transition-all duration-300 ${
-                    theme === 'light' ? 'bg-white' : 'bg-gray-800'
-                  }`}
+                  className={`rounded-lg overflow-hidden shadow-lg ${
+                    theme === 'light' 
+                      ? 'bg-white text-gray-900 border-gray-200' 
+                      : 'bg-gray-800 text-white border-gray-700'
+                  } border`}
                 >
                   <div
-                    className={`h-48 w-full animate-pulse rounded-t-xl ${
+                    className={`h-40 w-full animate-pulse rounded-t-lg ${
                       theme === 'light' ? 'bg-gray-200' : 'bg-gray-700'
                     }`}
                   ></div>
-                  <div className="p-4">
+                  <div className="p-3">
                     <div
-                      className={`h-4 rounded w-3/4 mb-3 animate-pulse ${
+                      className={`h-4 rounded w-3/4 mb-2 animate-pulse ${
                         theme === 'light' ? 'bg-gray-200' : 'bg-gray-700'
                       }`}
                     ></div>
@@ -325,49 +317,23 @@ export default function VideoFetch({ setWorkouts, setLoading, loading, theme }) 
               ))}
             </div>
           ) : (
-            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-6">
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
               {videos[category].map((video) => (
                 <div
                   key={video.id}
-                  className={`rounded-xl shadow-sm overflow-hidden hover:shadow-md transition-all duration-300 transform hover:-translate-y-1 ${
-                    theme === 'light' ? 'bg-white' : 'bg-gray-800'
+                  className={`rounded-lg overflow-hidden transition-all duration-300 hover:shadow-xl transform hover:-translate-y-1 border ${
+                    theme === 'light' 
+                      ? 'bg-white text-gray-900 border-gray-200' 
+                      : 'bg-gray-800 text-white border-gray-700'
                   }`}
                 >
                   <div className="relative group">
-                    {(!videoLoaded[video.id] || !playing[video.id]) && (
-                      <div
-                        className={`w-full h-48 rounded-t-xl flex items-center justify-center cursor-pointer ${
-                          theme === 'light' ? 'bg-gray-200' : 'bg-gray-700'
-                        }`}
-                        onClick={() => handleVideoClick(video.id)}
-                      >
-                        {video.thumbnail ? (
-                          <img
-                            src={video.thumbnail}
-                            alt={video.title || 'Video thumbnail'}
-                            className="w-full h-full object-cover"
-                          />
-                        ) : (
-                          <div className={theme === 'light' ? 'text-gray-500' : 'text-gray-300'}>
-                            <FiPlay size={48} />
-                          </div>
-                        )}
-                        <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity duration-200">
-                          <div className="bg-black/30 rounded-full p-4">
-                            <FiPlay
-                              size={24}
-                              className={theme === 'light' ? 'text-white' : 'text-yellow-400'}
-                            />
-                          </div>
-                        </div>
-                      </div>
-                    )}
                     <video
                       ref={(el) => (videoRefs.current[video.id] = el)}
                       src={video.videoUrl}
-                      className={`w-full h-48 object-cover rounded-t-xl ${
+                      className={`w-full h-40 object-cover rounded-t-lg ${
                         videoLoaded[video.id] && playing[video.id] ? 'block' : 'hidden'
-                      }`}
+                      } ${theme === 'light' ? 'bg-gray-100' : 'bg-gray-900'}`}
                       poster={video.thumbnail || ''}
                       onTimeUpdate={() => handleTimeUpdate(video.id)}
                       onLoadedData={() => handleVideoLoaded(video.id)}
@@ -378,31 +344,57 @@ export default function VideoFetch({ setWorkouts, setLoading, loading, theme }) 
                       volume={volume[video.id]}
                       controls={false}
                     />
+                    {(!videoLoaded[video.id] || !playing[video.id]) && (
+                      <div
+                        className={`w-full h-40 rounded-t-lg flex items-center justify-center cursor-pointer ${
+                          theme === 'light' ? 'bg-gray-100' : 'bg-gray-900'
+                        }`}
+                        onClick={() => handleVideoClick(video.id)}
+                      >
+                        {video.thumbnail ? (
+                          <img
+                            src={video.thumbnail}
+                            alt={video.title || 'Video thumbnail'}
+                            className="w-full h-full object-cover rounded-t-lg"
+                          />
+                        ) : (
+                          <div className={theme === 'light' ? 'text-gray-500' : 'text-gray-400'}>
+                            <FiPlay size={40} />
+                          </div>
+                        )}
+                        <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity duration-300 bg-black/40">
+                          <FiPlay
+                            size={32}
+                            className={theme === 'light' ? 'text-white' : 'text-blue-400'}
+                          />
+                        </div>
+                      </div>
+                    )}
                     {videoLoaded[video.id] && (
                       <div
-                        className={`absolute inset-0 flex items-center justify-center transition-opacity duration-200 ${
-                          playing[video.id] ? 'opacity-0 hover:opacity-100' : 'opacity-100'
-                        }`}
+                        className={`absolute inset-0 flex items-center justify-center transition-opacity duration-300 ${
+                          playing[video.id] ? 'opacity-0 group-hover:opacity-100' : 'opacity-100'
+                        } bg-black/40`}
                       >
                         <button
                           onClick={(e) => {
                             e.stopPropagation();
                             handlePlayPause(video.id);
                           }}
-                          className="text-white text-5xl hover:scale-110 transition-transform duration-200"
+                          className="text-white text-4xl hover:scale-110 transition-transform duration-200"
                         >
                           {playing[video.id] ? <FiPause /> : <FiPlay />}
                         </button>
                       </div>
                     )}
-                    <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/70 to-transparent p-2 flex items-center justify-between opacity-0 group-hover:opacity-100 transition-opacity duration-200">
+                    <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/60 to-transparent p-2 flex items-center justify-between opacity-0 group-hover:opacity-100 transition-opacity duration-300">
                       <div className="flex items-center space-x-2">
                         <button
                           onClick={(e) => {
                             e.stopPropagation();
                             handlePlayPause(video.id);
                           }}
-                          className="text-white p-1 hover:text-gray-300"
+                          className="text-white p-1 hover:text-gray-200"
                         >
                           {playing[video.id] ? <FiPause size={16} /> : <FiPlay size={16} />}
                         </button>
@@ -412,7 +404,7 @@ export default function VideoFetch({ setWorkouts, setLoading, loading, theme }) 
                               e.stopPropagation();
                               handleMuteToggle(video.id);
                             }}
-                            className="text-white p-1 hover:text-gray-300"
+                            className="text-white p-1 hover:text-gray-200"
                           >
                             {muted[video.id] || volume[video.id] === 0 ? (
                               <FiVolumeX size={16} />
@@ -432,32 +424,30 @@ export default function VideoFetch({ setWorkouts, setLoading, loading, theme }) 
                                 e.stopPropagation();
                                 handleVolumeChange(video.id, e.target.value);
                               }}
-                              className={`w-16 h-1 rounded-lg appearance-none cursor-pointer sm:w-12 ${
-                                theme === 'light' ? 'bg-gray-200' : 'bg-gray-600'
+                              className={`w-12 h-1 rounded-lg appearance-none cursor-pointer ${
+                                theme === 'light' ? 'bg-gray-300' : 'bg-gray-600'
                               }`}
                             />
                           )}
                         </div>
                       </div>
-                      <div className="flex items-center space-x-2">
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            if (isFullScreen) {
-                              handleExitFullScreen();
-                            } else {
-                              handleFullScreen(video.id, category);
-                            }
-                          }}
-                          className="text-white p-6 hover:text-gray-300"
-                        >
-                          {isFullScreen ? <FiMinimize size={16} /> : <FiMaximize size={16} />}
-                        </button>
-                      </div>
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          if (isFullScreen) {
+                            handleExitFullScreen();
+                          } else {
+                            handleFullScreen(video.id, category);
+                          }
+                        }}
+                        className="text-white p-1 hover:text-gray-200"
+                      >
+                        {isFullScreen ? <FiMinimize size={16} /> : <FiMaximize size={16} />}
+                      </button>
                     </div>
                     <div
                       className={`absolute bottom-0 left-0 right-0 h-1 cursor-pointer ${
-                        theme === 'light' ? 'bg-gray-300/30' : 'bg-gray-600/30'
+                        theme === 'light' ? 'bg-gray-300' : 'bg-gray-600'
                       }`}
                       onClick={(e) => {
                         e.stopPropagation();
@@ -465,43 +455,36 @@ export default function VideoFetch({ setWorkouts, setLoading, loading, theme }) 
                       }}
                     >
                       <div
-                        className="h-full bg-red-600 transition-all duration-200"
+                        className="h-full bg-red-500 transition-all duration-300"
                         style={{ width: `${progress[video.id] || 0}%` }}
                       ></div>
                     </div>
-                    <div className="absolute bottom-2 right-2 bg-black/70 text-white text-xs font-semibold px-2 py-1 rounded">
+                    <div className="absolute bottom-2 right-2 bg-black/70 text-white text-xs font-medium px-1.5 py-0.5 rounded">
                       {video.duration}
                     </div>
                   </div>
-                  <div className="p-4 flex items-start space-x-3">
+                  <div className="p-3 flex items-start space-x-3">
                     <div
-                      className={`w-10 h-10 rounded-full flex items-center justify-center font-semibold ${
-                        theme === 'light' ? 'bg-gray-200 text-gray-600' : 'bg-gray-700 text-gray-300'
+                      className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-medium ${
+                        theme === 'light' ? 'bg-blue-100 text-blue-600' : 'bg-gray-700 text-gray-300'
                       }`}
                     >
                       {video.title?.[0]?.toUpperCase() || 'U'}
                     </div>
                     <div className="flex-1 min-w-0">
                       <h3
-                        className={`text-lg font-semibold truncate ${
-                          theme === 'light' ? 'text-gray-900' : 'text-white'
+                        className={`text-base font-medium truncate ${
+                          theme === 'light' ? 'text-zinc-800' : 'text-white'
                         }`}
                       >
                         {video.title || 'Untitled Video'}
                       </h3>
                       <p
-                        className={`text-sm truncate ${
-                          theme === 'light' ? 'text-gray-500' : 'text-gray-300'
+                        className={`text-xs ${
+                          theme === 'light' ? 'text-gray-500' : 'text-gray-400'
                         }`}
                       >
                         {video.channel || 'Channel Name'} • {video.views} views • 2 days ago
-                      </p>
-                      <p
-                        className={`text-sm line-clamp-2 mt-1 ${
-                          theme === 'light' ? 'text-gray-600' : 'text-gray-400'
-                        }`}
-                      >
-                        {video.description || 'No description available'}
                       </p>
                     </div>
                   </div>
@@ -512,14 +495,14 @@ export default function VideoFetch({ setWorkouts, setLoading, loading, theme }) 
         </section>
       ))}
       {currentFullScreenVideo && (
-        <div className="fixed inset-0 bg-black flex items-center justify-center z-50">
-          <div className="relative w-full h-full max-w-7xl mx-auto">
+        <div className={`fixed inset-0 ${theme === 'light' ? 'bg-white' : 'bg-black'} flex items-center justify-center z-50`}>
+          <div className="relative w-full h-full max-w-[90%] mx-auto">
             <video
               ref={(el) => (videoRefs.current[currentFullScreenVideo.id] = el)}
               src={videos[currentCategory].find((v) => v.id === currentFullScreenVideo.id).videoUrl}
-              className={`mx-auto transition-all duration-200 object-contain ${
-                isSmallScreen ? 'w-[80%] h-[80%]' : 'w-full h-full'
-              }`}
+              className={`mx-auto transition-all duration-300 object-contain rounded-lg ${
+                isSmallScreen ? 'w-[70%] h-[70%]' : 'w-full h-full'
+              } ${theme === 'light' ? 'bg-gray-100' : 'bg-gray-900'}`}
               poster={videos[currentCategory].find((v) => v.id === currentFullScreenVideo.id).thumbnail || ''}
               autoPlay
               onTimeUpdate={() => handleTimeUpdate(currentFullScreenVideo.id)}
@@ -533,41 +516,41 @@ export default function VideoFetch({ setWorkouts, setLoading, loading, theme }) 
             <div className="absolute inset-0 flex items-center justify-center z-10">
               <button
                 onClick={() => handlePlayPause(currentFullScreenVideo.id)}
-                className={`text-white text-6xl hover:scale-110 transition-transform duration-200 sm:text-4xl ${
+                className={`text-white text-5xl hover:scale-110 transition-transform duration-300 sm:text-4xl ${
                   playing[currentFullScreenVideo.id] ? 'opacity-0 hover:opacity-100' : 'opacity-100'
                 }`}
               >
                 {playing[currentFullScreenVideo.id] ? <FiPause /> : <FiPlay />}
               </button>
             </div>
-            <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/80 to-transparent p-4 flex items-center justify-between sm:p-2 z-10">
-              <div className="flex items-center space-x-4 sm:space-x-2">
+            <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/80 to-transparent p-3 flex items-center justify-between sm:p-2 z-10">
+              <div className="flex items-center space-x-3 sm:space-x-2">
                 <button
                   onClick={(e) => {
                     e.stopPropagation();
                     handlePlayPause(currentFullScreenVideo.id);
                   }}
-                  className="text-white p-2 hover:text-gray-300 sm:p-1 bg-black/50 rounded-full"
+                  className="text-white p-1.5 hover:text-gray-200 sm:p-1 bg-black/50 rounded-full"
                 >
-                  {playing[currentFullScreenVideo.id] ? <FiPause size={20} /> : <FiPlay size={20} />}
+                  {playing[currentFullScreenVideo.id] ? <FiPause size={18} /> : <FiPlay size={18} />}
                 </button>
                 <button
                   onClick={(e) => {
                     e.stopPropagation();
                     handlePreviousVideo();
                   }}
-                  className="text-white p-2 hover:text-gray-300 sm:p-1 bg-black/50 rounded-full"
+                  className="text-white p-1.5 hover:text-gray-200 sm:p-1 bg-black/50 rounded-full"
                 >
-                  <FiArrowLeft size={20} />
+                  <FiArrowLeft size={18} />
                 </button>
                 <button
                   onClick={(e) => {
                     e.stopPropagation();
                     handleNextVideo();
                   }}
-                  className="text-white p-2 hover:text-gray-300 sm:p-1 bg-black/50 rounded-full"
+                  className="text-white p-1.5 hover:text-gray-200 sm:p-1 bg-black/50 rounded-full"
                 >
-                  <FiArrowRight size={20} />
+                  <FiArrowRight size={18} />
                 </button>
                 <div className="flex items-center space-x-2 sm:space-x-1">
                   <button
@@ -575,12 +558,13 @@ export default function VideoFetch({ setWorkouts, setLoading, loading, theme }) 
                       e.stopPropagation();
                       handleMuteToggle(currentFullScreenVideo.id);
                     }}
-                    className="text-white p-2 hover:text-gray-300 sm:p-1 bg-black/50 rounded-full"
+                    className="text-white p-1.5 hover:text-gray-200 sm:p-1 bg-black/50 rounded-full"
                   >
                     {muted[currentFullScreenVideo.id] || volume[currentFullScreenVideo.id] === 0 ? (
-                      <FiVolumeX size={20} />
+                      <FiVolumeX size={18}/>
+                      
                     ) : (
-                      <FiVolume2 size={20} />
+                      <FiVolume2 size={18} />
                     )}
                   </button>
                   {!muted[currentFullScreenVideo.id] && (
@@ -595,13 +579,13 @@ export default function VideoFetch({ setWorkouts, setLoading, loading, theme }) 
                         e.stopPropagation();
                         handleVolumeChange(currentFullScreenVideo.id, e.target.value);
                       }}
-                      className={`w-24 h-1 rounded-lg appearance-none cursor-pointer sm:w-16 ${
-                        theme === 'light' ? 'bg-gray-200' : 'bg-gray-600'
+                      className={`w-20 h-1 rounded-lg appearance-none cursor-pointer sm:w-14 ${
+                        theme === 'light' ? 'bg-gray-300' : 'bg-gray-600'
                       }`}
                     />
                   )}
                 </div>
-                <div className="text-white text-sm ml-2">
+                <div className="text-white text-xs font-medium ml-2 sm:ml-1">
                   {formatDuration(videoRefs.current[currentFullScreenVideo.id]?.currentTime || 0)} /{' '}
                   {videos[currentCategory].find((v) => v.id === currentFullScreenVideo.id).duration}
                 </div>
@@ -612,26 +596,26 @@ export default function VideoFetch({ setWorkouts, setLoading, loading, theme }) 
                     e.stopPropagation();
                     handleToggleSmallScreen();
                   }}
-                  className="text-white p-2 hover:text-gray-300 sm:p-1 bg-black/50 rounded-full"
+                  className="text-white p-1.5 hover:text-gray-200 sm:p-1 bg-black/50 rounded-full"
                   title={isSmallScreen ? 'Maximize Video' : 'Minimize Video'}
                 >
-                  {isSmallScreen ? <FiMaximize size={20} /> : <FiMonitor size={20} />}
+                  {isSmallScreen ? <FiMaximize size={18} /> : <FiMonitor size={18} />}
                 </button>
                 <button
                   onClick={(e) => {
                     e.stopPropagation();
                     handleExitFullScreen();
                   }}
-                  className="text-white p-2 hover:text-gray-300 sm:p-1 bg-black/50 rounded-full"
+                  className="text-white p-1.5 hover:text-gray-200 sm:p-1 bg-black/50 rounded-full"
                   title="Exit Fullscreen"
                 >
-                  <FiMinimize size={20} />
+                  <FiMinimize size={18} />
                 </button>
               </div>
             </div>
             <div
-              className={`absolute bottom-14 left-0 right-0 h-2 cursor-pointer sm:bottom-12 z-10 ${
-                theme === 'light' ? 'bg-gray-300/30' : 'bg-gray-600/30'
+              className={`absolute bottom-10 left-0 right-0 h-1.5 cursor-pointer sm:bottom-8 z-10 ${
+                theme === 'light' ? 'bg-gray-300' : 'bg-gray-600'
               }`}
               onClick={(e) => {
                 e.stopPropagation();
@@ -639,11 +623,11 @@ export default function VideoFetch({ setWorkouts, setLoading, loading, theme }) 
               }}
             >
               <div
-                className="h-full bg-red-600 transition-all duration-200"
+                className="h-full bg-red-500 transition-all duration-300"
                 style={{ width: `${progress[currentFullScreenVideo.id] || 0}%` }}
               ></div>
             </div>
-            <div className="absolute top-4 left-4 text-white text-xl font-semibold bg-black/60 px-3 py-2 rounded-md sm:text-base sm:px-2 sm:py-1 z-10">
+            <div className="absolute top-4 left-4 text-white text-lg font-medium bg-black/60 px-2 py-1 rounded sm:text-base sm:px-1.5 sm:py-0.5 z-10">
               {videos[currentCategory].find((v) => v.id === currentFullScreenVideo.id).title || 'Untitled Video'}
             </div>
           </div>

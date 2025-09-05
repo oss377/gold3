@@ -3,7 +3,7 @@
 import { useState, useContext, useCallback } from "react";
 import { db, auth } from "../../fconfig";
 import { createUserWithEmailAndPassword } from "firebase/auth";
-import { collection, addDoc } from "firebase/firestore";
+import { collection, addDoc, doc, updateDoc } from "firebase/firestore";
 import { Loader2, Mail, User, Lock, Eye, EyeOff } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { motion } from "framer-motion";
@@ -109,11 +109,11 @@ export default function RegisterForm() {
   }
   const { theme } = context;
 
-  // Memoize completeRegistration to prevent unnecessary re-renders
+  // Memoize completeRegistration to save user data to Firestore
   const completeRegistration = useCallback(
-    async (userId: string, paymentStatus: string) => {
+    async (userId: string) => {
       try {
-        await addDoc(collection(db, "GYM"), {
+        const docRef = await addDoc(collection(db, "GYM"), {
           uid: userId,
           firstName: formData.firstName.trim(),
           lastName: formData.lastName.trim(),
@@ -153,7 +153,8 @@ export default function RegisterForm() {
           signature: formData.signature.trim(),
           role: formData.role,
           category: formData.category,
-          payment: paymentStatus,
+          payment: "not payed",
+          registrationDate: new Date().toISOString(),
         });
         setFormData({
           firstName: "",
@@ -197,16 +198,62 @@ export default function RegisterForm() {
           category: "aerobics",
           payment: "not payed",
         });
-        toast.success("Registration and payment successful! Redirecting to login...");
-        router.push("/login");
+        toast.success("Registration successful! Redirecting to payment...", {
+          position: "top-center",
+          autoClose: 3000,
+          hideProgressBar: false,
+          closeOnClick: true,
+          pauseOnHover: true,
+          draggable: true,
+        });
+        // Store document ID and user ID for payment update
+        sessionStorage.setItem("pendingDocId", docRef.id);
+        sessionStorage.setItem("pendingUserId", userId);
+        setTimeout(() => {
+          router.push("/payment");
+        }, 3000);
       } catch (error: any) {
         console.error("Firestore error:", error);
         setErrors({ general: "Failed to save registration data. Please try again or contact support." });
-        toast.error("Failed to save registration data. Please try again.");
+        toast.error("Failed to save registration data. Please try again.", {
+          position: "top-center",
+          autoClose: 5000,
+        });
         setIsLoading(false);
       }
     },
     [formData, router]
+  );
+
+  // Update payment status in Firestore
+  const updatePaymentStatus = useCallback(
+    async (docId: string, paymentStatus: string) => {
+      try {
+        const userDocRef = doc(db, "GYM", docId);
+        await updateDoc(userDocRef, {
+          payment: paymentStatus,
+          paymentDate: paymentStatus === "payed" ? new Date().toISOString() : null,
+        });
+        toast.success(`Payment ${paymentStatus === "payed" ? "successful" : "not completed"}! Redirecting to login...`, {
+          position: "top-center",
+          autoClose: 3000,
+        });
+        sessionStorage.removeItem("pendingDocId");
+        sessionStorage.removeItem("pendingUserId");
+        setTimeout(() => {
+          router.push("/login");
+        }, 3000);
+      } catch (error: any) {
+        console.error("Payment update error:", error);
+        setErrors({ general: "Failed to update payment status. Please contact support." });
+        toast.error("Failed to update payment status. Please try again.", {
+          position: "top-center",
+          autoClose: 5000,
+        });
+        setIsLoading(false);
+      }
+    },
+    [router]
   );
 
   const handleInputChange = (
@@ -231,10 +278,7 @@ export default function RegisterForm() {
 
     try {
       const userCredential = await createUserWithEmailAndPassword(auth, formData.email.trim(), formData.password);
-      // Store user ID and form data in session storage to persist during payment
-      sessionStorage.setItem("pendingUserId", userCredential.user.uid);
-      sessionStorage.setItem("pendingFormData", JSON.stringify(formData));
-      router.push("/payment");
+      await completeRegistration(userCredential.user.uid);
     } catch (error: any) {
       let errorMessage = "Registration failed. Please try again.";
       if (error.code === "auth/invalid-email") {
@@ -247,26 +291,45 @@ export default function RegisterForm() {
         errorMessage = "Too many attempts. Please try again later.";
       }
       setErrors({ general: errorMessage });
-      toast.error(errorMessage);
+      toast.error(errorMessage, {
+        position: "top-center",
+        autoClose: 5000,
+      });
       setIsLoading(false);
     }
   };
 
-  // Handle payment success and redirect to login
+  // Handle payment success
   const handlePaymentSuccess = useCallback(async () => {
+    const docId = sessionStorage.getItem("pendingDocId");
     const userId = sessionStorage.getItem("pendingUserId");
-    const storedFormData = sessionStorage.getItem("pendingFormData");
-    if (userId && storedFormData) {
-      await completeRegistration(userId, "payed");
-      sessionStorage.removeItem("pendingUserId");
-      sessionStorage.removeItem("pendingFormData");
-      router.push("/login"); // Redirect to login page after successful payment
+    if (docId && userId) {
+      await updatePaymentStatus(docId, "payed");
     } else {
       setErrors({ general: "Payment data not found. Please try registering again." });
-      toast.error("Payment data not found. Please try registering again.");
+      toast.error("Payment data not found. Please try registering again.", {
+        position: "top-center",
+        autoClose: 5000,
+      });
       setIsLoading(false);
     }
-  }, [completeRegistration, router]);
+  }, [updatePaymentStatus]);
+
+  // Handle payment failure or non-completion
+  const handlePaymentFailure = useCallback(async () => {
+    const docId = sessionStorage.getItem("pendingDocId");
+    const userId = sessionStorage.getItem("pendingUserId");
+    if (docId && userId) {
+      await updatePaymentStatus(docId, "not payed");
+    } else {
+      setErrors({ general: "Payment data not found. Please try registering again." });
+      toast.error("Payment data not found. Please try registering again.", {
+        position: "top-center",
+        autoClose: 5000,
+      });
+      setIsLoading(false);
+    }
+  }, [updatePaymentStatus]);
 
   console.log("handleSubmit defined:", typeof handleSubmit);
 
@@ -411,7 +474,7 @@ export default function RegisterForm() {
                       onChange={(e) => handleInputChange(e, name as keyof FormData)}
                       className={`w-full p-3 border ${
                         theme === "light" ? "border-zinc-200" : "border-zinc-700"
-                      } rounded faiz-lg focus:outline-none focus:ring-2 focus:ring-blue-500 ${
+                      } rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 ${
                         theme === "light" ? "bg-white" : "bg-gray-800"
                       }`}
                     >
@@ -508,7 +571,7 @@ export default function RegisterForm() {
                   Processing...
                 </>
               ) : (
-                "Proceed to Payment"
+                "Register"
               )}
             </motion.button>
           </form>

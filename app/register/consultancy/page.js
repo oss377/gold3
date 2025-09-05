@@ -1,15 +1,16 @@
 "use client";
 
-import React, { useState, useEffect, useContext } from 'react';
+import React, { useState, useEffect, useContext, useCallback } from 'react';
 import { useForm } from 'react-hook-form';
 import { ToastContainer, toast } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
-import { collection, addDoc } from 'firebase/firestore';
-import { onAuthStateChanged } from 'firebase/auth';
+import { collection, addDoc, doc, updateDoc } from 'firebase/firestore';
+import { createUserWithEmailAndPassword, onAuthStateChanged } from 'firebase/auth';
 import { auth, db } from '../../fconfig';
 import { LanguageContext } from '../../../context/LanguageContext';
 import { ThemeContext } from '../../../context/ThemeContext';
 import { ChevronLeftIcon, ChevronRightIcon, CheckCircleIcon } from '@heroicons/react/24/solid';
+import { useRouter } from 'next/navigation';
 
 // Cloudinary configuration
 const CLOUDINARY_UPLOAD_PRESET = process.env.NEXT_PUBLIC_CLOUDINARY_UPLOAD_PRESET || 'gold';
@@ -24,12 +25,13 @@ const GYMForm = () => {
       firstName: '',
       lastName: '',
       phoneNumber: '',
+      email: '',
+      password: '',
       photo: null,
       address: '',
       city: '',
       country: '',
       jobType: '',
-      email: '',
       emergencyName: '',
       emergencyPhone: '',
       gender: '',
@@ -59,7 +61,8 @@ const GYMForm = () => {
       preferredStartDate: '',
       signature: '',
       role: "user",
-       category: "personalTreaning",
+      category: "personalTraining",
+      payment: "not payed",
     },
   });
   const [isAuthenticated, setIsAuthenticated] = useState(false);
@@ -69,11 +72,12 @@ const GYMForm = () => {
   const [isSubmitted, setIsSubmitted] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
   const [photoPreview, setPhotoPreview] = useState(null);
+  const router = useRouter();
 
   const steps = [
     {
       name: t.personalInfo || 'Personal Info',
-      fields: ['firstName', 'lastName', 'phoneNumber', 'email', 'address', 'city', 'country', 'jobType', 'emergencyName', 'emergencyPhone', 'gender'],
+      fields: ['firstName', 'lastName', 'phoneNumber', 'email', 'password', 'address', 'city', 'country', 'jobType', 'emergencyName', 'emergencyPhone', 'gender'],
     },
     {
       name: t.healthInfo || 'Health Info',
@@ -108,7 +112,7 @@ const GYMForm = () => {
     }
   }, [height, weight, setValue]);
 
-  // Validate Firebase services
+  // Validate Firebase services and authentication
   useEffect(() => {
     if (!auth || !db) {
       setFormErrors({ global: t.serviceError || 'Firebase services are not initialized.' });
@@ -186,51 +190,156 @@ const GYMForm = () => {
     }
   };
 
-  const onSubmit = async (data) => {
-    setFormErrors({});
-    if (!isAuthenticated) {
-      setFormErrors({ global: t.authError || 'You must be logged in to submit the form.' });
-      toast.error(t.authError || 'You must be logged in to submit the form.');
-      return;
-    }
-    if (!db) {
-      setFormErrors({ global: t.serviceError || 'Firestore database is not initialized.' });
-      toast.error(t.serviceError || 'Firestore database is not initialized.');
-      return;
-    }
+  // Memoize submitRegistration to register user and save data to Firestore
+  const submitRegistration = useCallback(
+    async (data) => {
+      setFormErrors({});
+      if (isAuthenticated) {
+        setFormErrors({ global: t.alreadyAuthenticated || 'You are already logged in. Please log out to register a new account.' });
+        toast.error(t.alreadyAuthenticated || 'You are already logged in. Please log out to register a new account.', {
+          position: "top-center",
+          autoClose: 5000,
+        });
+        return;
+      }
+      if (!auth || !db) {
+        setFormErrors({ global: t.serviceError || 'Firestore database or authentication is not initialized.' });
+        toast.error(t.serviceError || 'Firestore database or authentication is not initialized.', {
+          position: "top-center",
+          autoClose: 5000,
+        });
+        return;
+      }
 
-    try {
-      let photoURL = '';
-      if (data.photo && data.photo[0]) {
-        photoURL = await uploadToCloudinary(data.photo[0]);
-        if (!photoURL) {
-          throw new Error(t.storageError || 'Image upload failed.');
+      try {
+        // Register user with Firebase Authentication
+        const userCredential = await createUserWithEmailAndPassword(auth, data.email, data.password);
+        const user = userCredential.user;
+
+        let photoURL = '';
+        if (data.photo && data.photo[0]) {
+          photoURL = await uploadToCloudinary(data.photo[0]);
+          if (!photoURL) {
+            throw new Error(t.storageError || 'Image upload failed.');
+          }
         }
-      }
 
-      await addDoc(collection(db, 'GYM'), {
-        ...data,
-        photo: null, // Store null since we use photoURL
-        photoURL,
-        userId: auth.currentUser.uid,
-        timestamp: new Date(),
-      });
-      toast.success(t.registrationComplete || 'Registration successful!');
-      setIsSubmitted(true);
-    } catch (error) {
-      console.error('Submission error:', error);
-      let errorMessage = error.message || t.saveError || 'An error occurred while saving your data.';
-      if (error.code === 'permission-denied') {
-        errorMessage = t.permissionError || 'Permission denied: Unable to save data.';
-      } else if (error.code === 'unavailable') {
-        errorMessage = t.serviceError || 'Firestore service is unavailable.';
-      } else if (error.code === 'auth/invalid-api-key') {
-        errorMessage = t.serviceError || 'Invalid Firebase API key. Please contact support.';
+        const docRef = await addDoc(collection(db, 'GYM'), {
+          ...data,
+          photo: null, // Store null since we use photoURL
+          photoURL,
+          userId: user.uid,
+          timestamp: new Date().toISOString(),
+          payment: "not payed",
+          registrationDate: new Date().toISOString(),
+        });
+
+        // Store document ID for payment update
+        sessionStorage.setItem("pendingDocId", docRef.id);
+        sessionStorage.setItem("pendingUserId", user.uid);
+
+        toast.success(t.registrationComplete || 'Registration successful! Redirecting to payment...', {
+          position: "top-center",
+          autoClose: 3000,
+          hideProgressBar: false,
+          closeOnClick: true,
+          pauseOnHover: true,
+          draggable: true,
+        });
+
+        setIsSubmitted(true);
+        setTimeout(() => {
+          router.push("/payment");
+        }, 3000);
+      } catch (error) {
+        console.error('Submission error:', error);
+        let errorMessage = error.message || t.saveError || 'An error occurred while registering.';
+        if (error.code === 'auth/email-already-in-use') {
+          errorMessage = t.emailInUse || 'This email is already registered. Please use a different email or log in.';
+        } else if (error.code === 'auth/weak-password') {
+          errorMessage = t.weakPassword || 'Password is too weak. Please use a stronger password (at least 6 characters).';
+        } else if (error.code === 'auth/invalid-email') {
+          errorMessage = t.emailInvalid || 'Invalid email address.';
+        } else if (error.code === 'permission-denied') {
+          errorMessage = t.permissionError || 'Permission denied: Unable to save data.';
+        } else if (error.code === 'unavailable') {
+          errorMessage = t.serviceError || 'Firestore service is unavailable.';
+        } else if (error.code === 'auth/invalid-api-key') {
+          errorMessage = t.serviceError || 'Invalid Firebase API key. Please contact support.';
+        }
+        toast.error(errorMessage, {
+          position: "top-center",
+          autoClose: 5000,
+        });
+        setFormErrors({ global: errorMessage });
       }
-      toast.error(errorMessage);
-      setFormErrors({ global: errorMessage });
+    },
+    [isAuthenticated, t, router]
+  );
+
+  // Update payment status in Firestore
+  const updatePaymentStatus = useCallback(
+    async (docId, paymentStatus) => {
+      try {
+        const userDocRef = doc(db, "GYM", docId);
+        await updateDoc(userDocRef, {
+          payment: paymentStatus,
+          paymentDate: paymentStatus === "payed" ? new Date().toISOString() : null,
+        });
+        toast.success(`Payment ${paymentStatus === "payed" ? "successful" : "not completed"}! Redirecting to home...`, {
+          position: "top-center",
+          autoClose: 3000,
+          hideProgressBar: false,
+          closeOnClick: true,
+          pauseOnHover: true,
+          draggable: true,
+        });
+        sessionStorage.removeItem("pendingDocId");
+        sessionStorage.removeItem("pendingUserId");
+        setTimeout(() => {
+          router.push("/");
+        }, 3000);
+      } catch (error) {
+        console.error("Payment update error:", error);
+        setFormErrors({ global: t.paymentUpdateError || 'Failed to update payment status. Please contact support.' });
+        toast.error(t.paymentUpdateError || 'Failed to update payment status. Please try again.', {
+          position: "top-center",
+          autoClose: 5000,
+        });
+      }
+    },
+    [t, router]
+  );
+
+  // Handle payment success
+  const handlePaymentSuccess = useCallback(async () => {
+    const docId = sessionStorage.getItem("pendingDocId");
+    const userId = sessionStorage.getItem("pendingUserId");
+    if (docId && userId) {
+      await updatePaymentStatus(docId, "payed");
+    } else {
+      setFormErrors({ global: t.paymentDataError || 'Payment data not found. Please try registering again.' });
+      toast.error(t.paymentDataError || 'Payment data not found. Please try registering again.', {
+        position: "top-center",
+        autoClose: 5000,
+      });
     }
-  };
+  }, [updatePaymentStatus, t]);
+
+  // Handle payment failure or non-completion
+  const handlePaymentFailure = useCallback(async () => {
+    const docId = sessionStorage.getItem("pendingDocId");
+    const userId = sessionStorage.getItem("pendingUserId");
+    if (docId && userId) {
+      await updatePaymentStatus(docId, "not payed");
+    } else {
+      setFormErrors({ global: t.paymentDataError || 'Payment data not found. Please try registering again.' });
+      toast.error(t.paymentDataError || 'Payment data not found. Please try registering again.', {
+        position: "top-center",
+        autoClose: 5000,
+      });
+    }
+  }, [updatePaymentStatus, t]);
 
   const nextStep = async () => {
     if (currentStep < steps.length - 1) {
@@ -239,7 +348,10 @@ const GYMForm = () => {
       if (!hasErrors) {
         setCurrentStep(currentStep + 1);
       } else {
-        toast.error(t.validationError || 'Please fix errors before proceeding.');
+        toast.error(t.validationError || 'Please fix errors before proceeding.', {
+          position: "top-center",
+          autoClose: 3000,
+        });
       }
     }
   };
@@ -263,12 +375,12 @@ const GYMForm = () => {
       <div className={`min-h-screen flex items-center justify-center ${theme === 'dark' ? 'bg-gradient-to-r from-gray-700 to-gray-800' : 'bg-gradient-to-r from-blue-50 to-purple-50'}`}>
         <div className={`max-w-4xl w-full ${theme === 'dark' ? 'bg-gray-800 border-gray-600' : 'bg-white border-gray-200'} p-8 rounded-xl shadow-2xl text-center border`}>
           <h2 className={`text-3xl font-extrabold ${theme === 'dark' ? 'text-white' : 'text-gray-900'} mb-6`}>{t.registrationComplete || 'Registration Complete!'}</h2>
-          <p className={`${theme === 'dark' ? 'text-gray-300' : 'text-gray-600'} mb-8`}>{t.registrationMessage || 'Thank you for registering with the Gym. Your information has been successfully saved.'}</p>
+          <p className={`${theme === 'dark' ? 'text-gray-300' : 'text-gray-600'} mb-8`}>{t.registrationMessage || 'Thank you for registering with the Gym. Your information has been successfully saved. You will be redirected to the payment page.'}</p>
           <button
-            onClick={() => window.location.href = '/'}
+            onClick={() => router.push('/payment')}
             className={`px-6 py-3 rounded-lg text-sm font-medium ${theme === 'dark' ? 'bg-gray-700 text-white hover:bg-gray-600 focus:ring-2 focus:ring-yellow-400' : 'bg-blue-600 text-white hover:bg-blue-700 focus:ring-2 focus:ring-blue-500'} transition-all duration-300`}
           >
-            {t.goToHome || 'Go to Home Page'}
+            {t.proceedToPayment || 'Proceed to Payment'}
           </button>
         </div>
       </div>
@@ -296,7 +408,7 @@ const GYMForm = () => {
             <p className={`text-center mb-6 ${theme === 'dark' ? 'bg-red-900/50 text-red-400' : 'bg-red-50 text-red-500'} p-3 rounded-md`}>{formErrors.global}</p>
           )}
 
-          <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
+          <form onSubmit={handleSubmit(submitRegistration)} className="space-y-6">
             {currentStep === 0 && (
               <div className="space-y-6 animate-fade-in">
                 <h3 className={`text-xl font-semibold ${theme === 'dark' ? 'text-white' : 'text-gray-800'}`}>{t.personalInfo || 'Personal Information'}</h3>
@@ -346,6 +458,21 @@ const GYMForm = () => {
                       aria-describedby={errors.email ? 'email-error' : undefined}
                     />
                     {errors.email && <p id="email-error" className={`text-xs mt-1 ${theme === 'dark' ? 'text-red-400' : 'text-red-500'}`}>{errors.email.message}</p>}
+                  </div>
+                  <div>
+                    <label className={`block text-sm font-medium ${theme === 'dark' ? 'text-gray-300' : 'text-gray-700'}`}>{t.password || 'Password'}</label>
+                    <input
+                      type="password"
+                      {...register('password', { 
+                        required: t.passwordError || 'Password is required', 
+                        minLength: { value: 6, message: t.passwordMinLength || 'Password must be at least 6 characters' }
+                      })}
+                      className={`mt-1 block w-full px-4 py-3 border ${theme === 'dark' ? 'bg-gray-700 border-gray-600 focus:ring-yellow-400 focus:border-yellow-400' : 'bg-white border-gray-300 focus:ring-blue-500 focus:border-blue-500'} rounded-lg shadow-sm transition-all duration-300`}
+                      placeholder={t.passwordPlaceholder || 'Enter your password'}
+                      aria-label="Password"
+                      aria-describedby={errors.password ? 'password-error' : undefined}
+                    />
+                    {errors.password && <p id="password-error" className={`text-xs mt-1 ${theme === 'dark' ? 'text-red-400' : 'text-red-500'}`}>{errors.password.message}</p>}
                   </div>
                   <div className="sm:col-span-2">
                     <label className={`block text-sm font-medium ${theme === 'dark' ? 'text-gray-300' : 'text-gray-700'}`}>{t.address || 'Address'}</label>
@@ -865,15 +992,15 @@ const GYMForm = () => {
               ) : (
                 <button
                   type="submit"
-                  disabled={!isAuthenticated || isUploading}
-                  className={`px-6 py-3 rounded-lg text-sm font-medium transition-all duration-300 ${isAuthenticated && !isUploading ? (theme === 'dark' ? 'bg-gray-700 text-white hover:bg-gray-600 focus:ring-2 focus:ring-yellow-400' : 'bg-blue-600 text-white hover:bg-blue-700 focus:ring-2 focus:ring-blue-500') : (theme === 'dark' ? 'bg-gray-600 text-gray-400 cursor-not-allowed' : 'bg-gray-400 text-gray-500 cursor-not-allowed')}`}
+                  disabled={isUploading}
+                  className={`px-6 py-3 rounded-lg text-sm font-medium transition-all duration-300 ${!isUploading ? (theme === 'dark' ? 'bg-gray-700 text-white hover:bg-gray-600 focus:ring-2 focus:ring-yellow-400' : 'bg-blue-600 text-white hover:bg-blue-700 focus:ring-2 focus:ring-blue-500') : (theme === 'dark' ? 'bg-gray-600 text-gray-400 cursor-not-allowed' : 'bg-gray-400 text-gray-500 cursor-not-allowed')}`}
                 >
                   {t.submit || 'Submit'}
                 </button>
               )}
             </div>
           </form>
-          <ToastContainer position="top-right" autoClose={3000} theme={theme} />
+          <ToastContainer position="top-center" autoClose={3000} theme={theme} />
         </div>
       </div>
 
