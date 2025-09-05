@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useContext, Dispatch, SetStateAction } from 'react';
+import { useState, useEffect, useContext } from 'react';
 import { useRouter } from 'next/navigation';
 import {
   Menu,
@@ -22,47 +22,6 @@ import UserNotification from '../../components/UserNotification';
 import Message from '../../components/Messages';
 import { ThemeContext } from '../../context/ThemeContext';
 import LanguageContext from '../../context/LanguageContext';
-import ScheduleFetcher from '../../components/ScheduleFetcher';
-import { getAuth, onAuthStateChanged } from 'firebase/auth';
-import { db } from '../../app/fconfig';
-import { doc, getDoc } from 'firebase/firestore';
-
-interface UserCredentials {
-  userId: string;
-  email: string;
-  role: string;
-  category?: string;
-}
-
-interface UserProfile {
-  id: string;
-  firstName: string;
-  lastName: string;
-  email: string;
-  category: string;
-  membershipType: string;
-  createdAt: string;
-  [key: string]: any;
-}
-
-interface UserNotificationProps {
-  count: number;
-  setCount: Dispatch<SetStateAction<number>>;
-  theme: string;
-}
-
-interface MessageProps {
-  count: number;
-  setCount: Dispatch<SetStateAction<number>>;
-  onClick: () => void;
-  theme: string;
-}
-
-interface LanguageContextValue {
-  language: string;
-  toggleLanguage: () => void;
-  t: Record<string, string>;
-}
 
 export default function UserDashboard() {
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
@@ -71,121 +30,72 @@ export default function UserDashboard() {
   const [searchQuery, setSearchQuery] = useState('');
   const [errorMessage, setErrorMessage] = useState('');
   const [isAuthorized, setIsAuthorized] = useState(false);
-  const [userCredentials, setUserCredentials] = useState<UserCredentials | null>(null);
-  const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
   const router = useRouter();
   const themeContext = useContext(ThemeContext);
-  const languageContext = useContext(LanguageContext) as LanguageContextValue | undefined;
+  const languageContext = useContext(LanguageContext) || {};
 
   if (!themeContext) {
     throw new Error('UserDashboard must be used within a ThemeProvider');
   }
 
   const { theme, toggleTheme } = themeContext;
-  const { language = 'en', toggleLanguage = () => {}, t = {} } = languageContext || {};
+  const { language = 'en', toggleLanguage = () => {}, t = {} } = languageContext;
 
   useEffect(() => {
-    const auth = getAuth();
-    const unsubscribe = onAuthStateChanged(auth, async (user) => {
-      if (!user) {
-        console.log('No user authenticated, redirecting to /');
-        toast.error(t.pleaseLogin || 'Please log in to access this page');
-        router.push('/');
-        return;
-      }
-
+    const validateSession = async () => {
       try {
-        console.log('Fetching /api/validate for user:', user.uid);
-        const response = await fetch('/api/validate', {
-          method: 'GET',
-          credentials: 'include',
+        const response = await fetch("/api/validate", {
+          method: "GET",
+          credentials: "include",
         });
 
         if (!response.ok) {
           const { error } = await response.json();
-          console.log('Validation failed:', error);
-          toast.error(error || t.pleaseLogin || 'Please log in to access this page');
-          router.push('/');
+          toast.error(error || "Please log in to access this page");
+          router.push("/");
           return;
         }
 
-        const credentials: UserCredentials = await response.json();
-        console.log('Validation response:', credentials);
-        if (credentials.userId !== user.uid) {
-          console.log('Session mismatch: validate userId', credentials.userId, '!= auth userId', user.uid);
-          toast.error(t.invalidSession || 'Session mismatch. Please log in again.');
-          router.push('/');
-          return;
-        }
-
-        setUserCredentials(credentials);
         setIsAuthorized(true);
-        console.log('User authorized, credentials set:', credentials);
-
-        // Fetch user profile from Firestore
-        console.log('Fetching user profile from GYM collection for userId:', user.uid);
-        const userDocRef = doc(db, 'GYM', user.uid);
-        const userDocSnap = await getDoc(userDocRef);
-
-        if (userDocSnap.exists()) {
-          const data = userDocSnap.data();
-          setUserProfile({
-            id: userDocSnap.id,
-            firstName: data.firstName || 'Unknown',
-            lastName: data.lastName || 'Unknown',
-            email: data.email || 'Unknown',
-            category: data.category || 'Uncategorized',
-            membershipType: data.membershipType || 'Unknown',
-            createdAt: data.createdAt || 'Unknown',
-            ...data,
-          });
-          console.log('User profile fetched:', data);
-        } else {
-          console.warn('User document not found in GYM collection for userId:', user.uid);
-          setErrorMessage(t.userNotFound || 'User profile not found. Please contact support.');
-        }
-      } catch (error) {
-        console.error('Validation or profile fetch error:', error);
-        toast.error(t.pleaseLogin || 'Please log in to access this page');
-        router.push('/');
+      } catch (error: any) {
+        toast.error("Please log in to access this page");
+        router.push("/");
       }
-    });
+    };
 
-    return () => unsubscribe();
-  }, [router, t]);
+    validateSession();
+  }, [router]);
 
   const navItems = [
     { name: t.dashboard || 'Dashboard', icon: BarChart, href: '/user' },
     { name: t.schedules || 'Schedules', icon: Calendar, href: '/user/schedules' },
     { name: t.workouts || 'Workouts', icon: Dumbbell, href: '/user/workouts' },
     { name: t.settings || 'Settings', icon: Settings, href: '/user/settings' },
+    { name: t.logout || 'Logout', icon: LogOut },
   ];
 
   const toggleSidebar = () => setIsSidebarOpen(!isSidebarOpen);
-
   const handleLogout = async () => {
     try {
-      const response = await fetch('/api/logout', {
-        method: 'POST',
+      const response = await fetch("/api/logout", {
+        method: "POST",
         headers: {
-          'Content-Type': 'application/json',
+          "Content-Type": "application/json",
         },
       });
 
       if (response.ok) {
-        toast.success(t.loggedOut || 'Logged out successfully');
-        router.push('/');
+        toast.success("Logged out successfully");
+        router.push("/");
       } else {
-        toast.error(t.logoutFailed || 'Logout failed. Please try again.');
+        toast.error("Logout failed. Please try again.");
       }
     } catch (error) {
-      toast.error(t.logoutError || 'An error occurred during logout.');
-      console.error('Logout error:', error);
+      toast.error("An error occurred during logout.");
+      console.error("Logout error:", error);
     }
   };
-
   const handleConsultancy = () => router.push('/consultancy');
-
   const handleMessageClick = async () => {
     console.log('Message icon clicked! Navigating to messages...');
     try {
@@ -197,7 +107,6 @@ export default function UserDashboard() {
   };
 
   if (!isAuthorized) {
-    console.log('Rendering null, isAuthorized is false');
     return null;
   }
 
@@ -241,34 +150,37 @@ export default function UserDashboard() {
           </button>
         </div>
         <nav className="mt-8 space-y-2 px-3">
-          {navItems.map((item) => (
-            <Link
-              key={item.name}
-              href={item.href}
-              className={`flex items-center px-4 py-3 rounded-lg text-sm font-medium transition-all duration-200 ${
-                theme === 'light' ? 'hover:bg-blue-100 hover:text-blue-600' : 'hover:bg-gray-700 hover:text-white'
-              }`}
-            >
-              <item.icon
-                size={20}
-                className={`mr-3 ${theme === 'light' ? 'text-blue-600' : 'text-yellow-400'}`}
-              />
-              <span>{item.name}</span>
-            </Link>
-          ))}
-          <button
-            key="logout"
-            onClick={handleLogout}
-            className={`flex items-center w-full px-4 py-3 rounded-lg text-sm font-medium transition-all duration-200 ${
-              theme === 'light' ? 'hover:bg-blue-100 hover:text-blue-600' : 'hover:bg-gray-700 hover:text-white'
-            }`}
-          >
-            <LogOut
-              size={20}
-              className={`mr-3 ${theme === 'light' ? 'text-blue-600' : 'text-yellow-400'}`}
-            />
-            <span>{t.logout || 'Logout'}</span>
-          </button>
+          {navItems.map((item) =>
+            item.name === (t.logout || 'Logout') ? (
+              <button
+                key={item.name}
+                onClick={handleLogout}
+                className={`flex items-center w-full px-4 py-3 rounded-lg text-sm font-medium transition-all duration-200 ${
+                  theme === 'light' ? 'hover:bg-blue-100 hover:text-blue-600' : 'hover:bg-gray-700 hover:text-white'
+                }`}
+              >
+                <item.icon
+                  size={20}
+                  className={`mr-3 ${theme === 'light' ? 'text-blue-600' : 'text-yellow-400'}`}
+                />
+                <span>{item.name}</span>
+              </button>
+            ) : (
+              <Link
+                key={item.name}
+                href={item.href}
+                className={`flex items-center px-4 py-3 rounded-lg text-sm font-medium transition-all duration-200 ${
+                  theme === 'light' ? 'hover:bg-blue-100 hover:text-blue-600' : 'hover:bg-gray-700 hover:text-white'
+                }`}
+              >
+                <item.icon
+                  size={20}
+                  className={`mr-3 ${theme === 'light' ? 'text-blue-600' : 'text-yellow-400'}`}
+                />
+                <span>{item.name}</span>
+              </Link>
+            )
+          )}
           <button
             onClick={toggleTheme}
             className={`flex items-center w-full px-4 py-3 rounded-lg text-sm font-medium transition-all duration-200 ${
@@ -342,17 +254,8 @@ export default function UserDashboard() {
                 } focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-all duration-200`}
               />
             </div>
-            <UserNotification
-              count={notifications}
-              setCount={setNotifications}
-              theme={theme}
-            />
-            <Message
-              count={messages}
-              setCount={setMessages}
-              onClick={handleMessageClick}
-              theme={theme}
-            />
+            <UserNotification notificationCount={notifications} setNotificationCount={setNotifications} theme={theme} />
+            <Message messageCount={messages} setMessageCount={setMessages} onClick={handleMessageClick} theme={theme} />
             <button
               onClick={handleConsultancy}
               className={`flex items-center px-4 py-2 rounded-lg font-medium transition-colors duration-200 ${
@@ -380,69 +283,6 @@ export default function UserDashboard() {
             theme === 'light' ? 'bg-gradient-to-br from-blue-50 to-purple-50 text-gray-900' : 'bg-gradient-to-br from-gray-800 to-gray-900 text-white'
           }`}
         >
-          {/* User Profile Section */}
-          {userProfile && (
-            <div
-              className={`rounded-xl shadow-lg p-6 mb-10 border ${
-                theme === 'light' ? 'bg-white text-gray-900 border-gray-200' : 'bg-gray-800 text-white border-gray-700'
-              }`}
-            >
-              <h3 className={`text-xl font-semibold mb-6 ${theme === 'light' ? 'text-zinc-800' : 'text-white'}`}>
-                {t.userProfile || 'Your Profile'}
-              </h3>
-              <div className="space-y-2">
-                <div className="flex justify-between">
-                  <span className={`font-medium ${theme === 'light' ? 'text-zinc-800' : 'text-white'}`}>
-                    {t.firstName || 'First Name'}:
-                  </span>
-                  <span className={theme === 'light' ? 'text-gray-600' : 'text-gray-200'}>
-                    {userProfile.firstName}
-                  </span>
-                </div>
-                <div className="flex justify-between">
-                  <span className={`font-medium ${theme === 'light' ? 'text-zinc-800' : 'text-white'}`}>
-                    {t.lastName || 'Last Name'}:
-                  </span>
-                  <span className={theme === 'light' ? 'text-gray-600' : 'text-gray-200'}>
-                    {userProfile.lastName}
-                  </span>
-                </div>
-                <div className="flex justify-between">
-                  <span className={`font-medium ${theme === 'light' ? 'text-zinc-800' : 'text-white'}`}>
-                    {t.email || 'Email'}:
-                  </span>
-                  <span className={theme === 'light' ? 'text-gray-600' : 'text-gray-200'}>
-                    {userProfile.email}
-                  </span>
-                </div>
-                <div className="flex justify-between">
-                  <span className={`font-medium ${theme === 'light' ? 'text-zinc-800' : 'text-white'}`}>
-                    {t.category || 'Category'}:
-                  </span>
-                  <span className={theme === 'light' ? 'text-gray-600' : 'text-gray-200'}>
-                    {userProfile.category}
-                  </span>
-                </div>
-                <div className="flex justify-between">
-                  <span className={`font-medium ${theme === 'light' ? 'text-zinc-800' : 'text-white'}`}>
-                    {t.membershipType || 'Membership Type'}:
-                  </span>
-                  <span className={theme === 'light' ? 'text-gray-600' : 'text-gray-200'}>
-                    {userProfile.membershipType}
-                  </span>
-                </div>
-                <div className="flex justify-between">
-                  <span className={`font-medium ${theme === 'light' ? 'text-zinc-800' : 'text-white'}`}>
-                    {t.createdAt || 'Joined'}:
-                  </span>
-                  <span className={theme === 'light' ? 'text-gray-600' : 'text-gray-200'}>
-                    {userProfile.createdAt}
-                  </span>
-                </div>
-              </div>
-            </div>
-          )}
-
           <div
             className={`grid ${
               isSidebarOpen ? 'grid-cols-1 sm:grid-cols-2 lg:grid-cols-3' : 'grid-cols-1 sm:grid-cols-2 lg:grid-cols-4'
@@ -472,7 +312,7 @@ export default function UserDashboard() {
                 >
                   {stat.value}
                 </p>
-                <p className={`text-sm mt-1 ${theme === 'light' ? 'text-gray-600' : 'text-gray-300'}`}>
+                <p className={`text-sm mt-1 ${theme === 'light' ? 'text-gray-500' : 'text-gray-300'}`}>
                   {stat.change}
                 </p>
               </div>
@@ -487,13 +327,36 @@ export default function UserDashboard() {
             <h3 className={`text-xl font-semibold mb-6 ${theme === 'light' ? 'text-zinc-800' : 'text-white'}`}>
               {t.workoutSchedule || 'Your Workout Schedule'}
             </h3>
-            <ScheduleFetcher
-              theme={theme}
-              t={t}
-              setErrorMessage={setErrorMessage}
-              userId={userCredentials?.userId}
-              category={userCredentials?.category}
-            />
+            <div
+              className={`grid ${
+                isSidebarOpen ? 'grid-cols-1 sm:grid-cols-2' : 'grid-cols-1 sm:grid-cols-2 lg:grid-cols-3'
+              } gap-4 transition-all duration-300`}
+            >
+              {[
+                { title: t.yogaClass || 'Yoga Class', time: t.yogaTime || '9:00 AM - 10:00 AM', instructor: t.yogaInstructor || 'Sarah Johnson' },
+                { title: t.strengthTraining || 'Strength Training', time: t.strengthTime || '11:00 AM - 12:00 PM', instructor: t.strengthInstructor || 'Mike Brown' },
+                { title: t.spinClass || 'Spin Class', time: t.spinTime || '6:00 PM - 7:00 PM', instructor: t.spinInstructor || 'Emily Davis' },
+              ].map((schedule, index) => (
+                <div
+                  key={index}
+                  className={`border rounded-lg p-5 transition-all duration-200 ${
+                    theme === 'light'
+                      ? 'border-gray-200 hover:bg-blue-50'
+                      : 'border-gray-600 hover:bg-gray-700'
+                  }`}
+                >
+                  <h4 className={`font-semibold text-lg ${theme === 'light' ? 'text-zinc-800' : 'text-white'}`}>
+                    {schedule.title}
+                  </h4>
+                  <p className={`text-sm ${theme === 'light' ? 'text-gray-500' : 'text-gray-300'}`}>
+                    {schedule.time}
+                  </p>
+                  <p className={`text-sm ${theme === 'light' ? 'text-gray-600' : 'text-gray-200'}`}>
+                    {t.instructor || 'Instructor'}: {schedule.instructor}
+                  </p>
+                </div>
+              ))}
+            </div>
           </div>
 
           <div
