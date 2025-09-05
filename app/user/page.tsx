@@ -30,12 +30,19 @@ export default function UserDashboard() {
   const [searchQuery, setSearchQuery] = useState('');
   const [errorMessage, setErrorMessage] = useState('');
   const [isAuthorized, setIsAuthorized] = useState(false);
+  const [userEmail, setUserEmail] = useState(''); // New state for user email
   const router = useRouter();
   const themeContext = useContext(ThemeContext);
-  const languageContext = useContext(LanguageContext) || {};
+  const languageContext = useContext(LanguageContext);
 
+  // Check for ThemeContext
   if (!themeContext) {
     throw new Error('UserDashboard must be used within a ThemeProvider');
+  }
+
+  // Check for LanguageContext
+  if (!languageContext) {
+    throw new Error('UserDashboard must be used within a LanguageProvider');
   }
 
   const { theme, toggleTheme } = themeContext;
@@ -51,20 +58,22 @@ export default function UserDashboard() {
 
         if (!response.ok) {
           const { error } = await response.json();
-          toast.error(error || "Please log in to access this page");
+          toast.error(error || t.pleaseLogin || "Please log in to access this page");
           router.push("/");
           return;
         }
 
+        const data = await response.json();
         setIsAuthorized(true);
-      } catch (error: any) {
-        toast.error("Please log in to access this page");
+        setUserEmail(data.email || 'Unknown'); // Set email from API response
+      } catch (error) {
+        toast.error(t.pleaseLogin || "Please log in to access this page");
         router.push("/");
       }
     };
 
     validateSession();
-  }, [router]);
+  }, [router, t]);
 
   const navItems = [
     { name: t.dashboard || 'Dashboard', icon: BarChart, href: '/user' },
@@ -75,6 +84,7 @@ export default function UserDashboard() {
   ];
 
   const toggleSidebar = () => setIsSidebarOpen(!isSidebarOpen);
+
   const handleLogout = async () => {
     try {
       const response = await fetch("/api/logout", {
@@ -85,17 +95,19 @@ export default function UserDashboard() {
       });
 
       if (response.ok) {
-        toast.success("Logged out successfully");
+        toast.success(t.logoutSuccess || "Logged out successfully");
         router.push("/");
       } else {
-        toast.error("Logout failed. Please try again.");
+        toast.error(t.logoutFailed || "Logout failed. Please try again.");
       }
     } catch (error) {
-      toast.error("An error occurred during logout.");
+      toast.error(t.logoutError || "An error occurred during logout.");
       console.error("Logout error:", error);
     }
   };
+
   const handleConsultancy = () => router.push('/consultancy');
+
   const handleMessageClick = async () => {
     console.log('Message icon clicked! Navigating to messages...');
     try {
@@ -144,7 +156,7 @@ export default function UserDashboard() {
           <button
             className={theme === 'light' ? 'text-zinc-700 hover:text-zinc-900' : 'text-white hover:text-gray-200'}
             onClick={toggleSidebar}
-            aria-label={isSidebarOpen ? 'Close sidebar' : 'Open sidebar'}
+            aria-label={isSidebarOpen ? t.closeSidebar || 'Close sidebar' : t.openSidebar || 'Open sidebar'}
           >
             <X size={24} />
           </button>
@@ -186,7 +198,7 @@ export default function UserDashboard() {
             className={`flex items-center w-full px-4 py-3 rounded-lg text-sm font-medium transition-all duration-200 ${
               theme === 'light' ? 'hover:bg-blue-100 hover:text-blue-600' : 'hover:bg-gray-700 hover:text-white'
             }`}
-            aria-label={theme === 'light' ? 'Switch to dark mode' : 'Switch to light mode'}
+            aria-label={theme === 'light' ? t.darkMode || 'Switch to dark mode' : t.lightMode || 'Switch to light mode'}
           >
             {theme === 'light' ? (
               <Moon size={20} className="mr-3 text-blue-600" />
@@ -200,7 +212,7 @@ export default function UserDashboard() {
             className={`flex items-center w-full px-4 py-3 rounded-lg text-sm font-medium transition-all duration-200 ${
               theme === 'light' ? 'hover:bg-blue-100 hover:text-blue-600' : 'hover:bg-gray-700 hover:text-white'
             }`}
-            aria-label={language === 'en' ? 'Switch to Amharic' : 'Switch to English'}
+            aria-label={language === 'en' ? t.switchAmharic || 'Switch to Amharic' : t.switchEnglish || 'Switch to English'}
           >
             <Globe size={20} className={`mr-3 ${theme === 'light' ? 'text-blue-600' : 'text-yellow-400'}`} />
             <span>{language === 'en' ? 'አማርኛ' : 'English'}</span>
@@ -222,17 +234,24 @@ export default function UserDashboard() {
             <button
               className={theme === 'light' ? 'text-blue-600 hover:text-blue-800 mr-4' : 'text-yellow-400 hover:text-yellow-300 mr-4'}
               onClick={toggleSidebar}
-              aria-label={isSidebarOpen ? 'Close sidebar' : 'Open sidebar'}
+              aria-label={isSidebarOpen ? t.closeSidebar || 'Close sidebar' : t.openSidebar || 'Open sidebar'}
             >
               {isSidebarOpen ? <X size={24} /> : <Menu size={24} />}
             </button>
-            <h2
-              className={`text-2xl font-semibold tracking-tight ${
-                theme === 'light' ? 'text-zinc-800' : 'text-white'
-              }`}
-            >
-              {t.dashboard || 'User Dashboard'}
-            </h2>
+            <div>
+              <h2
+                className={`text-2xl font-semibold tracking-tight ${
+                  theme === 'light' ? 'text-zinc-800' : 'text-white'
+                }`}
+              >
+                {t.dashboard || 'User Dashboard'}
+              </h2>
+              <p
+                className={`text-sm ${theme === 'light' ? 'text-gray-600' : 'text-gray-300'}`}
+              >
+                {t.welcome || 'Welcome'}: {userEmail}
+              </p>
+            </div>
           </div>
           <div className="flex items-center space-x-6">
             <div className="relative">
@@ -252,6 +271,7 @@ export default function UserDashboard() {
                     ? 'bg-white border-gray-300 text-gray-900'
                     : 'bg-gray-700 border-gray-600 text-white'
                 } focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-all duration-200`}
+                aria-label={t.searchPlaceholder || 'Search classes, trainers'}
               />
             </div>
             <UserNotification notificationCount={notifications} setNotificationCount={setNotifications} theme={theme} />
