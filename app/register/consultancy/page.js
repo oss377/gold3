@@ -13,9 +13,9 @@ import { ChevronLeftIcon, ChevronRightIcon, CheckCircleIcon } from '@heroicons/r
 import { useRouter } from 'next/navigation';
 
 // Cloudinary configuration
-const CLOUDINARY_UPLOAD_PRESET = process.env.NEXT_PUBLIC_CLOUDINARY_UPLOAD_PRESET || 'gold';
+const CLOUDINARY_UPLOAD_PRESET = process.env.NEXT_PUBLIC_CLOUDINARY_UPLOAD_PRESET || 'goldgold';
 const CLOUDINARY_CLOUD_NAME = process.env.NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME || 'dnqsoezfo';
-const CLOUDINARY_FOLDER = process.env.NEXT_PUBLIC_CLOUDINARY_FOLDER || 'gymVideo';
+const CLOUDINARY_FOLDER = process.env.NEXT_PUBLIC_CLOUDINARY_FOLDER || 'videos';
 
 const GYMForm = () => {
   const { t } = useContext(LanguageContext);
@@ -66,6 +66,7 @@ const GYMForm = () => {
     },
   });
   const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [currentUser, setCurrentUser] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
   const [formErrors, setFormErrors] = useState({});
   const [currentStep, setCurrentStep] = useState(0);
@@ -102,14 +103,18 @@ const GYMForm = () => {
   const weight = watch('weight');
 
   useEffect(() => {
-    if (height && weight && !isNaN(height) && !isNaN(weight) && height > 0 && weight > 0) {
-      const heightInMeters = parseFloat(height) / 100;
-      const weightInKg = parseFloat(weight);
-      const bmi = (weightInKg / (heightInMeters * heightInMeters)).toFixed(2);
-      setValue('bmi', bmi);
-    } else {
-      setValue('bmi', '');
-    }
+    const calculateBMI = () => {
+      const heightNum = parseFloat(height);
+      const weightNum = parseFloat(weight);
+      if (heightNum > 0 && weightNum > 0 && heightNum <= 300 && weightNum <= 500) {
+        const heightInMeters = heightNum / 100;
+        const bmi = (weightNum / (heightInMeters * heightInMeters)).toFixed(2);
+        setValue('bmi', bmi, { shouldValidate: true });
+      } else {
+        setValue('bmi', '', { shouldValidate: true });
+      }
+    };
+    calculateBMI();
   }, [height, weight, setValue]);
 
   // Validate Firebase services and authentication
@@ -122,6 +127,10 @@ const GYMForm = () => {
 
     const unsubscribe = onAuthStateChanged(auth, (user) => {
       setIsAuthenticated(!!user);
+      setCurrentUser(user);
+      if (user) {
+        setValue('email', user.email || '');
+      }
       setIsLoading(false);
     }, (error) => {
       console.error('Auth state error:', error);
@@ -134,7 +143,7 @@ const GYMForm = () => {
     });
 
     return () => unsubscribe();
-  }, [t]);
+  }, [t, setValue]);
 
   const uploadToCloudinary = async (file) => {
     if (!file) return null;
@@ -190,21 +199,12 @@ const GYMForm = () => {
     }
   };
 
-  // Memoize submitRegistration to register user and save data to Firestore
   const submitRegistration = useCallback(
     async (data) => {
       setFormErrors({});
-      if (isAuthenticated) {
-        setFormErrors({ global: t.alreadyAuthenticated || 'You are already logged in. Please log out to register a new account.' });
-        toast.error(t.alreadyAuthenticated || 'You are already logged in. Please log out to register a new account.', {
-          position: "top-center",
-          autoClose: 5000,
-        });
-        return;
-      }
-      if (!auth || !db) {
-        setFormErrors({ global: t.serviceError || 'Firestore database or authentication is not initialized.' });
-        toast.error(t.serviceError || 'Firestore database or authentication is not initialized.', {
+      if (!db) {
+        setFormErrors({ global: t.serviceError || 'Firestore database is not initialized.' });
+        toast.error(t.serviceError || 'Firestore database is not initialized.', {
           position: "top-center",
           autoClose: 5000,
         });
@@ -212,11 +212,9 @@ const GYMForm = () => {
       }
 
       try {
-        // Register user with Firebase Authentication
-        const userCredential = await createUserWithEmailAndPassword(auth, data.email, data.password);
-        const user = userCredential.user;
-
+        let userId = currentUser?.uid;
         let photoURL = '';
+
         if (data.photo && data.photo[0]) {
           photoURL = await uploadToCloudinary(data.photo[0]);
           if (!photoURL) {
@@ -224,19 +222,26 @@ const GYMForm = () => {
           }
         }
 
+        if (!isAuthenticated) {
+          if (!auth) {
+            throw new Error(t.serviceError || 'Firebase authentication is not initialized.');
+          }
+          const userCredential = await createUserWithEmailAndPassword(auth, data.email, data.password);
+          userId = userCredential.user.uid;
+        }
+
         const docRef = await addDoc(collection(db, 'GYM'), {
           ...data,
-          photo: null, // Store null since we use photoURL
+          photo: null,
           photoURL,
-          userId: user.uid,
+          userId: userId || 'unknown',
           timestamp: new Date().toISOString(),
           payment: "not payed",
           registrationDate: new Date().toISOString(),
         });
 
-        // Store document ID for payment update
         sessionStorage.setItem("pendingDocId", docRef.id);
-        sessionStorage.setItem("pendingUserId", user.uid);
+        sessionStorage.setItem("pendingUserId", userId || 'unknown');
 
         toast.success(t.registrationComplete || 'Registration successful! Redirecting to payment...', {
           position: "top-center",
@@ -274,10 +279,9 @@ const GYMForm = () => {
         setFormErrors({ global: errorMessage });
       }
     },
-    [isAuthenticated, t, router]
+    [isAuthenticated, currentUser, t, router]
   );
 
-  // Update payment status in Firestore
   const updatePaymentStatus = useCallback(
     async (docId, paymentStatus) => {
       try {
@@ -311,7 +315,6 @@ const GYMForm = () => {
     [t, router]
   );
 
-  // Handle payment success
   const handlePaymentSuccess = useCallback(async () => {
     const docId = sessionStorage.getItem("pendingDocId");
     const userId = sessionStorage.getItem("pendingUserId");
@@ -326,7 +329,6 @@ const GYMForm = () => {
     }
   }, [updatePaymentStatus, t]);
 
-  // Handle payment failure or non-completion
   const handlePaymentFailure = useCallback(async () => {
     const docId = sessionStorage.getItem("pendingDocId");
     const userId = sessionStorage.getItem("pendingUserId");
@@ -464,8 +466,8 @@ const GYMForm = () => {
                     <input
                       type="password"
                       {...register('password', { 
-                        required: t.passwordError || 'Password is required', 
-                        minLength: { value: 6, message: t.passwordMinLength || 'Password must be at least 6 characters' }
+                        required: !isAuthenticated ? (t.passwordError || 'Password is required') : false,
+                        minLength: !isAuthenticated ? { value: 6, message: t.passwordMinLength || 'Password must be at least 6 characters' } : undefined
                       })}
                       className={`mt-1 block w-full px-4 py-3 border ${theme === 'dark' ? 'bg-gray-700 border-gray-600 focus:ring-yellow-400 focus:border-yellow-400' : 'bg-white border-gray-300 focus:ring-blue-500 focus:border-blue-500'} rounded-lg shadow-sm transition-all duration-300`}
                       placeholder={t.passwordPlaceholder || 'Enter your password'}
@@ -569,7 +571,11 @@ const GYMForm = () => {
                     <label className={`block text-sm font-medium ${theme === 'dark' ? 'text-gray-300' : 'text-gray-700'}`}>{t.height || 'Height (cm)'}</label>
                     <input
                       type="number"
-                      {...register('height', { required: t.heightError || 'Height is required', min: { value: 0, message: t.heightPositive || 'Height must be positive' } })}
+                      {...register('height', { 
+                        required: t.heightError || 'Height is required', 
+                        min: { value: 50, message: t.heightMin || 'Height must be at least 50 cm' },
+                        max: { value: 300, message: t.heightMax || 'Height must be less than 300 cm' }
+                      })}
                       className={`mt-1 block w-full px-4 py-3 border ${theme === 'dark' ? 'bg-gray-700 border-gray-600 focus:ring-yellow-400 focus:border-yellow-400' : 'bg-white border-gray-300 focus:ring-blue-500 focus:border-blue-500'} rounded-lg shadow-sm transition-all duration-300`}
                       placeholder={t.heightPlaceholder || 'Enter height in cm'}
                       aria-label="Height"
@@ -581,13 +587,41 @@ const GYMForm = () => {
                     <label className={`block text-sm font-medium ${theme === 'dark' ? 'text-gray-300' : 'text-gray-700'}`}>{t.weight || 'Weight (kg)'}</label>
                     <input
                       type="number"
-                      {...register('weight', { required: t.weightError || 'Weight is required', min: { value: 0, message: t.weightPositive || 'Weight must be positive' } })}
+                      {...register('weight', { 
+                        required: t.weightError || 'Weight is required', 
+                        min: { value: 20, message: t.weightMin || 'Weight must be at least 20 kg' },
+                        max: { value: 500, message: t.weightMax || 'Weight must be less than 500 kg' }
+                      })}
                       className={`mt-1 block w-full px-4 py-3 border ${theme === 'dark' ? 'bg-gray-700 border-gray-600 focus:ring-yellow-400 focus:border-yellow-400' : 'bg-white border-gray-300 focus:ring-blue-500 focus:border-blue-500'} rounded-lg shadow-sm transition-all duration-300`}
                       placeholder={t.weightPlaceholder || 'Enter weight in kg'}
                       aria-label="Weight"
                       aria-describedby={errors.weight ? 'weight-error' : undefined}
                     />
                     {errors.weight && <p id="weight-error" className={`text-xs mt-1 ${theme === 'dark' ? 'text-red-400' : 'text-red-500'}`}>{errors.weight.message}</p>}
+                  </div>
+                  <div>
+                    <label className={`block text-sm font-medium ${theme === 'dark' ? 'text-gray-300' : 'text-gray-700'}`}>{t.bmi || 'BMI'}</label>
+                    <input
+                      type="text"
+                      value={formData.bmi || ''}
+                      readOnly
+                      className={`mt-1 block w-full px-4 py-3 border ${theme === 'dark' ? 'bg-gray-700 border-gray-600' : 'bg-gray-100 border-gray-300'} rounded-lg shadow-sm transition-all duration-300`}
+                      placeholder={t.bmiPlaceholder || 'Calculated BMI'}
+                      aria-label="BMI"
+                      aria-describedby={formData.bmi ? 'bmi-info' : undefined}
+                    />
+                    {formData.bmi && (
+                      <p id="bmi-info" className={`text-xs mt-1 ${theme === 'dark' ? 'text-gray-300' : 'text-gray-600'}`}>
+                        {formData.bmi < 18.5 ? t.bmiUnderweight || 'Underweight' :
+                         formData.bmi < 25 ? t.bmiNormal || 'Normal' :
+                         formData.bmi < 30 ? t.bmiOverweight || 'Overweight' : t.bmiObese || 'Obese'}
+                      </p>
+                    )}
+                    {!formData.bmi && height && weight && (
+                      <p className={`text-xs mt-1 ${theme === 'dark' ? 'text-red-400' : 'text-red-500'}`}>
+                        {t.bmiInvalid || 'Invalid height or weight for BMI calculation'}
+                      </p>
+                    )}
                   </div>
                   <div>
                     <label className={`block text-sm font-medium ${theme === 'dark' ? 'text-gray-300' : 'text-gray-700'}`}>{t.age || 'Age'}</label>
@@ -600,17 +634,6 @@ const GYMForm = () => {
                       aria-describedby={errors.age ? 'age-error' : undefined}
                     />
                     {errors.age && <p id="age-error" className={`text-xs mt-1 ${theme === 'dark' ? 'text-red-400' : 'text-red-500'}`}>{errors.age.message}</p>}
-                  </div>
-                  <div>
-                    <label className={`block text-sm font-medium ${theme === 'dark' ? 'text-gray-300' : 'text-gray-700'}`}>{t.bmi || 'BMI'}</label>
-                    <input
-                      type="number"
-                      {...register('bmi')}
-                      readOnly
-                      className={`mt-1 block w-full px-4 py-3 border ${theme === 'dark' ? 'bg-gray-700 border-gray-600' : 'bg-gray-100 border-gray-300'} rounded-lg shadow-sm`}
-                      placeholder={t.bmiPlaceholder || 'Calculated BMI'}
-                      aria-label="BMI"
-                    />
                   </div>
                   <div>
                     <label className={`block text-sm font-medium ${theme === 'dark' ? 'text-gray-300' : 'text-gray-700'}`}>{t.bloodType || 'Blood Type'}</label>
@@ -636,7 +659,7 @@ const GYMForm = () => {
                     <label className={`block text-sm font-medium ${theme === 'dark' ? 'text-gray-300' : 'text-gray-700'}`}>{t.goalWeight || 'Goal Weight (kg)'}</label>
                     <input
                       type="number"
-                      {...register('goalWeight', { min: { value: 0, message: t.goalWeightPositive || 'Goal weight must be positive' } })}
+                      {...register('goalWeight', { min: { value: 20, message: t.goalWeightPositive || 'Goal weight must be at least 20 kg' } })}
                       className={`mt-1 block w-full px-4 py-3 border ${theme === 'dark' ? 'bg-gray-700 border-gray-600 focus:ring-yellow-400 focus:border-yellow-400' : 'bg-white border-gray-300 focus:ring-blue-500 focus:border-blue-500'} rounded-lg shadow-sm transition-all duration-300`}
                       placeholder={t.goalWeightPlaceholder || 'Enter goal weight'}
                       aria-label="Goal Weight"
@@ -936,8 +959,8 @@ const GYMForm = () => {
                     <p className={`text-sm ${theme === 'dark' ? 'text-gray-300' : 'text-gray-600'}`}>
                       {t.height || 'Height'}: {formData.height || 'Not provided'} cm<br />
                       {t.weight || 'Weight'}: {formData.weight || 'Not provided'} kg<br />
+                      {t.bmi || 'BMI'}: {formData.bmi || 'Not provided'} {formData.bmi ? `(${formData.bmi < 18.5 ? t.bmiUnderweight || 'Underweight' : formData.bmi < 25 ? t.bmiNormal || 'Normal' : formData.bmi < 30 ? t.bmiOverweight || 'Overweight' : t.bmiObese || 'Obese'})` : ''}<br />
                       {t.age || 'Age'}: {formData.age || 'Not provided'}<br />
-                      {t.bmi || 'BMI'}: {formData.bmi || 'Not provided'}<br />
                       {t.bloodType || 'Blood Type'}: {formData.bloodType || 'Not provided'}<br />
                       {t.goalWeight || 'Goal Weight'}: {formData.goalWeight || 'Not provided'} kg<br />
                       {t.medicalConditions || 'Medical Conditions'}: {formData.medicalConditions || 'Not provided'}<br />

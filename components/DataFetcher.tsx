@@ -86,17 +86,37 @@ export default function DataFetcher({ refreshTrigger, searchQuery, theme }: Data
           membership: data.membership || undefined,
           status: data.status || undefined,
           statusColor: data.statusColor || undefined,
-          payed: data.payed || false,
+          payment: data.payment,
+          paymentStartDate: data.paymentStartDate || undefined,
           actionDelete: data.actionDelete || 'delete',
           actionDetail: data.actionDetail || 'detail',
-          actionPayed: data.actionPayed || 'payed',
+          actionPayed: data.actionPayed || 'payment',
           category: data.category || 'Uncategorized',
           ...data,
         };
       });
 
+      // Check and update payment status for expired memberships
+      const updatedMembers = await Promise.all(
+        memberData.map(async (member) => {
+          if (member.payment === 'Payed' && member.paymentStartDate) {
+            const startDate = new Date(member.paymentStartDate);
+            const currentDate = new Date();
+            const diffTime = Math.abs(currentDate.getTime() - startDate.getTime());
+            const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+            
+            if (diffDays > 30) {
+              const memberRef = doc(db, 'GYM', member.id);
+              await updateDoc(memberRef, { payment: 'Not Payed', paymentStartDate: null });
+              return { ...member, payment: 'Not Payed', paymentStartDate: null };
+            }
+          }
+          return member;
+        })
+      );
+
       // Group members by category
-      memberData.forEach((member) => {
+      updatedMembers.forEach((member) => {
         const category = member.category || 'Uncategorized';
         if (!allMembers[category]) {
           allMembers[category] = [];
@@ -133,21 +153,22 @@ export default function DataFetcher({ refreshTrigger, searchQuery, theme }: Data
           status: data.status || 'Unknown',
           statusColor: data.statusColor || 'text-gray-500',
           collectionType: 'GYM',
-          payed: data.payed || false,
+          payment: data.payment,
+          paymentStartDate: data.paymentStartDate || undefined,
           actionDelete: data.actionDelete || 'delete',
           actionDetail: data.actionDetail || 'detail',
-          actionPayed: data.actionPayed || 'payed',
+          actionPayed: data.actionPayed || 'payment',
           category: data.category || 'Uncategorized',
           ...data,
         };
         setDetailsModal({ isOpen: true, member: freshMember });
       } else {
         console.warn(`Member ${member.id} not found in GYM`);
-        setDetailsModal({ isOpen: true, member: { ...member, name: member.name || 'Unknown', email: member.email || 'Unknown', payed: member.payed || false, actionPayed: member.actionPayed || 'payed' } });
+        setDetailsModal({ isOpen: true, member: { ...member, name: member.name || 'Unknown', email: member.email || 'Unknown', payment: member.payment, paymentStartDate: member.paymentStartDate || undefined, actionPayed: member.actionPayed || 'payment' } });
       }
     } catch (error) {
       console.error('Error fetching member details:', error);
-      setDetailsModal({ isOpen: true, member: { ...member, name: member.name || 'Unknown', email: member.email || 'Unknown', payed: member.payed || false, actionPayed: member.actionPayed || 'payed' } });
+      setDetailsModal({ isOpen: true, member: { ...member, name: member.name || 'Unknown', email: member.email || 'Unknown', payment: member.payment, paymentStartDate: member.paymentStartDate || undefined, actionPayed: member.actionPayed || 'payment' } });
     }
   };
 
@@ -174,12 +195,20 @@ export default function DataFetcher({ refreshTrigger, searchQuery, theme }: Data
     }
   };
 
-  const handleSetPayed = async (id: string, category: string, currentPayed: boolean) => {
+  const handleSetPayment = async (id: string, category: string, newPaymentStatus: string) => {
     try {
       const memberRef = doc(db, 'GYM', id);
-      await updateDoc(memberRef, {
-        payed: !currentPayed,
-      });
+      const updateData: { payment: string; paymentStartDate?: string | null } = {
+        payment: newPaymentStatus,
+      };
+      
+      if (newPaymentStatus === 'Payed') {
+        updateData.paymentStartDate = new Date().toISOString();
+      } else {
+        updateData.paymentStartDate = memberRef.paymentStartDate || new Date().toISOString();
+      }
+
+      await updateDoc(memberRef, updateData);
 
       setMembers((prev) => ({
         ...prev,
@@ -187,14 +216,31 @@ export default function DataFetcher({ refreshTrigger, searchQuery, theme }: Data
           member.id === id
             ? {
                 ...member,
-                payed: !currentPayed,
+                payment: newPaymentStatus,
+                paymentStartDate: newPaymentStatus === 'Payed' ? new Date().toISOString() : (member.paymentStartDate || new Date().toISOString()),
               }
             : member
         ),
       }));
     } catch (error) {
-      console.error('Error updating payed status:', error);
-      setFetchError('Failed to update payed status. Please try again.');
+      console.error('Error updating payment status:', error);
+      setFetchError('Failed to update payment status. Please try again.');
+    }
+  };
+
+  const calculateDaysDisplay = (paymentStatus: string, paymentStartDate?: string): string => {
+    if (!paymentStartDate) return 'N/A';
+    const startDate = new Date(paymentStartDate);
+    const currentDate = new Date();
+    const diffTime = Math.abs(currentDate.getTime() - startDate.getTime());
+    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+    
+    if (paymentStatus === 'Payed') {
+      const daysLeft = 30 - diffDays;
+      return daysLeft > 0 ? `${daysLeft} days left` : 'Expired';
+    } else {
+      const daysPassed = Math.min(diffDays, 30); // Cap at 30 days
+      return `${daysPassed} day${daysPassed === 1 ? '' : 's'} passed`;
     }
   };
 
@@ -232,7 +278,7 @@ export default function DataFetcher({ refreshTrigger, searchQuery, theme }: Data
       {fetchError && <div className="text-red-500 mb-4">{fetchError}</div>}
 
       {!isLoading && collectionMembers.length === 0 && !fetchError && (
-        <div className={`text-sm mb-4 ${theme === 'light' ? 'text-gray-500' : 'text-gray-300'}`}>
+        <div className={`text-sm mb-4 ${theme === 'light' ? 'text-gray-600' : 'text-gray-300'}`}>
           No members found in {category}
         </div>
       )}
@@ -247,7 +293,8 @@ export default function DataFetcher({ refreshTrigger, searchQuery, theme }: Data
                 <th className="py-4 px-2">Name</th>
                 <th className="py-4 px-2">Email</th>
                 <th className="py-4 px-2">Membership</th>
-                <th className="py-4 px-2">Payed</th>
+                <th className="py-4 px-2">Payment</th>
+                <th className="py-4 px-2">Days Status</th>
                 <th className="py-4 px-2">Actions</th>
               </tr>
             </thead>
@@ -268,7 +315,33 @@ export default function DataFetcher({ refreshTrigger, searchQuery, theme }: Data
                     <td className="py-4 px-2">{member.name}</td>
                     <td className="py-4 px-2">{member.email}</td>
                     <td className="py-4 px-2">{member.membership}</td>
-                    <td className="py-4 px-2">{member.payed ? 'Yes' : 'No'}</td>
+                    <td className="py-4 px-2">
+                      {member.payment !== undefined ? (
+                        <select
+                          value={member.payment}
+                          onChange={(e) => handleSetPayment(member.id, member.category || 'Uncategorized', e.target.value)}
+                          className={`px-3 py-1 rounded-lg text-sm ${
+                            theme === 'light'
+                              ? 'bg-green-500 text-white hover:bg-green-600'
+                              : 'bg-gray-700 text-white hover:bg-gray-600'
+                          } transition-colors duration-200`}
+                        >
+                          <option value="Payed">Payed</option>
+                          <option value="Not Payed">Not Payed</option>
+                        </select>
+                      ) : (
+                        'N/A'
+                      )}
+                    </td>
+                    <td className="py-4 px-2">
+                      <span
+                        className={`inline-block animate-pulse ${
+                          theme === 'light' ? 'text-blue-600' : 'text-blue-300'
+                        }`}
+                      >
+                        {calculateDaysDisplay(member.payment, member.paymentStartDate)}
+                      </span>
+                    </td>
                     <td className="py-4 px-2 flex space-x-2">
                       <button
                         onClick={() => openDetailsModal(member)}
@@ -280,17 +353,6 @@ export default function DataFetcher({ refreshTrigger, searchQuery, theme }: Data
                         title={member.actionDetail}
                       >
                         {member.actionDetail}
-                      </button>
-                      <button
-                        onClick={() => handleSetPayed(member.id, member.category || 'Uncategorized', member.payed)}
-                        className={`px-3 py-1 rounded-lg text-sm ${
-                          theme === 'light'
-                            ? 'bg-green-500 text-white hover:bg-green-600'
-                            : 'bg-gray-700 text-white hover:bg-gray-600'
-                        } transition-colors duration-200`}
-                        title={member.actionPayed}
-                      >
-                        {member.actionPayed}
                       </button>
                       <button
                         onClick={() => handleDelete(member.id)}
@@ -315,6 +377,16 @@ export default function DataFetcher({ refreshTrigger, searchQuery, theme }: Data
 
   return (
     <>
+      <style jsx>{`
+        @keyframes pulse {
+          0% { opacity: 1; }
+          50% { opacity: 0.5; }
+          100% { opacity: 1; }
+        }
+        .animate-pulse {
+          animation: pulse 2s ease-in-out infinite;
+        }
+      `}</style>
       {Object.keys(members).map((category) => (
         <div key={category}>{renderTable(category, members[category])}</div>
       ))}

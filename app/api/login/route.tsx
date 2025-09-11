@@ -1,8 +1,9 @@
+
 import { NextResponse, NextRequest } from "next/server";
 import jwt from "jsonwebtoken";
-import { auth, db, signInWithEmailAndPassword, collection, query, where, getDocs } from "../../fconfig"; // Adjusted to consistent Firebase config path
+import { auth, db, signInWithEmailAndPassword, collection, query, where, getDocs } from "../../fconfig";
 
-const JWT_SECRET = process.env.JWT_SECRET || "vN7tL2mQ9rP3kW8yJ4hB5xC1dT6fM9zR2pK8wN3eJ5uQ4tL"; // Fallback for development; ensure JWT_SECRET is set in production
+const JWT_SECRET = process.env.JWT_SECRET || "vN7tL2mQ9rP3kW8yJ4hB5xC1dT6fM9zR2pK8wN3eJ5uQ4tL";
 
 // Validate environment variables at runtime
 if (!JWT_SECRET) {
@@ -98,13 +99,12 @@ export async function POST(request: NextRequest) {
 
     return response;
   } catch (error: unknown) {
-    // Type error as unknown and narrow it
     let errorMessage = "Login failed. Please check your credentials.";
     let status = 401;
 
     if (error instanceof Error) {
       console.error("Login error:", {
-        code: (error as any).code, // Handle Firebase-specific error code
+        code: (error as any).code,
         message: error.message,
         stack: error.stack,
       });

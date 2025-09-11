@@ -1,4 +1,3 @@
-
 'use client';
 
 import { Search, XCircle, ChevronDown, X } from 'lucide-react';
@@ -24,6 +23,7 @@ interface CollectionItem {
   email?: string;
   phoneNumber?: string;
   paymentStatus?: string;
+  photoURL?: string;
   [key: string]: any;
 }
 
@@ -35,7 +35,9 @@ export default function SearchComponent({ searchQuery, setSearchQuery, theme, us
   const [searchByMembership, setSearchByMembership] = useState(false);
   const [selectedItem, setSelectedItem] = useState<CollectionItem | null>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
-  const categories = ['All', 'Gym', 'Karate', 'Earobics'];
+  const [isImageModalOpen, setIsImageModalOpen] = useState(false);
+  const [selectedImage, setSelectedImage] = useState<string | null>(null);
+  const categories = ['All', 'Gym', 'Karate', 'Earobics', 'Personal Training'];
   const context = useContext(ThemeContext);
 
   if (!context) {
@@ -53,40 +55,51 @@ export default function SearchComponent({ searchQuery, setSearchQuery, theme, us
     let results: CollectionItem[] = [];
 
     try {
-      const collectionsToQuery = category === 'All' ? categories.slice(1) : [category];
-
-      for (const col of collectionsToQuery) {
-        const colRef = collection(db, col.toLowerCase());
-        const snapshot = await getDocs(colRef);
-        const docs = snapshot.docs.map((doc) => ({
+      // Only query the "gym" collection
+      const colRef = collection(db, 'GYM');
+      const snapshot = await getDocs(colRef);
+      const docs = snapshot.docs.map((doc) => {
+        const data = doc.data();
+        // Use the 'photoURL' field as the Cloudinary URL, fallback to undefined if not present
+        const photoURL = data.photoURL ? data.photoURL : undefined;
+        return {
           id: doc.id,
-          ...doc.data(),
-          category: col,
-        })) as CollectionItem[];
+          ...data,
+          photoURL, // Ensure photoURL is included for consistency
+        };
+      }) as CollectionItem[];
 
-        results = results.concat(
-          docs.filter((item) => {
-            if (searchByMembership) {
-              return (
-                item.membershipType &&
-                typeof item.membershipType === 'string' &&
-                fuzzysearch(queryText.toLowerCase(), item.membershipType.toLowerCase())
-              );
-            } else {
-              const fullName = `${item.firstName || ''} ${item.lastName || ''}`.trim();
-              return (
-                (item.firstName &&
-                  typeof item.firstName === 'string' &&
-                  fuzzysearch(queryText.toLowerCase(), item.firstName.toLowerCase())) ||
-                (item.lastName &&
-                  typeof item.lastName === 'string' &&
-                  fuzzysearch(queryText.toLowerCase(), item.lastName.toLowerCase())) ||
-                (fullName && fuzzysearch(queryText.toLowerCase(), fullName.toLowerCase()))
-              );
-            }
-          })
+      // Filter by category first
+      let filteredDocs = docs;
+      if (category !== 'All') {
+        filteredDocs = docs.filter((item) => 
+          item.category && 
+          typeof item.category === 'string' && 
+          item.category.toLowerCase() === category.toLowerCase()
         );
       }
+
+      // Then filter by search query
+      results = filteredDocs.filter((item) => {
+        if (searchByMembership) {
+          return (
+            item.membershipType &&
+            typeof item.membershipType === 'string' &&
+            fuzzysearch(queryText.toLowerCase(), item.membershipType.toLowerCase())
+          );
+        } else {
+          const fullName = `${item.firstName || ''} ${item.lastName || ''}`.trim();
+          return (
+            (item.firstName &&
+              typeof item.firstName === 'string' &&
+              fuzzysearch(queryText.toLowerCase(), item.firstName.toLowerCase())) ||
+            (item.lastName &&
+              typeof item.lastName === 'string' &&
+              fuzzysearch(queryText.toLowerCase(), item.lastName.toLowerCase())) ||
+            (fullName && fuzzysearch(queryText.toLowerCase(), fullName.toLowerCase()))
+          );
+        }
+      });
 
       setSearchResults(results);
     } catch (error) {
@@ -105,7 +118,7 @@ export default function SearchComponent({ searchQuery, setSearchQuery, theme, us
 
   const handlePaid = async (item: CollectionItem) => {
     try {
-      const docRef = doc(db, item.category.toLowerCase(), item.id);
+      const docRef = doc(db, 'GYM', item.id); // Always update in gym collection
       await updateDoc(docRef, { paymentStatus: 'Paid' });
       setSearchResults((prev) =>
         prev.map((i) => (i.id === item.id ? { ...i, paymentStatus: 'Paid' } : i))
@@ -117,7 +130,7 @@ export default function SearchComponent({ searchQuery, setSearchQuery, theme, us
 
   const handlePending = async (item: CollectionItem) => {
     try {
-      const docRef = doc(db, item.category.toLowerCase(), item.id);
+      const docRef = doc(db, 'GYM', item.id); // Always update in gym collection
       await updateDoc(docRef, { paymentStatus: 'Pending' });
       setSearchResults((prev) =>
         prev.map((i) => (i.id === item.id ? { ...i, paymentStatus: 'Pending' } : i))
@@ -135,13 +148,18 @@ export default function SearchComponent({ searchQuery, setSearchQuery, theme, us
   const handleDelete = async (item: CollectionItem) => {
     if (window.confirm(`Are you sure you want to delete ${item.firstName} ${item.lastName}?`)) {
       try {
-        const docRef = doc(db, item.category.toLowerCase(), item.id);
+        const docRef = doc(db, 'GYM', item.id); // Always delete from gym collection
         await deleteDoc(docRef);
         setSearchResults((prev) => prev.filter((i) => i.id !== item.id));
       } catch (error) {
         console.error('Error deleting document:', error);
       }
     }
+  };
+
+  const handleImageClick = (imageUrl: string) => {
+    setSelectedImage(imageUrl);
+    setIsImageModalOpen(true);
   };
 
   useEffect(() => {
@@ -169,7 +187,7 @@ export default function SearchComponent({ searchQuery, setSearchQuery, theme, us
           </button>
           {isDropdownOpen && (
             <div
-              className={`absolute mt-2 w-40 rounded-lg shadow-lg z-10 ${
+              className={`absolute mt-2 w-48 rounded-lg shadow-lg z-10 ${
                 theme === 'light' ? 'bg-white text-gray-900' : 'bg-gray-800 text-white'
               }`}
             >
@@ -269,6 +287,14 @@ export default function SearchComponent({ searchQuery, setSearchQuery, theme, us
                   <tr>
                     <th
                       scope="col"
+                      className={`w-[10%] px-4 py-3 text-left text-xs font-medium ${
+                        theme === 'light' ? 'text-gray-600' : 'text-gray-300'
+                      } uppercase tracking-wider`}
+                    >
+                      Photo
+                    </th>
+                    <th
+                      scope="col"
                       className={`w-[15%] px-4 py-3 text-left text-xs font-medium ${
                         theme === 'light' ? 'text-gray-600' : 'text-gray-300'
                       } uppercase tracking-wider`}
@@ -301,7 +327,7 @@ export default function SearchComponent({ searchQuery, setSearchQuery, theme, us
                     </th>
                     <th
                       scope="col"
-                      className={`w-[20%] px-4 py-3 text-left text-xs font-medium ${
+                      className={`w-[15%] px-4 py-3 text-left text-xs font-medium ${
                         theme === 'light' ? 'text-gray-600' : 'text-gray-300'
                       } uppercase tracking-wider`}
                     >
@@ -309,7 +335,7 @@ export default function SearchComponent({ searchQuery, setSearchQuery, theme, us
                     </th>
                     <th
                       scope="col"
-                      className={`w-[20%] px-4 py-3 text-left text-xs font-medium ${
+                      className={`w-[15%] px-4 py-3 text-left text-xs font-medium ${
                         theme === 'light' ? 'text-gray-600' : 'text-gray-300'
                       } uppercase tracking-wider`}
                     >
@@ -325,6 +351,29 @@ export default function SearchComponent({ searchQuery, setSearchQuery, theme, us
                       key={item.id}
                       className={theme === 'light' ? 'hover:bg-blue-50' : 'hover:bg-gray-700'}
                     >
+                      <td className="px-4 py-4 max-w-[10%]">
+                        {item.photoURL ? (
+                          <button 
+                            onClick={() => handleImageClick(item.photoURL!)}
+                            className="focus:outline-none"
+                          >
+                            <img 
+                              src={item.photoURL} 
+                              alt={`${item.firstName} ${item.lastName}`}
+                              className="w-12 h-12 rounded-full object-cover cursor-pointer hover:opacity-80 transition-opacity duration-200"
+                            />
+                          </button>
+                        ) : (
+                          <div className={`w-12 h-12 rounded-full flex items-center justify-center ${
+                            theme === 'light' ? 'bg-gray-200 text-gray-600' : 'bg-gray-600 text-gray-300'
+                          }`}>
+                            <span className="text-xs">
+                              {item.firstName ? item.firstName.charAt(0) : ''}
+                              {item.lastName ? item.lastName.charAt(0) : ''}
+                            </span>
+                          </div>
+                        )}
+                      </td>
                       <td
                         className={`px-4 py-4 text-sm ${
                           theme === 'light' ? 'text-gray-900' : 'text-gray-300'
@@ -356,14 +405,14 @@ export default function SearchComponent({ searchQuery, setSearchQuery, theme, us
                       <td
                         className={`px-4 py-4 text-sm ${
                           theme === 'light' ? 'text-gray-500' : 'text-gray-300'
-                        } truncate max-w-[20%]`}
+                        } truncate max-w-[15%]`}
                       >
                         {item.email || 'N/A'}
                       </td>
                       <td
                         className={`px-4 py-4 text-sm ${
                           theme === 'light' ? 'text-gray-900' : 'text-gray-300'
-                        } max-w-[20%]`}
+                        } max-w-[15%]`}
                       >
                         <div className="flex gap-1">
                           <button
@@ -447,6 +496,32 @@ export default function SearchComponent({ searchQuery, setSearchQuery, theme, us
                 <X size={20} className={theme === 'light' ? 'text-white' : 'text-white'} />
               </button>
             </div>
+            
+            {/* Photo in Modal */}
+            <div className="flex justify-center mb-4">
+              {selectedItem.photoURL ? (
+                <button 
+                  onClick={() => handleImageClick(selectedItem.photoURL!)}
+                  className="focus:outline-none"
+                >
+                  <img 
+                    src={selectedItem.photoURL} 
+                    alt={`${selectedItem.firstName} ${selectedItem.lastName}`}
+                    className="w-24 h-24 rounded-full object-cover border-4 border-white shadow-md cursor-pointer hover:opacity-80 transition-opacity duration-200"
+                  />
+                </button>
+              ) : (
+                <div className={`w-24 h-24 rounded-full flex items-center justify-center border-4 border-white shadow-md ${
+                  theme === 'light' ? 'bg-gray-200 text-gray-600' : 'bg-gray-600 text-gray-300'
+                }`}>
+                  <span className="text-2xl">
+                    {selectedItem.firstName ? selectedItem.firstName.charAt(0) : ''}
+                    {selectedItem.lastName ? selectedItem.lastName.charAt(0) : ''}
+                  </span>
+                </div>
+              )}
+            </div>
+            
             <div className="space-y-2">
               <p>
                 <strong className={theme === 'light' ? 'text-zinc-800' : 'text-white'}>First Name:</strong>{' '}
@@ -479,7 +554,7 @@ export default function SearchComponent({ searchQuery, setSearchQuery, theme, us
               {Object.entries(selectedItem)
                 .filter(
                   ([key]) =>
-                    !['id', 'firstName', 'lastName', 'membershipType', 'category', 'email', 'phoneNumber', 'paymentStatus'].includes(
+                    !['id', 'firstName', 'lastName', 'membershipType', 'category', 'email', 'phoneNumber', 'paymentStatus', 'photoURL'].includes(
                       key
                     )
                 )
@@ -489,6 +564,30 @@ export default function SearchComponent({ searchQuery, setSearchQuery, theme, us
                     {value || 'N/A'}
                   </p>
                 ))}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Image Modal */}
+      {isImageModalOpen && selectedImage && (
+        <div 
+          className="fixed inset-0 bg-black bg-opacity-90 flex items-center justify-center z-50 p-4"
+          onClick={() => setIsImageModalOpen(false)}
+        >
+          <div className="relative max-w-4xl w-full max-h-full">
+            <button
+              onClick={() => setIsImageModalOpen(false)}
+              className="absolute -top-10 right-0 text-white hover:text-gray-300 z-10"
+            >
+              <X size={30} />
+            </button>
+            <div className="flex justify-center items-center h-full">
+              <img 
+                src={selectedImage} 
+                alt="Enlarged profile"
+                className="max-w-full max-h-full object-contain rounded-lg"
+              />
             </div>
           </div>
         </div>
