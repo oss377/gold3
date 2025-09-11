@@ -64,6 +64,7 @@ export default function UserDashboard() {
   const [searchQuery, setSearchQuery] = useState('');
   const [errorMessage, setErrorMessage] = useState('');
   const [isAuthorized, setIsAuthorized] = useState(false);
+<<<<<<< HEAD
   const [userEmail, setUserEmail] = useState('');
   const [loading, setLoading] = useState(true);
   const [userCategory, setUserCategory] = useState('');
@@ -82,11 +83,22 @@ export default function UserDashboard() {
   // Refs for logo image fallbacks
   const sidebarIconRef = useRef(null);
   const headerIconRef = useRef(null);
+=======
+  const [userEmail, setUserEmail] = useState(''); // New state for user email
+  const router = useRouter();
+  const themeContext = useContext(ThemeContext);
+  const languageContext = useContext(LanguageContext);
+>>>>>>> 6ad8c0f427699eee8a6c2db4967cbafc13f0fc0d
 
+  // Check for ThemeContext
   if (!themeContext) {
     throw new Error('UserDashboard must be used within a ThemeProvider');
   }
 
+<<<<<<< HEAD
+=======
+  // Check for LanguageContext
+>>>>>>> 6ad8c0f427699eee8a6c2db4967cbafc13f0fc0d
   if (!languageContext) {
     throw new Error('UserDashboard must be used within a LanguageProvider');
   }
@@ -117,10 +129,15 @@ export default function UserDashboard() {
 
         const data = await response.json();
         setIsAuthorized(true);
+<<<<<<< HEAD
         setUserEmail(data.email || 'Unknown');
         console.log('User authorized:', data.email);
       } catch (error) {
         console.error('Session validation error:', error);
+=======
+        setUserEmail(data.email || 'Unknown'); // Set email from API response
+      } catch (error) {
+>>>>>>> 6ad8c0f427699eee8a6c2db4967cbafc13f0fc0d
         toast.error(t.pleaseLogin || "Please log in to access this page");
         router.push("/");
       }
@@ -128,6 +145,7 @@ export default function UserDashboard() {
 
     validateSession();
   }, [router, t]);
+<<<<<<< HEAD
 
   useEffect(() => {
     const fetchData = async () => {
@@ -248,6 +266,8 @@ export default function UserDashboard() {
 
     fetchData();
   }, [isAuthorized, userEmail, t]);
+=======
+>>>>>>> 6ad8c0f427699eee8a6c2db4967cbafc13f0fc0d
 
   const navItems = [
     { name: t.dashboard || 'Dashboard', icon: BarChart, href: '/user' },
@@ -282,8 +302,11 @@ export default function UserDashboard() {
 
   const handleConsultancy = () => router.push('/consultancy');
 
+<<<<<<< HEAD
   const handlePay = () => router.push('/payment');
 
+=======
+>>>>>>> 6ad8c0f427699eee8a6c2db4967cbafc13f0fc0d
   const handleMessageClick = async () => {
     console.log('Message icon clicked! Navigating to messages...');
     try {
@@ -459,6 +482,7 @@ export default function UserDashboard() {
             >
               {isSidebarOpen ? <X size={28} /> : <Menu size={28} />}
             </button>
+<<<<<<< HEAD
             <div className="flex items-center space-x-3">
               <div className="relative w-10 h-10">
                 <Image
@@ -488,6 +512,21 @@ export default function UserDashboard() {
                   {t.welcome || 'Welcome'}: {userEmail} | {t.category || 'Category'}: {userCategory}
                 </p>
               </div>
+=======
+            <div>
+              <h2
+                className={`text-2xl font-semibold tracking-tight ${
+                  theme === 'light' ? 'text-zinc-800' : 'text-white'
+                }`}
+              >
+                {t.dashboard || 'User Dashboard'}
+              </h2>
+              <p
+                className={`text-sm ${theme === 'light' ? 'text-gray-600' : 'text-gray-300'}`}
+              >
+                {t.welcome || 'Welcome'}: {userEmail}
+              </p>
+>>>>>>> 6ad8c0f427699eee8a6c2db4967cbafc13f0fc0d
             </div>
           </div>
           <div className="flex items-center space-x-4">
@@ -505,9 +544,15 @@ export default function UserDashboard() {
                 onChange={(e) => setSearchQuery(e.target.value)}
                 className={`pl-10 pr-4 py-2 rounded-2xl border ${
                   theme === 'light'
+<<<<<<< HEAD
                     ? 'bg-white bg-opacity-90 border-blue-100 text-blue-900'
                     : 'bg-blue-800 bg-opacity-90 border-teal-800 text-white'
                 } focus:outline-none focus:ring-2 focus:ring-teal-600 transition-all duration-300`}
+=======
+                    ? 'bg-white border-gray-300 text-gray-900'
+                    : 'bg-gray-700 border-gray-600 text-white'
+                } focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-all duration-200`}
+>>>>>>> 6ad8c0f427699eee8a6c2db4967cbafc13f0fc0d
                 aria-label={t.searchPlaceholder || 'Search classes, trainers'}
               />
             </div>
