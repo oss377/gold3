@@ -1,8 +1,9 @@
+
 'use client';
 
-import { useState, useEffect, useContext, useRef } from 'react';
+import { useState, useEffect, useContext, useRef, Dispatch, SetStateAction } from 'react';
 import { useRouter } from 'next/navigation';
-import { User, LogIn, Home as HomeIcon, Video, Heart, Users, Menu, X, Sun, Moon, Trash2, Globe } from 'lucide-react';
+import { User, LogIn, Home as HomeIcon, Video, Heart, Users, Menu, X, Sun, Moon, Globe } from 'lucide-react';
 import { db } from '../app/fconfig';
 import { collection, getDocs, deleteDoc, doc, updateDoc } from 'firebase/firestore';
 import Login from '../components/login';
@@ -12,7 +13,96 @@ import LanguageContext from '../context/LanguageContext';
 import Head from 'next/head';
 import Image from 'next/image';
 
-function WelcomeCard({ theme, t }) {
+// Interface for Translation
+interface Translation {
+  welcome?: string;
+  getStarted?: string;
+  discoverWorkouts?: string;
+  startConsultancy?: string;
+  browseWorkouts?: string;
+  joinCommunity?: string;
+  connectCommunity?: string;
+  joinChat?: string;
+  home?: string;
+  workouts?: string;
+  favorites?: string;
+  login?: string;
+  register?: string;
+  darkMode?: string;
+  appTitle?: string;
+  heroTitle?: string;
+  heroSubtitle?: string;
+  getStartedButton?: string;
+  joinNow?: string;
+  signUpText?: string;
+  welcomeBack?: string;
+  chooseProgram?: string;
+  registerAerobics?: string;
+  registerGym?: string;
+  registerKarate?: string;
+  registerconsultancy?: string;
+  alreadyAccount?: string;
+  company?: string;
+  about?: string;
+  careers?: string;
+  blog?: string;
+  support?: string;
+  help?: string;
+  contact?: string;
+  faq?: string;
+  legal?: string;
+  terms?: string;
+  privacy?: string;
+  cookies?: string;
+  footerText?: string;
+}
+
+// Interface for Workout
+interface Workout {
+  id: string;
+  soon?: boolean;
+  [key: string]: any;
+}
+
+// Interface for Category
+interface Category {
+  id: string;
+  name: string;
+  icon: string;
+}
+
+// Interface for NavItem
+interface NavItem {
+  name: string;
+  icon: React.ComponentType<{ size: number; className?: string }>;
+  href?: string;
+}
+
+// Interface for Workouts State
+interface Workouts {
+  karate: Workout[];
+  aerobics: Workout[];
+  gym: Workout[];
+}
+
+// Interface for VideoFetch Props
+interface VideoFetchProps {
+  setWorkouts: Dispatch<SetStateAction<Workouts>>;
+  setLoading: Dispatch<SetStateAction<boolean>>;
+  loading: boolean;
+  categories: Category[];
+  handleDelete: (categoryId: string, workoutId: string) => Promise<void>;
+  handleTogglePending: (categoryId: string, workoutId: string, currentStatus: boolean) => Promise<void>;
+}
+
+// Interface for Login Props
+interface LoginProps {
+  onSubmit: (e: React.FormEvent<HTMLFormElement>) => void;
+  toggleAuthType: Dispatch<SetStateAction<string>>;
+  theme: string;
+}
+
+function WelcomeCard({ theme, t }: { theme: string; t: Translation }) {
   return (
     <div
       className={`relative rounded-3xl p-8 shadow-2xl transform hover:-translate-y-2 transition-all duration-500 ${
@@ -65,7 +155,7 @@ function WelcomeCard({ theme, t }) {
   );
 }
 
-function JoinGroupChatCard({ theme, t }) {
+function JoinGroupChatCard({ theme, t }: { theme: string; t: Translation }) {
   return (
     <div
       className={`rounded-3xl shadow-2xl p-8 hover:shadow-3xl transform hover:-translate-y-2 transition-all duration-500 border relative overflow-hidden ${
@@ -91,7 +181,7 @@ function JoinGroupChatCard({ theme, t }) {
       </p>
       <div className="text-center">
         <button
-          onClick={() => window.location.href = '/message'}
+          onClick={() => window.location.href = '/publicMessage'}
           className={`px-6 py-3 rounded-2xl font-semibold transition-all duration-300 hover:scale-105 hover:shadow-lg ${
             theme === 'light' ? 'bg-teal-600 hover:bg-teal-700 text-white' : 'bg-teal-800 hover:bg-teal-700 text-white'
           }`}
@@ -104,36 +194,37 @@ function JoinGroupChatCard({ theme, t }) {
 }
 
 export default function Home() {
-  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
-  const [authModalOpen, setAuthModalOpen] = useState(false);
-  const [authType, setAuthType] = useState('login');
-  const [workouts, setWorkouts] = useState({
+  const [isSidebarOpen, setIsSidebarOpen] = useState<boolean>(false);
+  const [authModalOpen, setAuthModalOpen] = useState<boolean>(false);
+  const [authType, setAuthType] = useState<string>('login');
+  const [workouts, setWorkouts] = useState<Workouts>({
     karate: [],
     aerobics: [],
     gym: [],
   });
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState<boolean>(true);
   const router = useRouter();
   const { theme, toggleTheme } = useContext(ThemeContext);
-  const { language = 'en', toggleLanguage = () => {}, t = {} } = useContext(LanguageContext) || {};
+  const languageContext = useContext(LanguageContext);
+  const { language = 'en', toggleLanguage = () => {}, t = {} as Translation } = languageContext || {};
 
   // Add a ref for the fallback icon
-  const fallbackIconRef = useRef(null);
+  const fallbackIconRef = useRef<SVGSVGElement | null>(null);
 
-  const handleImageError = (e) => {
+  const handleImageError = (e: React.SyntheticEvent<HTMLImageElement>) => {
     e.currentTarget.style.display = 'none';
     if (fallbackIconRef.current) {
       fallbackIconRef.current.style.display = 'block';
     }
   };
 
-  const categories = [
+  const categories: Category[] = [
     { id: 'karate', name: 'Karate', icon: '🏃‍♂️' },
     { id: 'aerobics', name: 'Aerobics', icon: '💃' },
     { id: 'gym', name: 'Gym', icon: '🏋️‍♂️' },
   ];
 
-  const navItems = [
+  const navItems: NavItem[] = [
     { name: t.home || 'Home', icon: HomeIcon, href: '/' },
     { name: t.workouts || 'Workouts', icon: Video, href: '/workouts' },
     { name: t.favorites || 'Favorites', icon: Heart, href: '/favorites' },
@@ -146,13 +237,17 @@ export default function Home() {
     const fetchWorkouts = async () => {
       try {
         setLoading(true);
-        const fetchedWorkouts = {};
+        const fetchedWorkouts: Workouts = {
+          karate: [],
+          aerobics: [],
+          gym: [],
+        };
         for (const category of categories) {
           const querySnapshot = await getDocs(collection(db, category.id));
-          fetchedWorkouts[category.id] = querySnapshot.docs.map(doc => ({
+          fetchedWorkouts[category.id as keyof Workouts] = querySnapshot.docs.map(doc => ({
             id: doc.id,
             ...doc.data(),
-          }));
+          })) as Workout[];
         }
         setWorkouts(fetchedWorkouts);
       } catch (error) {
@@ -165,12 +260,12 @@ export default function Home() {
   }, []);
 
   // Delete a workout
-  const handleDelete = async (categoryId, workoutId) => {
+  const handleDelete = async (categoryId: string, workoutId: string) => {
     try {
       await deleteDoc(doc(db, categoryId, workoutId));
       setWorkouts(prev => ({
         ...prev,
-        [categoryId]: prev[categoryId].filter(workout => workout.id !== workoutId),
+        [categoryId as keyof Workouts]: prev[categoryId as keyof Workouts].filter(workout => workout.id !== workoutId),
       }));
     } catch (error) {
       console.error('Error deleting workout:', error);
@@ -178,13 +273,13 @@ export default function Home() {
   };
 
   // Toggle pending status
-  const handleTogglePending = async (categoryId, workoutId, currentStatus) => {
+  const handleTogglePending = async (categoryId: string, workoutId: string, currentStatus: boolean) => {
     try {
       const workoutRef = doc(db, categoryId, workoutId);
       await updateDoc(workoutRef, { soon: !currentStatus });
       setWorkouts(prev => ({
         ...prev,
-        [categoryId]: prev[categoryId].map(workout => 
+        [categoryId as keyof Workouts]: prev[categoryId as keyof Workouts].map(workout => 
           workout.id === workoutId ? { ...workout, soon: !currentStatus } : workout
         ),
       }));
@@ -196,7 +291,7 @@ export default function Home() {
   // Add keyboard accessibility for auth modal
   useEffect(() => {
     if (authModalOpen) {
-      const handleKeyDown = (e) => {
+      const handleKeyDown = (e: KeyboardEvent) => {
         if (e.key === 'Escape') setAuthModalOpen(false);
       };
       window.addEventListener('keydown', handleKeyDown);
@@ -206,16 +301,16 @@ export default function Home() {
 
   const toggleSidebar = () => setIsSidebarOpen(!isSidebarOpen);
 
-  const toggleAuthModal = (type) => {
+  const toggleAuthModal = (type: string) => {
     setAuthType(type);
     setAuthModalOpen(!authModalOpen);
   };
 
-  const handleLogin = (e) => {
+  const handleLogin = (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
-    const formData = new FormData(e.target);
-    const email = formData.get('email');
-    const password = formData.get('password');
+    const formData = new FormData(e.target as HTMLFormElement);
+    const email = formData.get('email') as string;
+    const password = formData.get('password') as string;
 
     const isAdmin = email === 'awekeadisie@gmail.com' && password === '123456';
 
@@ -459,9 +554,7 @@ export default function Home() {
               </p>
               <button
                 onClick={() => toggleAuthModal('register')}
-                className={`mt-6 px-8 py-3 rounded-2xl font-semibold transition-all duration-300 hover:scale-105 hover:shadow-lg ${
-                  theme === 'light' ? 'bg-teal-600 hover:bg-teal-700 text-white' : 'bg-teal-800 hover:bg-teal-700 text-white'
-                }`}
+                className={`{ mt-6 px-8 py-3 rounded-2xl font-semibold transition-all duration-300 hover:scale-105 hover:shadow-lg ${ theme === 'light' ? 'bg-teal-600 hover:bg-teal-700 text-white' : 'bg-teal-800 hover:bg-teal-700 text-white'}`}
               >
                 {t.getStartedButton || 'Join Now'}
               </button>
@@ -725,6 +818,4 @@ export default function Home() {
           </div>
         )}
       </div>
-    </div>
-  );
-}
+    </div> );}

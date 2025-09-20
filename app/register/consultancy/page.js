@@ -13,9 +13,10 @@ import { ChevronLeftIcon, ChevronRightIcon, CheckCircleIcon } from '@heroicons/r
 import { useRouter } from 'next/navigation';
 
 // Cloudinary configuration
-const CLOUDINARY_UPLOAD_PRESET = process.env.NEXT_PUBLIC_CLOUDINARY_UPLOAD_PRESET || 'goldgold';
+const CLOUDINARY_UPLOAD_PRESET = process.env.NEXT_PUBLIC_CLOUDINARY_UPLOAD_PRESET || 'photoupload';
 const CLOUDINARY_CLOUD_NAME = process.env.NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME || 'dnqsoezfo';
-const CLOUDINARY_FOLDER = process.env.NEXT_PUBLIC_CLOUDINARY_FOLDER || 'videos';
+const CLOUDINARY_FOLDER = process.env.NEXT_PUBLIC_CLOUDINARY_FOLDER || 'photoss';
+
 
 const GYMForm = () => {
   const { t } = useContext(LanguageContext);

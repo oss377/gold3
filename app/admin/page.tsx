@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useContext } from 'react';
+import { useState, useEffect, useContext, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import {
   Dumbbell,
@@ -94,6 +94,8 @@ export default function GymDashboard() {
   const { theme, toggleTheme } = useContext(ThemeContext);
   const { language, toggleLanguage, t } = useContext(LanguageContext);
 
+  const fallbackRef = useRef<SVGSVGElement>(null);
+
   useEffect(() => {
     const validateSessionAndFetchUser = async () => {
       try {
@@ -169,7 +171,7 @@ export default function GymDashboard() {
   };
 
   const handleMessageClick = () => {
-    router.push('/message');
+    router.push('/adminMessage');
   };
 
   const openUploadModal = () => setIsUploadModalOpen(true);
@@ -223,10 +225,11 @@ export default function GymDashboard() {
                 className="w-full h-full object-contain"
                 onError={(e) => {
                   e.currentTarget.style.display = 'none';
-                  e.currentTarget.nextSibling.style.display = 'block';
+                  if (fallbackRef.current) fallbackRef.current.style.display = 'block';
                 }}
               />
               <Dumbbell
+                ref={fallbackRef}
                 size={32}
                 className={`${theme === 'light' ? 'text-teal-600' : 'text-teal-300'} hidden`}
               />
@@ -334,6 +337,7 @@ export default function GymDashboard() {
             </h2>
           </div>
           <div className="flex items-center space-x-4">
+            {/* @ts-ignore */}
             <Notifications
               notificationCount={notifications}
               setNotificationCount={setNotifications}
@@ -398,8 +402,11 @@ export default function GymDashboard() {
         </header>
 
         {/* Modals */}
+        {/* @ts-ignore */}
         <VideoUploadModal isOpen={isUploadModalOpen} onClose={closeUploadModal} theme={theme} t={t} />
+        {/* @ts-ignore */}
         <RegisterMember isOpen={isRegisterModalOpen} onClose={closeRegisterModal} theme={theme} t={t} />
+        {/* @ts-ignore */}
         <UploadSchedule
           isOpen={isScheduleModalOpen}
           onClose={closeScheduleModal}
@@ -436,16 +443,18 @@ export default function GymDashboard() {
           </div>
 
           {/* Search Component */}
+          {/* @ts-ignore */}
           <SearchComponent searchQuery={searchQuery} setSearchQuery={setSearchQuery} theme={theme} t={t} />
 
           {/* Stats Cards or Placeholder */}
           {hasStats ? (
+          
             <DataFetcher
               refreshTrigger={refreshTrigger}
               searchQuery={searchQuery}
               theme={theme}
               t={t}
-              onStatsFetched={(stats) => {
+              onStatsFetched={(stats: any) => {
                 console.log('Fetched stats:', stats);
               }}
               onStatsStatus={setHasStats}

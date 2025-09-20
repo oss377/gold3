@@ -1,8 +1,8 @@
 'use client';
 
 import { useState, useEffect, useContext } from 'react';
-import { useRouter } from 'next/navigation';
-import { collection, query, orderBy, getDocs, addDoc, serverTimestamp, doc, getDoc } from 'firebase/firestore';
+import { useRouter, useSearchParams } from 'next/navigation';
+import { doc, getDoc, setDoc, updateDoc, arrayUnion } from 'firebase/firestore';
 import { db } from '../fconfig';
 import { toast } from 'react-toastify';
 import { ThemeContext } from '../../context/ThemeContext';
@@ -10,10 +10,10 @@ import { LanguageContext } from '../../context/LanguageContext';
 
 // Define interface for message
 interface Message {
-  id: string;
   content: string;
   senderEmail: string;
   senderName: string;
+  receiver: string;
   timestamp: string;
 }
 
@@ -24,6 +24,7 @@ export default function Messages() {
   const [userName, setUserName] = useState('');
   const [newMessage, setNewMessage] = useState('');
   const router = useRouter();
+  const searchParams = useSearchParams();
   const themeContext = useContext(ThemeContext);
   const languageContext = useContext(LanguageContext);
 
@@ -41,7 +42,34 @@ export default function Messages() {
   useEffect(() => {
     const validateSessionAndFetchUser = async () => {
       try {
-        // Validate session to get user email
+        // Get email from query parameters
+        const email = searchParams.get('email') || '';
+
+        if (!email) {
+          toast.error(t.pleaseLogin || 'Please log in to access this page');
+          router.push('/');
+          return;
+        }
+
+        const decodedEmail = decodeURIComponent(email);
+        setUserEmail(decodedEmail);
+        console.log('User email from query:', decodedEmail);
+
+        // Fetch user data from GYM collection
+        const userRef = doc(db, 'GYM', decodedEmail);
+        const userSnap = await getDoc(userRef);
+
+        if (userSnap.exists()) {
+          const userData = userSnap.data();
+          setUserName(userData.firstName || 'Unknown');
+          console.log('User firstName fetched from Firebase:', userData.firstName);
+        } else {
+          console.warn('User data not found in GYM collection for:', decodedEmail);
+          setUserName('Unknown');
+          toast.warn(t.userDataNotFound || 'User data not found. Please contact support.');
+        }
+
+        // Validate session to ensure user is authorized
         const response = await fetch('/api/validate', {
           method: 'GET',
           credentials: 'include',
@@ -54,32 +82,22 @@ export default function Messages() {
         }
 
         const data = await response.json();
-        const email = data.email || 'Unknown';
-        setUserEmail(email);
-        console.log('User authorized for messages:', email);
-
-        // Fetch user data from GYM collection
-        const userRef = doc(db, 'GYM', email);
-        const userSnap = await getDoc(userRef);
-
-        if (userSnap.exists()) {
-          const userData = userSnap.data();
-          setUserName(userData.firstName || 'Unknown');
-          console.log('User firstName fetched:', userData.firstName);
-        } else {
-          console.warn('User data not found in GYM collection for:', email);
-          setUserName('Unknown');
-          toast.warn(t.userDataNotFound || 'User data not found. Please contact support.');
+        if (data.email !== decodedEmail) {
+          console.warn('Session email does not match query email:', data.email, decodedEmail);
+          toast.error(t.pleaseLogin || 'Session mismatch. Please log in again.');
+          router.push('/');
         }
       } catch (error) {
         console.error('Session validation or user data fetch error:', error);
         toast.error(t.pleaseLogin || 'Please log in to access this page');
         router.push('/');
+      } finally {
+        setLoading(false);
       }
     };
 
     validateSessionAndFetchUser();
-  }, [router, t]);
+  }, [router, t, searchParams]);
 
   useEffect(() => {
     const fetchMessages = async () => {
@@ -90,19 +108,28 @@ export default function Messages() {
 
       setLoading(true);
       try {
-        const messagesQuery = query(
-          collection(db, 'messages'),
-          orderBy('timestamp', 'asc')
-        );
-        const messagesSnap = await getDocs(messagesQuery);
-        const fetchedMessages: Message[] = messagesSnap.docs.map((doc) => ({
-          id: doc.id,
-          ...doc.data(),
-        })) as Message[];
+        const messageDocRef = doc(db, 'messages', userEmail);
+        const messageSnap = await getDoc(messageDocRef);
 
-        setMessages(fetchedMessages);
-        console.log('Messages fetched:', fetchedMessages.length);
-      } catch (error) {
+        if (messageSnap.exists()) {
+          const messageData = messageSnap.data();
+          const fetchedMessages: Message[] = (messageData.messages || []).map((msg: any) => ({
+            content: msg.content || '',
+            senderEmail: msg.senderEmail || '',
+            senderName: msg.senderName || 'Unknown',
+            receiver: msg.receiver || 'Unknown',
+            timestamp: msg.timestamp || '',
+          }));
+
+          // Sort messages by timestamp (ascending)
+          fetchedMessages.sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
+          setMessages(fetchedMessages);
+          console.log('Messages fetched:', fetchedMessages.length);
+        } else {
+          console.log('No messages document found for:', userEmail);
+          setMessages([]);
+        }
+      } catch (error: any) {
         console.error('Error fetching messages:', error);
         toast.error(t.fetchError || 'Failed to fetch messages');
       } finally {
@@ -125,15 +152,30 @@ export default function Messages() {
       const messageData = {
         content: newMessage,
         senderEmail: userEmail,
-        senderName: userName,
-        timestamp: serverTimestamp(),
+        senderName: userName || 'Unknown',
+        receiver: 'admin',
+        timestamp: new Date().toISOString(),
       };
 
-      const docRef = await addDoc(collection(db, 'messages'), messageData);
+      const messageDocRef = doc(db, 'messages', userEmail);
+      const messageSnap = await getDoc(messageDocRef);
+
+      if (messageSnap.exists()) {
+        // Append to existing messages array
+        await updateDoc(messageDocRef, {
+          messages: arrayUnion(messageData),
+        });
+      } else {
+        // Create new document with messages array
+        await setDoc(messageDocRef, {
+          messages: [messageData],
+        });
+      }
+
       setMessages((prev) => [
         ...prev,
-        { id: docRef.id, ...messageData, timestamp: new Date().toISOString() },
-      ]);
+        messageData,
+      ].sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime()));
       setNewMessage('');
       toast.success(t.messageSent || 'Message sent successfully');
     } catch (error) {
@@ -177,13 +219,22 @@ export default function Messages() {
             : 'bg-gradient-to-r from-blue-900 to-teal-900 text-white'
         }`}
       >
-        <h2
-          className={`text-3xl font-extrabold tracking-tight ${
-            theme === 'light' ? 'text-blue-900' : 'text-white'
-          }`}
-        >
-          {t.messages || 'Messages'}
-        </h2>
+        <div className="flex items-center space-x-4">
+          <h2
+            className={`text-3xl font-extrabold tracking-tight ${
+              theme === 'light' ? 'text-blue-900' : 'text-white'
+            }`}
+          >
+            {t.messages || 'Messages'}
+          </h2>
+          <p
+            className={`text-lg font-semibold ${
+              theme === 'light' ? 'text-teal-600' : 'text-teal-300'
+            }`}
+          >
+            {t.welcome || 'Welcome'}, {userEmail || 'User'}
+          </p>
+        </div>
       </header>
 
       <main className={`flex-1 p-8 flex flex-col ${
@@ -202,11 +253,11 @@ export default function Messages() {
         >
           <div className="flex-1 flex flex-col space-y-4 max-h-[60vh] overflow-y-auto">
             {messages.length > 0 ? (
-              messages.map((message) => {
+              messages.map((message, index) => {
                 const isCurrentUser = message.senderEmail === userEmail;
                 return (
                   <div
-                    key={message.id}
+                    key={index}
                     className={`flex ${isCurrentUser ? 'justify-end' : 'justify-start'}`}
                   >
                     <div

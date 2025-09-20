@@ -1,4 +1,3 @@
-
 'use client';
 
 import { useState, useEffect, useContext, useRef } from 'react';
@@ -18,6 +17,8 @@ import {
   Globe,
   Loader2,
   CreditCard,
+  User,
+  Users,
 } from 'lucide-react';
 import Link from 'next/link';
 import Image from 'next/image';
@@ -64,8 +65,8 @@ export default function UserDashboard() {
   const [searchQuery, setSearchQuery] = useState('');
   const [errorMessage, setErrorMessage] = useState('');
   const [isAuthorized, setIsAuthorized] = useState(false);
-<<<<<<< HEAD
   const [userEmail, setUserEmail] = useState('');
+  const [userName, setUserName] = useState('');
   const [loading, setLoading] = useState(true);
   const [userCategory, setUserCategory] = useState('');
   const [stats, setStats] = useState<Stats>({
@@ -76,29 +77,22 @@ export default function UserDashboard() {
   const [nextSession, setNextSession] = useState<NextSession>({ time: '', class: '' });
   const [schedules, setSchedules] = useState<Schedule[]>([]);
   const [recentActivities, setRecentActivities] = useState<Activity[]>([]);
+  const [showMessageOptions, setShowMessageOptions] = useState(false); // New state for message options
   const router = useRouter();
   const themeContext = useContext(ThemeContext);
   const languageContext = useContext(LanguageContext);
+  const messageOptionsRef = useRef<HTMLDivElement>(null);
 
   // Refs for logo image fallbacks
   const sidebarIconRef = useRef(null);
   const headerIconRef = useRef(null);
-=======
-  const [userEmail, setUserEmail] = useState(''); // New state for user email
-  const router = useRouter();
-  const themeContext = useContext(ThemeContext);
-  const languageContext = useContext(LanguageContext);
->>>>>>> 6ad8c0f427699eee8a6c2db4967cbafc13f0fc0d
 
   // Check for ThemeContext
   if (!themeContext) {
     throw new Error('UserDashboard must be used within a ThemeProvider');
   }
 
-<<<<<<< HEAD
-=======
   // Check for LanguageContext
->>>>>>> 6ad8c0f427699eee8a6c2db4967cbafc13f0fc0d
   if (!languageContext) {
     throw new Error('UserDashboard must be used within a LanguageProvider');
   }
@@ -129,15 +123,24 @@ export default function UserDashboard() {
 
         const data = await response.json();
         setIsAuthorized(true);
-<<<<<<< HEAD
         setUserEmail(data.email || 'Unknown');
         console.log('User authorized:', data.email);
+
+        // Fetch user data from GYM collection
+        const gymRef = doc(db, 'GYM', data.email);
+        const gymSnap = await getDoc(gymRef);
+        
+        if (gymSnap.exists()) {
+          const gymData = gymSnap.data();
+          setUserName(gymData.firstName || 'Unknown');
+          setUserCategory(gymData.category ? gymData.category.toLowerCase().trim() : 'general');
+          console.log('GYM collection data:', gymData);
+        } else {
+          console.warn('User data not found in GYM collection for:', data.email);
+          toast.warn(t.userDataNotFound || 'User data not found in GYM collection');
+        }
       } catch (error) {
         console.error('Session validation error:', error);
-=======
-        setUserEmail(data.email || 'Unknown'); // Set email from API response
-      } catch (error) {
->>>>>>> 6ad8c0f427699eee8a6c2db4967cbafc13f0fc0d
         toast.error(t.pleaseLogin || "Please log in to access this page");
         router.push("/");
       }
@@ -145,7 +148,6 @@ export default function UserDashboard() {
 
     validateSession();
   }, [router, t]);
-<<<<<<< HEAD
 
   useEffect(() => {
     const fetchData = async () => {
@@ -158,35 +160,6 @@ export default function UserDashboard() {
       console.log('Starting data fetch for user:', userEmail);
       
       try {
-        // Fetch user data from GYM collection
-        const gymRef = doc(db, 'GYM', userEmail);
-        const gymSnap = await getDoc(gymRef);
-        
-        if (!gymSnap.exists()) {
-          console.warn('User data not found in GYM collection for:', userEmail);
-          toast.error(t.userDataNotFound || 'User data not found in GYM collection');
-          setLoading(false);
-          return;
-        }
-        
-        const gymData = gymSnap.data();
-        console.log('GYM collection data:', gymData);
-        
-        // Normalize category to lowercase and trim whitespace
-        const category = gymData.category ? gymData.category.toLowerCase().trim() : 'general';
-        setUserCategory(category);
-        
-        // Log current user category
-        console.log('Current User Category:', category);
-
-        // Check if category is valid
-        if (!category || category.trim() === '') {
-          console.warn('Category Checkup: Invalid or missing category for user:', userEmail);
-          toast.warn(t.invalidCategory || 'Your category is invalid or missing. Please contact support.');
-        } else {
-          console.log('Category Checkup: Valid category found:', category);
-        }
-
         // Fetch all unique categories from schedules collection (normalized)
         const schedulesSnap = await getDocs(collection(db, 'schedules'));
         console.log('Total schedules documents:', schedulesSnap.docs.length);
@@ -210,10 +183,9 @@ export default function UserDashboard() {
           const scheduleData = docSnap.data();
           const scheduleCategory = scheduleData.category ? scheduleData.category.toLowerCase().trim() : 'general';
           
-          console.log('Checking schedule:', docSnap.id, 'with category:', scheduleCategory, 'against user category:', category);
+          console.log('Checking schedule:', docSnap.id, 'with category:', scheduleCategory, 'against user category:', userCategory);
           
-          // Compare normalized categories
-          if (scheduleCategory === category) {
+          if (scheduleCategory === userCategory) {
             fetchedSchedules.push({
               id: docSnap.id,
               title: scheduleData.title,
@@ -241,20 +213,36 @@ export default function UserDashboard() {
           });
         }
 
-        // Fetch recent activities
-        const activitiesQ = query(
-          collection(db, 'activities'),
-          where('userEmail', '==', userEmail),
-          orderBy('date', 'desc'),
-          limit(3)
-        );
-        const activitiesSnap = await getDocs(activitiesQ);
-        const fetchedActivities: Activity[] = activitiesSnap.docs.map((docSnap) => ({
-          id: docSnap.id,
-          ...docSnap.data(),
-        })) as Activity[];
-        setRecentActivities(fetchedActivities);
-        console.log('Recent activities found:', fetchedActivities.length);
+        // Fetch recent activities with enhanced error handling
+        try {
+          const activitiesQ = query(
+            collection(db, 'activities'),
+            where('userEmail', '==', userEmail),
+            orderBy('date', 'desc'),
+            limit(3)
+          );
+          const activitiesSnap = await getDocs(activitiesQ);
+          const fetchedActivities: Activity[] = activitiesSnap.docs.map((docSnap) => ({
+            id: docSnap.id,
+            ...docSnap.data(),
+          })) as Activity[];
+          setRecentActivities(fetchedActivities);
+          console.log('Recent activities found:', fetchedActivities.length);
+        } catch (error: any) {
+          console.error('Error fetching activities:', error);
+          if (error.code === 'failed-precondition' && error.message.includes('requires an index')) {
+            const indexUrl = error.message.match(/https:\/\/[^\s]+/)?.[0] || 'Firebase Console';
+            toast.error(
+              t.indexError || 
+              `Unable to fetch activities due to a missing database index. Please create it in the Firebase Console: ${indexUrl}`
+            );
+            console.error('Index creation required. Visit:', indexUrl);
+            setRecentActivities([]); // Fallback to empty array to continue loading dashboard
+          } else {
+            toast.error(t.fetchError || 'Failed to fetch recent activities');
+            setRecentActivities([]); // Fallback to empty array
+          }
+        }
       } catch (error) {
         console.error('Error fetching dashboard data:', error);
         toast.error(t.fetchError || 'Failed to fetch dashboard data');
@@ -265,9 +253,25 @@ export default function UserDashboard() {
     };
 
     fetchData();
-  }, [isAuthorized, userEmail, t]);
-=======
->>>>>>> 6ad8c0f427699eee8a6c2db4967cbafc13f0fc0d
+  }, [isAuthorized, userEmail, t, userCategory]);
+
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (messageOptionsRef.current && !messageOptionsRef.current.contains(event.target as Node)) {
+        setShowMessageOptions(false);
+      }
+    };
+
+    if (showMessageOptions) {
+      document.addEventListener('mousedown', handleClickOutside);
+    } else {
+      document.removeEventListener('mousedown', handleClickOutside);
+    }
+
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, [showMessageOptions]);
 
   const navItems = [
     { name: t.dashboard || 'Dashboard', icon: BarChart, href: '/user' },
@@ -302,17 +306,24 @@ export default function UserDashboard() {
 
   const handleConsultancy = () => router.push('/consultancy');
 
-<<<<<<< HEAD
   const handlePay = () => router.push('/payment');
 
-=======
->>>>>>> 6ad8c0f427699eee8a6c2db4967cbafc13f0fc0d
-  const handleMessageClick = async () => {
-    console.log('Message icon clicked! Navigating to messages...');
+  const handleMessageClick = () => {
+    console.log('Message icon clicked! Toggling message options...');
+    setShowMessageOptions(!showMessageOptions); // Toggle message options visibility
+  };
+
+  const handleMessageNavigation = async (type: 'personal' | 'public') => {
+    console.log(`${type} message selected! Navigating to ${type} message page...`);
     try {
-      await router.push('/message');
+      await router.push(
+        type === 'personal'
+          ? `/userMessage?email=${encodeURIComponent(userEmail)}&name=${encodeURIComponent(userName)}`
+          : `/publicMessage?email=${encodeURIComponent(userEmail)}&name=${encodeURIComponent(userName)}`
+      );
+      setShowMessageOptions(false); // Close options after navigation
     } catch (error) {
-      setErrorMessage(t.errorMessage || 'Messages page is currently unavailable. Please try again later.');
+      setErrorMessage(t.errorMessage || `${type.charAt(0).toUpperCase() + type.slice(1)} messages page is currently unavailable. Please try again later.`);
       setTimeout(() => setErrorMessage(''), 5000);
     }
   };
@@ -348,6 +359,7 @@ export default function UserDashboard() {
 
   console.log('Rendering dashboard with:', {
     userEmail,
+    userName,
     userCategory,
     schedulesCount: schedules.length,
     activitiesCount: recentActivities.length
@@ -482,7 +494,6 @@ export default function UserDashboard() {
             >
               {isSidebarOpen ? <X size={28} /> : <Menu size={28} />}
             </button>
-<<<<<<< HEAD
             <div className="flex items-center space-x-3">
               <div className="relative w-10 h-10">
                 <Image
@@ -512,21 +523,6 @@ export default function UserDashboard() {
                   {t.welcome || 'Welcome'}: {userEmail} | {t.category || 'Category'}: {userCategory}
                 </p>
               </div>
-=======
-            <div>
-              <h2
-                className={`text-2xl font-semibold tracking-tight ${
-                  theme === 'light' ? 'text-zinc-800' : 'text-white'
-                }`}
-              >
-                {t.dashboard || 'User Dashboard'}
-              </h2>
-              <p
-                className={`text-sm ${theme === 'light' ? 'text-gray-600' : 'text-gray-300'}`}
-              >
-                {t.welcome || 'Welcome'}: {userEmail}
-              </p>
->>>>>>> 6ad8c0f427699eee8a6c2db4967cbafc13f0fc0d
             </div>
           </div>
           <div className="flex items-center space-x-4">
@@ -544,50 +540,95 @@ export default function UserDashboard() {
                 onChange={(e) => setSearchQuery(e.target.value)}
                 className={`pl-10 pr-4 py-2 rounded-2xl border ${
                   theme === 'light'
-<<<<<<< HEAD
                     ? 'bg-white bg-opacity-90 border-blue-100 text-blue-900'
                     : 'bg-blue-800 bg-opacity-90 border-teal-800 text-white'
                 } focus:outline-none focus:ring-2 focus:ring-teal-600 transition-all duration-300`}
-=======
-                    ? 'bg-white border-gray-300 text-gray-900'
-                    : 'bg-gray-700 border-gray-600 text-white'
-                } focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-all duration-200`}
->>>>>>> 6ad8c0f427699eee8a6c2db4967cbafc13f0fc0d
                 aria-label={t.searchPlaceholder || 'Search classes, trainers'}
               />
             </div>
             <UserNotification count={notifications} isHighContrast={theme === 'dark'} />
-            <button
-              onClick={handleMessageClick}
-              className={`relative p-2 rounded-full transition-all duration-300 ${
-                theme === 'light' ? 'text-teal-600 hover:bg-teal-100' : 'text-teal-300 hover:bg-teal-800'
-              }`}
-              aria-label={t.messages || 'Messages'}
-            >
-              <svg
-                className="w-6 h-6"
-                fill="none"
-                stroke="currentColor"
-                viewBox="0 0 24 24"
-                xmlns="http://www.w3.org/2000/svg"
+            <div className="relative">
+              <button
+                onClick={handleMessageClick}
+                className={`relative p-2 rounded-full transition-all duration-300 ${
+                  theme === 'light' ? 'text-teal-600 hover:bg-teal-100' : 'text-teal-300 hover:bg-teal-800'
+                }`}
+                aria-label={t.messages || 'Messages'}
               >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth="2"
-                  d="M7 8h10M7 12h4m1 8l-4-4H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-3l-4 4z"
-                />
-              </svg>
-              {messages > 0 && (
-                <span
-                  className={`absolute top-0 right-0 inline-flex items-center justify-center px-2 py-1 text-xs font-bold leading-none text-white transform translate-x-1/2 -translate-y-1/2 rounded-full ${
-                    theme === 'light' ? 'bg-teal-600' : 'bg-teal-300'
-                  }`}
+                <svg
+                  className="w-6 h-6"
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                  xmlns="http://www.w3.org/2000/svg"
                 >
-                  {messages}
-                </span>
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth="2"
+                    d="M7 8h10M7 12h4m1 8l-4-4H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-3l-4 4z"
+                  />
+                </svg>
+                {messages > 0 && (
+                  <span
+                    className={`absolute top-0 right-0 inline-flex items-center justify-center px-2 py-1 text-xs font-bold leading-none text-white transform translate-x-1/2 -translate-y-1/2 rounded-full ${
+                      theme === 'light' ? 'bg-teal-600' : 'bg-teal-300'
+                    }`}
+                  >
+                    {messages}
+                  </span>
+                )}
+              </button>
+              {showMessageOptions && (
+                <div
+                  ref={messageOptionsRef}
+                  className={`absolute right-0 mt-3 w-80 rounded-2xl shadow-2xl z-50 overflow-hidden transition-all duration-300 transform origin-top-right ${
+                    theme === 'light' ? 'bg-white bg-opacity-95 text-blue-900 border border-blue-100' : 'bg-blue-800 bg-opacity-95 text-white border border-teal-800'
+                  }`}
+                  style={cardStyle}
+                >
+                  <div className="p-4">
+                    <h3 className={`text-lg font-bold mb-4 ${theme === 'light' ? 'text-blue-900' : 'text-white'}`}>
+                      {t.selectMessageType || 'Select Message Type'}
+                    </h3>
+                    <div className="space-y-3">
+                      <div
+                        className={`flex items-start p-4 rounded-xl cursor-pointer transition-all duration-300 hover:scale-105 hover:shadow-md ${
+                          theme === 'light' ? 'bg-teal-50 hover:bg-teal-100' : 'bg-teal-900 hover:bg-teal-800'
+                        }`}
+                        onClick={() => handleMessageNavigation('personal')}
+                      >
+                        <User size={24} className={`mr-3 flex-shrink-0 ${theme === 'light' ? 'text-teal-600' : 'text-teal-300'}`} />
+                        <div>
+                          <h4 className={`font-semibold text-base ${theme === 'light' ? 'text-blue-900' : 'text-white'}`}>
+                            {t.personalMessage || 'Personal Message'}
+                          </h4>
+                          <p className={`text-sm ${theme === 'light' ? 'text-blue-500' : 'text-teal-400'}`}>
+                            {t.personalMessageDesc || 'Send a private message to a specific user or trainer.'}
+                          </p>
+                        </div>
+                      </div>
+                      <div
+                        className={`flex items-start p-4 rounded-xl cursor-pointer transition-all duration-300 hover:scale-105 hover:shadow-md ${
+                          theme === 'light' ? 'bg-teal-50 hover:bg-teal-100' : 'bg-teal-900 hover:bg-teal-800'
+                        }`}
+                        onClick={() => handleMessageNavigation('public')}
+                      >
+                        <Users size={24} className={`mr-3 flex-shrink-0 ${theme === 'light' ? 'text-teal-600' : 'text-teal-300'}`} />
+                        <div>
+                          <h4 className={`font-semibold text-base ${theme === 'light' ? 'text-blue-900' : 'text-white'}`}>
+                            {t.publicMessage || 'Public Message'}
+                          </h4>
+                          <p className={`text-sm ${theme === 'light' ? 'text-blue-500' : 'text-teal-400'}`}>
+                            {t.publicMessageDesc || 'Post a message visible to all users in the community.'}
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
               )}
-            </button>
+            </div>
             <button
               onClick={handlePay}
               className={`flex items-center px-5 py-2 rounded-2xl font-semibold transition-all duration-300 hover:scale-105 hover:shadow-lg ${
