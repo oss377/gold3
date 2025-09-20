@@ -1,7 +1,7 @@
 // app/fconfig.tsx
 import { initializeApp, getApps, FirebaseApp } from 'firebase/app';
 import { getFirestore, Firestore, collection, query, where, getDocs, doc, getDoc } from 'firebase/firestore';
-import { getAuth, Auth, signInWithEmailAndPassword } from 'firebase/auth';
+import { getAuth, Auth, signInWithEmailAndPassword, updatePassword } from 'firebase/auth';
 import { getStorage, FirebaseStorage } from 'firebase/storage';
 
 const firebaseConfig = {
@@ -40,4 +40,17 @@ try {
 }
 
 // Export Firestore and Auth functions
-export { app, db, auth, storage, collection, signInWithEmailAndPassword, query, where, getDocs, doc, getDoc  };
+export { 
+  app, 
+  db, 
+  auth, 
+  storage, 
+  collection, 
+  signInWithEmailAndPassword, 
+  updatePassword,
+  query, 
+  where, 
+  getDocs, 
+  doc, 
+  getDoc 
+};

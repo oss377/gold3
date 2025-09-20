@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect, useContext, useRef } from 'react';
-import { useRouter } from 'next/navigation';
+import { useRouter, usePathname } from 'next/navigation'; // Added usePathname for active state
 import {
   Menu,
   X,
@@ -17,8 +17,6 @@ import {
   Globe,
   Loader2,
   CreditCard,
-  User,
-  Users,
 } from 'lucide-react';
 import Link from 'next/link';
 import Image from 'next/image';
@@ -79,6 +77,7 @@ export default function UserDashboard() {
   const [recentActivities, setRecentActivities] = useState<Activity[]>([]);
   const [showMessageOptions, setShowMessageOptions] = useState(false); // New state for message options
   const router = useRouter();
+  const pathname = usePathname(); // Added to track current route for active state
   const themeContext = useContext(ThemeContext);
   const languageContext = useContext(LanguageContext);
   const messageOptionsRef = useRef<HTMLDivElement>(null);
@@ -253,28 +252,13 @@ export default function UserDashboard() {
     };
 
     fetchData();
-  }, [isAuthorized, userEmail, t, userCategory]);
-
-  useEffect(() => {
-    const handleClickOutside = (event: MouseEvent) => {
-      if (messageOptionsRef.current && !messageOptionsRef.current.contains(event.target as Node)) {
-        setShowMessageOptions(false);
-      }
-    };
-
-    if (showMessageOptions) {
-      document.addEventListener('mousedown', handleClickOutside);
-    } else {
-      document.removeEventListener('mousedown', handleClickOutside);
-    }
-
-    return () => {
-      document.removeEventListener('mousedown', handleClickOutside);
-    };
-  }, [showMessageOptions]);
+  }, [isAuthorized, userEmail, t]);
+=======
+>>>>>>> 6ad8c0f427699eee8a6c2db4967cbafc13f0fc0d
 
   const navItems = [
     { name: t.dashboard || 'Dashboard', icon: BarChart, href: '/user' },
+    { name: t.profile || 'Profile', icon: User, href: '/user/profile' }, // Added Profile nav item
     { name: t.schedules || 'Schedules', icon: Calendar, href: '/user/schedules' },
     { name: t.workouts || 'Workouts', icon: Dumbbell, href: '/user/workouts' },
     { name: t.settings || 'Settings', icon: Settings, href: '/user/settings' },
@@ -308,13 +292,10 @@ export default function UserDashboard() {
 
   const handlePay = () => router.push('/payment');
 
-  const handleMessageClick = () => {
-    console.log('Message icon clicked! Toggling message options...');
-    setShowMessageOptions(!showMessageOptions); // Toggle message options visibility
-  };
-
-  const handleMessageNavigation = async (type: 'personal' | 'public') => {
-    console.log(`${type} message selected! Navigating to ${type} message page...`);
+=======
+>>>>>>> 6ad8c0f427699eee8a6c2db4967cbafc13f0fc0d
+  const handleMessageClick = async () => {
+    console.log('Message icon clicked! Navigating to messages...');
     try {
       await router.push(
         type === 'personal'
@@ -417,19 +398,23 @@ export default function UserDashboard() {
             <X size={28} />
           </button>
         </div>
-        <nav className="mt-8 space-y-3 px-4">
-          {navItems.map((item) =>
+        <nav className="mt-8 space-y-2 px-4">
+          {navItems.map((item, index) =>
             item.name === (t.logout || 'Logout') ? (
               <button
                 key={item.name}
                 onClick={handleLogout}
-                className={`flex items-center w-full px-4 py-3 rounded-2xl text-base font-semibold transition-all duration-300 hover:scale-105 hover:shadow-lg ${
-                  theme === 'light' ? 'hover:bg-teal-100 hover:text-teal-600' : 'hover:bg-teal-800 hover:text-white'
-                }`}
+                className={`flex items-center w-full px-4 py-3 rounded-xl text-sm font-medium transition-all duration-300 group hover:bg-gradient-to-r hover:from-teal-500 hover:to-blue-500 hover:text-white transform hover:-translate-y-0.5 hover:shadow-lg ${
+                  theme === 'light' ? 'text-blue-900' : 'text-teal-200'
+                } ${isSidebarOpen ? 'animate-slide-in' : ''}`}
+                style={{ animationDelay: `${index * 50}ms` }}
+                aria-label={t.logout || 'Logout'}
               >
                 <item.icon
-                  size={22}
-                  className={`mr-4 ${theme === 'light' ? 'text-teal-600' : 'text-teal-300'}`}
+                  size={20}
+                  className={`mr-3 transition-colors duration-300 group-hover:text-white ${
+                    theme === 'light' ? 'text-teal-600' : 'text-teal-300'
+                  }`}
                 />
                 <span>{item.name}</span>
               </button>
@@ -437,13 +422,23 @@ export default function UserDashboard() {
               <Link
                 key={item.name}
                 href={item.href}
-                className={`flex items-center px-4 py-3 rounded-2xl text-base font-semibold transition-all duration-300 hover:scale-105 hover:shadow-lg ${
-                  theme === 'light' ? 'hover:bg-teal-100 hover:text-teal-600' : 'hover:bg-teal-800 hover:text-white'
+                className={`flex items-center px-4 py-3 rounded-xl text-sm font-medium transition-all duration-300 group hover:bg-gradient-to-r hover:from-teal-500 hover:to-blue-500 hover:text-white transform hover:-translate-y-0.5 hover:shadow-lg ${
+                  theme === 'light' ? 'text-blue-900' : 'text-teal-200'
+                } ${pathname === item.href ? 'bg-gradient-to-r from-teal-500 to-blue-500 text-white shadow-md' : ''} ${
+                  isSidebarOpen ? 'animate-slide-in' : ''
                 }`}
+                style={{ animationDelay: `${index * 50}ms` }}
+                aria-label={item.name}
               >
                 <item.icon
-                  size={22}
-                  className={`mr-4 ${theme === 'light' ? 'text-teal-600' : 'text-teal-300'}`}
+                  size={20}
+                  className={`mr-3 transition-colors duration-300 group-hover:text-white ${
+                    pathname === item.href
+                      ? 'text-white'
+                      : theme === 'light'
+                      ? 'text-teal-600'
+                      : 'text-teal-300'
+                  }`}
                 />
                 <span>{item.name}</span>
               </Link>
@@ -451,26 +446,28 @@ export default function UserDashboard() {
           )}
           <button
             onClick={toggleTheme}
-            className={`flex items-center w-full px-4 py-3 rounded-2xl text-base font-semibold transition-all duration-300 hover:scale-105 hover:shadow-lg ${
-              theme === 'light' ? 'hover:bg-teal-100 hover:text-teal-600' : 'hover:bg-teal-800 hover:text-white'
-            }`}
+            className={`flex items-center w-full px-4 py-3 rounded-xl text-sm font-medium transition-all duration-300 group hover:bg-gradient-to-r hover:from-teal-500 hover:to-blue-500 hover:text-white transform hover:-translate-y-0.5 hover:shadow-lg ${
+              theme === 'light' ? 'text-blue-900' : 'text-teal-200'
+            } ${isSidebarOpen ? 'animate-slide-in' : ''}`}
+            style={{ animationDelay: `${(navItems.length) * 50}ms` }}
             aria-label={theme === 'light' ? t.darkMode || 'Switch to dark mode' : t.lightMode || 'Switch to light mode'}
           >
             {theme === 'light' ? (
-              <Moon size={22} className="mr-4 text-teal-600" />
+              <Moon size={20} className="mr-3 text-teal-600 group-hover:text-white" />
             ) : (
-              <Sun size={22} className="mr-4 text-teal-300" />
+              <Sun size={20} className="mr-3 text-teal-300 group-hover:text-white" />
             )}
             <span>{theme === 'light' ? (t.darkMode || 'Dark Mode') : (t.lightMode || 'Light Mode')}</span>
           </button>
           <button
             onClick={toggleLanguage}
-            className={`flex items-center w-full px-4 py-3 rounded-2xl text-base font-semibold transition-all duration-300 hover:scale-105 hover:shadow-lg ${
-              theme === 'light' ? 'hover:bg-teal-100 hover:text-teal-600' : 'hover:bg-teal-800 hover:text-white'
-            }`}
+            className={`flex items-center w-full px-4 py-3 rounded-xl text-sm font-medium transition-all duration-300 group hover:bg-gradient-to-r hover:from-teal-500 hover:to-blue-500 hover:text-white transform hover:-translate-y-0.5 hover:shadow-lg ${
+              theme === 'light' ? 'text-blue-900' : 'text-teal-200'
+            } ${isSidebarOpen ? 'animate-slide-in' : ''}`}
+            style={{ animationDelay: `${(navItems.length + 1) * 50}ms` }}
             aria-label={language === 'en' ? t.switchAmharic || 'Switch to Amharic' : t.switchEnglish || 'Switch to English'}
           >
-            <Globe size={22} className={`mr-4 ${theme === 'light' ? 'text-teal-600' : 'text-teal-300'}`} />
+            <Globe size={20} className={`mr-3 ${theme === 'light' ? 'text-teal-600 group-hover:text-white' : 'text-teal-300 group-hover:text-white'}`} />
             <span>{language === 'en' ? 'አማርኛ' : 'English'}</span>
           </button>
         </nav>
