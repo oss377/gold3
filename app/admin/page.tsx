@@ -17,6 +17,9 @@ import {
   Moon,
   Globe,
   MessageCircle,
+  User,
+  ChevronLeft,
+  ChevronRight,
 } from 'lucide-react';
 import Link from 'next/link';
 import { toast } from 'react-toastify';
@@ -39,6 +42,7 @@ interface Translation {
   classes?: string;
   settings?: string;
   logout?: string;
+  profile?: string;
   adminDashboard?: string;
   darkMode?: string;
   uploadVideo?: string;
@@ -80,6 +84,7 @@ interface NavItem {
 
 export default function GymDashboard() {
   const [isSidebarOpen, setIsSidebarOpen] = useState<boolean>(false);
+  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState<boolean>(false);
   const [notifications, setNotifications] = useState<number>(0);
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [isUploadModalOpen, setIsUploadModalOpen] = useState<boolean>(false);
@@ -139,6 +144,7 @@ export default function GymDashboard() {
 
   const navItems: NavItem[] = [
     { name: t['dashboard'] || 'Dashboard', href: '/admin', icon: BarChart },
+    { name: t['profile'] || 'Profile', href: '/admin/profile', icon: User },
     { name: t['members'] || 'Members', href: '/admin/members', icon: Users },
     { name: t['classes'] || 'Classes', href: '/admin/classes', icon: Calendar },
     { name: t['settings'] || 'Settings', href: '/admin/settings', icon: Settings },
@@ -146,6 +152,7 @@ export default function GymDashboard() {
   ];
 
   const toggleSidebar = () => setIsSidebarOpen(!isSidebarOpen);
+  const toggleSidebarCollapse = () => setIsSidebarCollapsed(!isSidebarCollapsed);
 
   const handleLogout = async () => {
     try {
@@ -204,18 +211,18 @@ export default function GymDashboard() {
     >
       {/* Sidebar */}
       <aside
-        className={`fixed inset-y-0 left-0 z-50 w-72 shadow-2xl transform transition-transform duration-500 ease-in-out ${
+        className={`fixed inset-y-0 left-0 z-50 shadow-2xl transform transition-transform duration-500 ease-in-out ${
           theme === 'light'
             ? 'bg-gradient-to-b from-blue-100 to-teal-100 text-blue-900'
             : 'bg-gradient-to-b from-blue-900 to-teal-900 text-white'
-        } ${isSidebarOpen ? 'translate-x-0' : '-translate-x-full'}`}
+        } ${isSidebarOpen ? 'translate-x-0' : '-translate-x-full'} ${isSidebarCollapsed ? 'w-20' : 'w-72'}`}
       >
         <div
-          className={`flex items-center justify-between p-6 border-b ${
+          className={`flex items-center justify-between p-4 border-b ${
             theme === 'light' ? 'border-blue-200' : 'border-blue-800'
           }`}
         >
-          <div className="flex items-center space-x-3">
+          <div className={`flex items-center ${isSidebarCollapsed ? 'justify-center' : 'space-x-3'}`}>
             <div className="relative w-10 h-10">
               <img
                 src="/gym-logo.png"
@@ -231,84 +238,138 @@ export default function GymDashboard() {
                 className={`${theme === 'light' ? 'text-teal-600' : 'text-teal-300'} hidden`}
               />
             </div>
-            <h1
-              className={`text-2xl font-extrabold tracking-tight ${
-                theme === 'light' ? 'text-blue-900' : 'text-white'
-              }`}
-            >
-              Workout App
-            </h1>
+            {!isSidebarCollapsed && (
+              <h1
+                className={`text-2xl font-extrabold tracking-tight ${
+                  theme === 'light' ? 'text-blue-900' : 'text-white'
+                }`}
+              >
+                Workout App
+              </h1>
+            )}
           </div>
-          <button
-            className={theme === 'light' ? 'text-blue-600 hover:text-blue-900' : 'text-blue-300 hover:text-white'}
-            onClick={toggleSidebar}
-          >
-            <XCircle size={28} />
-          </button>
+          <div className="flex items-center space-x-2">
+            <button
+              className={theme === 'light' ? 'text-blue-600 hover:text-blue-900' : 'text-blue-300 hover:text-white'}
+              onClick={toggleSidebar}
+            >
+              <XCircle size={28} />
+            </button>
+            <button
+              className={`p-2 rounded-full transition-all duration-300 hover:scale-105 ${
+                theme === 'light' ? 'text-teal-600 hover:bg-teal-100' : 'text-teal-300 hover:bg-teal-800'
+              }`}
+              onClick={toggleSidebarCollapse}
+              aria-label={isSidebarCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+            >
+              {isSidebarCollapsed ? (
+                <ChevronRight size={24} className="animate-pulse" />
+              ) : (
+                <ChevronLeft size={24} className="animate-pulse" />
+              )}
+            </button>
+          </div>
         </div>
-        <nav className="mt-8 space-y-3 px-4">
+        <nav
+          className={`mt-4 space-y-2 px-2 overflow-y-auto max-h-[calc(100vh-80px)] scrollbar-thin ${
+            theme === 'light'
+              ? 'scrollbar-thumb-teal-600 scrollbar-track-blue-100'
+              : 'scrollbar-thumb-teal-300 scrollbar-track-blue-900'
+          }`}
+        >
           {navItems.map((item) =>
             item.name === (t['logout'] || 'Logout') ? (
               <button
                 key={item.name}
                 onClick={handleLogout}
                 className={`flex items-center w-full px-4 py-3 rounded-2xl text-base font-semibold transition-all duration-300 hover:scale-105 hover:shadow-lg ${
-                  theme === 'light' ? 'hover:bg-teal-100 hover:text-teal-600' : 'hover:bg-teal-800 hover:text-white'
+                  isSidebarCollapsed
+                    ? 'justify-end'
+                    : theme === 'light'
+                    ? 'hover:bg-teal-100 hover:text-teal-600'
+                    : 'hover:bg-teal-800 hover:text-white'
                 }`}
               >
                 <item.icon
                   size={22}
-                  className={`mr-4 ${theme === 'light' ? 'text-teal-600' : 'text-teal-300'}`}
+                  className={`${
+                    isSidebarCollapsed ? '' : 'mr-4'
+                  } ${theme === 'light' ? 'text-teal-600' : 'text-teal-300'}`}
                 />
-                <span>{item.name}</span>
+                {!isSidebarCollapsed && <span>{item.name}</span>}
               </button>
             ) : (
               <Link
                 key={item.name}
                 href={item.href ?? '#'}
                 className={`flex items-center px-4 py-3 rounded-2xl text-base font-semibold transition-all duration-300 hover:scale-105 hover:shadow-lg ${
-                  theme === 'light' ? 'hover:bg-teal-100 hover:text-teal-600' : 'hover:bg-teal-800 hover:text-white'
+                  isSidebarCollapsed
+                    ? 'justify-end'
+                    : theme === 'light'
+                    ? 'hover:bg-teal-100 hover:text-teal-600'
+                    : 'hover:bg-teal-800 hover:text-white'
                 }`}
                 onClick={() => setIsSidebarOpen(false)}
               >
                 <item.icon
                   size={22}
-                  className={`mr-4 ${theme === 'light' ? 'text-teal-600' : 'text-teal-300'}`}
+                  className={`${
+                    isSidebarCollapsed ? '' : 'mr-4'
+                  } ${theme === 'light' ? 'text-teal-600' : 'text-teal-300'}`}
                 />
-                <span>{item.name}</span>
+                {!isSidebarCollapsed && <span>{item.name}</span>}
               </Link>
             )
           )}
           <button
             onClick={toggleTheme}
             className={`flex items-center w-full px-4 py-3 rounded-2xl text-base font-semibold transition-all duration-300 hover:scale-105 hover:shadow-lg ${
-              theme === 'light' ? 'hover:bg-teal-100 hover:text-teal-600' : 'hover:bg-teal-800 hover:text-white'
+              isSidebarCollapsed
+                ? 'justify-end'
+                : theme === 'light'
+                ? 'hover:bg-teal-100 hover:text-teal-600'
+                : 'hover:bg-teal-800 hover:text-white'
             }`}
             aria-label={theme === 'light' ? 'Switch to dark mode' : 'Switch to light mode'}
           >
             {theme === 'light' ? (
-              <Moon size={22} className="mr-4 text-teal-600" />
+              <Moon size={22} className={`${isSidebarCollapsed ? '' : 'mr-4'} text-teal-600`} />
             ) : (
-              <Sun size={22} className="mr-4 text-teal-300" />
+              <Sun size={22} className={`${isSidebarCollapsed ? '' : 'mr-4'} text-teal-300`} />
             )}
-            <span>{t['darkMode'] || 'Dark Mode'}</span>
+            {!isSidebarCollapsed && <span>{t['darkMode'] || 'Dark Mode'}</span>}
           </button>
           <button
             onClick={toggleLanguage}
             className={`flex items-center w-full px-4 py-3 rounded-2xl text-base font-semibold transition-all duration-300 hover:scale-105 hover:shadow-lg ${
-              theme === 'light' ? 'hover:bg-teal-100 hover:text-teal-600' : 'hover:bg-teal-800 hover:text-white'
+              isSidebarCollapsed
+                ? 'justify-end'
+                : theme === 'light'
+                ? 'hover:bg-teal-100 hover:text-teal-600'
+                : 'hover:bg-teal-800 hover:text-white'
             }`}
             aria-label={language === 'en' ? 'Switch to Amharic' : 'Switch to English'}
           >
-            <Globe size={22} className={`mr-4 ${theme === 'light' ? 'text-teal-600' : 'text-teal-300'}`} />
-            <span>{language === 'en' ? 'አማርኛ' : 'English'}</span>
+            <Globe
+              size={22}
+              className={`${
+                isSidebarCollapsed ? '' : 'mr-4'
+              } ${theme === 'light' ? 'text-teal-600' : 'text-teal-300'}`}
+            />
+            {!isSidebarCollapsed && <span>{language === 'en' ? 'አማርኛ' : 'English'}</span>}
           </button>
         </nav>
       </aside>
 
       {/* Main Content */}
       <div
-        className={`flex-1 flex flex-col transition-all duration-500 ${isSidebarOpen ? 'ml-72' : 'ml-0'}`}
+        className={`flex-1 flex flex-col transition-all duration-500 ${
+          isSidebarOpen
+            ? isSidebarCollapsed
+              ? 'ml-20'
+              : 'ml-72'
+            : 'ml-0'
+        }`}
       >
         {/* Header */}
         <header
@@ -409,7 +470,7 @@ export default function GymDashboard() {
 
         {/* Main Content Area */}
         <main
-          className={`flex-1 p-8 overflow-y-auto ${
+          className={`flex-1 p-8 overflow-y-auto scroll-smooth ${
             theme === 'light' ? 'bg-gradient-to-br from-blue-50 to-teal-50 text-blue-900' : 'bg-gradient-to-br from-blue-950 to-teal-950 text-white'
           }`}
         >

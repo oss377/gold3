@@ -1,8 +1,7 @@
-
 'use client';
 
 import { useState, useEffect, useContext, useRef } from 'react';
-import { useRouter } from 'next/navigation';
+import { useRouter, usePathname } from 'next/navigation'; // Added usePathname for active state
 import {
   Menu,
   X,
@@ -18,6 +17,7 @@ import {
   Globe,
   Loader2,
   CreditCard,
+  User, // Added User icon for profile
 } from 'lucide-react';
 import Link from 'next/link';
 import Image from 'next/image';
@@ -64,7 +64,6 @@ export default function UserDashboard() {
   const [searchQuery, setSearchQuery] = useState('');
   const [errorMessage, setErrorMessage] = useState('');
   const [isAuthorized, setIsAuthorized] = useState(false);
-<<<<<<< HEAD
   const [userEmail, setUserEmail] = useState('');
   const [loading, setLoading] = useState(true);
   const [userCategory, setUserCategory] = useState('');
@@ -77,28 +76,20 @@ export default function UserDashboard() {
   const [schedules, setSchedules] = useState<Schedule[]>([]);
   const [recentActivities, setRecentActivities] = useState<Activity[]>([]);
   const router = useRouter();
+  const pathname = usePathname(); // Added to track current route for active state
   const themeContext = useContext(ThemeContext);
   const languageContext = useContext(LanguageContext);
 
   // Refs for logo image fallbacks
   const sidebarIconRef = useRef(null);
   const headerIconRef = useRef(null);
-=======
-  const [userEmail, setUserEmail] = useState(''); // New state for user email
-  const router = useRouter();
-  const themeContext = useContext(ThemeContext);
-  const languageContext = useContext(LanguageContext);
->>>>>>> 6ad8c0f427699eee8a6c2db4967cbafc13f0fc0d
 
   // Check for ThemeContext
   if (!themeContext) {
     throw new Error('UserDashboard must be used within a ThemeProvider');
   }
 
-<<<<<<< HEAD
-=======
   // Check for LanguageContext
->>>>>>> 6ad8c0f427699eee8a6c2db4967cbafc13f0fc0d
   if (!languageContext) {
     throw new Error('UserDashboard must be used within a LanguageProvider');
   }
@@ -129,15 +120,10 @@ export default function UserDashboard() {
 
         const data = await response.json();
         setIsAuthorized(true);
-<<<<<<< HEAD
         setUserEmail(data.email || 'Unknown');
         console.log('User authorized:', data.email);
       } catch (error) {
         console.error('Session validation error:', error);
-=======
-        setUserEmail(data.email || 'Unknown'); // Set email from API response
-      } catch (error) {
->>>>>>> 6ad8c0f427699eee8a6c2db4967cbafc13f0fc0d
         toast.error(t.pleaseLogin || "Please log in to access this page");
         router.push("/");
       }
@@ -145,7 +131,6 @@ export default function UserDashboard() {
 
     validateSession();
   }, [router, t]);
-<<<<<<< HEAD
 
   useEffect(() => {
     const fetchData = async () => {
@@ -266,11 +251,10 @@ export default function UserDashboard() {
 
     fetchData();
   }, [isAuthorized, userEmail, t]);
-=======
->>>>>>> 6ad8c0f427699eee8a6c2db4967cbafc13f0fc0d
 
   const navItems = [
     { name: t.dashboard || 'Dashboard', icon: BarChart, href: '/user' },
+    { name: t.profile || 'Profile', icon: User, href: '/user/profile' }, // Added Profile nav item
     { name: t.schedules || 'Schedules', icon: Calendar, href: '/user/schedules' },
     { name: t.workouts || 'Workouts', icon: Dumbbell, href: '/user/workouts' },
     { name: t.settings || 'Settings', icon: Settings, href: '/user/settings' },
@@ -302,11 +286,8 @@ export default function UserDashboard() {
 
   const handleConsultancy = () => router.push('/consultancy');
 
-<<<<<<< HEAD
   const handlePay = () => router.push('/payment');
 
-=======
->>>>>>> 6ad8c0f427699eee8a6c2db4967cbafc13f0fc0d
   const handleMessageClick = async () => {
     console.log('Message icon clicked! Navigating to messages...');
     try {
@@ -405,19 +386,23 @@ export default function UserDashboard() {
             <X size={28} />
           </button>
         </div>
-        <nav className="mt-8 space-y-3 px-4">
-          {navItems.map((item) =>
+        <nav className="mt-8 space-y-2 px-4">
+          {navItems.map((item, index) =>
             item.name === (t.logout || 'Logout') ? (
               <button
                 key={item.name}
                 onClick={handleLogout}
-                className={`flex items-center w-full px-4 py-3 rounded-2xl text-base font-semibold transition-all duration-300 hover:scale-105 hover:shadow-lg ${
-                  theme === 'light' ? 'hover:bg-teal-100 hover:text-teal-600' : 'hover:bg-teal-800 hover:text-white'
-                }`}
+                className={`flex items-center w-full px-4 py-3 rounded-xl text-sm font-medium transition-all duration-300 group hover:bg-gradient-to-r hover:from-teal-500 hover:to-blue-500 hover:text-white transform hover:-translate-y-0.5 hover:shadow-lg ${
+                  theme === 'light' ? 'text-blue-900' : 'text-teal-200'
+                } ${isSidebarOpen ? 'animate-slide-in' : ''}`}
+                style={{ animationDelay: `${index * 50}ms` }}
+                aria-label={t.logout || 'Logout'}
               >
                 <item.icon
-                  size={22}
-                  className={`mr-4 ${theme === 'light' ? 'text-teal-600' : 'text-teal-300'}`}
+                  size={20}
+                  className={`mr-3 transition-colors duration-300 group-hover:text-white ${
+                    theme === 'light' ? 'text-teal-600' : 'text-teal-300'
+                  }`}
                 />
                 <span>{item.name}</span>
               </button>
@@ -425,13 +410,23 @@ export default function UserDashboard() {
               <Link
                 key={item.name}
                 href={item.href}
-                className={`flex items-center px-4 py-3 rounded-2xl text-base font-semibold transition-all duration-300 hover:scale-105 hover:shadow-lg ${
-                  theme === 'light' ? 'hover:bg-teal-100 hover:text-teal-600' : 'hover:bg-teal-800 hover:text-white'
+                className={`flex items-center px-4 py-3 rounded-xl text-sm font-medium transition-all duration-300 group hover:bg-gradient-to-r hover:from-teal-500 hover:to-blue-500 hover:text-white transform hover:-translate-y-0.5 hover:shadow-lg ${
+                  theme === 'light' ? 'text-blue-900' : 'text-teal-200'
+                } ${pathname === item.href ? 'bg-gradient-to-r from-teal-500 to-blue-500 text-white shadow-md' : ''} ${
+                  isSidebarOpen ? 'animate-slide-in' : ''
                 }`}
+                style={{ animationDelay: `${index * 50}ms` }}
+                aria-label={item.name}
               >
                 <item.icon
-                  size={22}
-                  className={`mr-4 ${theme === 'light' ? 'text-teal-600' : 'text-teal-300'}`}
+                  size={20}
+                  className={`mr-3 transition-colors duration-300 group-hover:text-white ${
+                    pathname === item.href
+                      ? 'text-white'
+                      : theme === 'light'
+                      ? 'text-teal-600'
+                      : 'text-teal-300'
+                  }`}
                 />
                 <span>{item.name}</span>
               </Link>
@@ -439,26 +434,28 @@ export default function UserDashboard() {
           )}
           <button
             onClick={toggleTheme}
-            className={`flex items-center w-full px-4 py-3 rounded-2xl text-base font-semibold transition-all duration-300 hover:scale-105 hover:shadow-lg ${
-              theme === 'light' ? 'hover:bg-teal-100 hover:text-teal-600' : 'hover:bg-teal-800 hover:text-white'
-            }`}
+            className={`flex items-center w-full px-4 py-3 rounded-xl text-sm font-medium transition-all duration-300 group hover:bg-gradient-to-r hover:from-teal-500 hover:to-blue-500 hover:text-white transform hover:-translate-y-0.5 hover:shadow-lg ${
+              theme === 'light' ? 'text-blue-900' : 'text-teal-200'
+            } ${isSidebarOpen ? 'animate-slide-in' : ''}`}
+            style={{ animationDelay: `${(navItems.length) * 50}ms` }}
             aria-label={theme === 'light' ? t.darkMode || 'Switch to dark mode' : t.lightMode || 'Switch to light mode'}
           >
             {theme === 'light' ? (
-              <Moon size={22} className="mr-4 text-teal-600" />
+              <Moon size={20} className="mr-3 text-teal-600 group-hover:text-white" />
             ) : (
-              <Sun size={22} className="mr-4 text-teal-300" />
+              <Sun size={20} className="mr-3 text-teal-300 group-hover:text-white" />
             )}
             <span>{theme === 'light' ? (t.darkMode || 'Dark Mode') : (t.lightMode || 'Light Mode')}</span>
           </button>
           <button
             onClick={toggleLanguage}
-            className={`flex items-center w-full px-4 py-3 rounded-2xl text-base font-semibold transition-all duration-300 hover:scale-105 hover:shadow-lg ${
-              theme === 'light' ? 'hover:bg-teal-100 hover:text-teal-600' : 'hover:bg-teal-800 hover:text-white'
-            }`}
+            className={`flex items-center w-full px-4 py-3 rounded-xl text-sm font-medium transition-all duration-300 group hover:bg-gradient-to-r hover:from-teal-500 hover:to-blue-500 hover:text-white transform hover:-translate-y-0.5 hover:shadow-lg ${
+              theme === 'light' ? 'text-blue-900' : 'text-teal-200'
+            } ${isSidebarOpen ? 'animate-slide-in' : ''}`}
+            style={{ animationDelay: `${(navItems.length + 1) * 50}ms` }}
             aria-label={language === 'en' ? t.switchAmharic || 'Switch to Amharic' : t.switchEnglish || 'Switch to English'}
           >
-            <Globe size={22} className={`mr-4 ${theme === 'light' ? 'text-teal-600' : 'text-teal-300'}`} />
+            <Globe size={20} className={`mr-3 ${theme === 'light' ? 'text-teal-600 group-hover:text-white' : 'text-teal-300 group-hover:text-white'}`} />
             <span>{language === 'en' ? 'አማርኛ' : 'English'}</span>
           </button>
         </nav>
@@ -482,7 +479,6 @@ export default function UserDashboard() {
             >
               {isSidebarOpen ? <X size={28} /> : <Menu size={28} />}
             </button>
-<<<<<<< HEAD
             <div className="flex items-center space-x-3">
               <div className="relative w-10 h-10">
                 <Image
@@ -512,21 +508,6 @@ export default function UserDashboard() {
                   {t.welcome || 'Welcome'}: {userEmail} | {t.category || 'Category'}: {userCategory}
                 </p>
               </div>
-=======
-            <div>
-              <h2
-                className={`text-2xl font-semibold tracking-tight ${
-                  theme === 'light' ? 'text-zinc-800' : 'text-white'
-                }`}
-              >
-                {t.dashboard || 'User Dashboard'}
-              </h2>
-              <p
-                className={`text-sm ${theme === 'light' ? 'text-gray-600' : 'text-gray-300'}`}
-              >
-                {t.welcome || 'Welcome'}: {userEmail}
-              </p>
->>>>>>> 6ad8c0f427699eee8a6c2db4967cbafc13f0fc0d
             </div>
           </div>
           <div className="flex items-center space-x-4">
@@ -544,15 +525,9 @@ export default function UserDashboard() {
                 onChange={(e) => setSearchQuery(e.target.value)}
                 className={`pl-10 pr-4 py-2 rounded-2xl border ${
                   theme === 'light'
-<<<<<<< HEAD
                     ? 'bg-white bg-opacity-90 border-blue-100 text-blue-900'
                     : 'bg-blue-800 bg-opacity-90 border-teal-800 text-white'
                 } focus:outline-none focus:ring-2 focus:ring-teal-600 transition-all duration-300`}
-=======
-                    ? 'bg-white border-gray-300 text-gray-900'
-                    : 'bg-gray-700 border-gray-600 text-white'
-                } focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-all duration-200`}
->>>>>>> 6ad8c0f427699eee8a6c2db4967cbafc13f0fc0d
                 aria-label={t.searchPlaceholder || 'Search classes, trainers'}
               />
             </div>
