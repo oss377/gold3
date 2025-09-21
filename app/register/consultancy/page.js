@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect, useContext, useCallback } from 'react';
+import React, { useState, useEffect, useContext, useCallback, useRef } from 'react';
 import { useForm } from 'react-hook-form';
 import { ToastContainer, toast } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
@@ -9,14 +9,13 @@ import { createUserWithEmailAndPassword, onAuthStateChanged } from 'firebase/aut
 import { auth, db } from '../../fconfig';
 import { LanguageContext } from '../../../context/LanguageContext';
 import { ThemeContext } from '../../../context/ThemeContext';
-import { ChevronLeftIcon, ChevronRightIcon, CheckCircleIcon } from '@heroicons/react/24/solid';
+import { ChevronLeftIcon, ChevronRightIcon, CheckCircleIcon, CameraIcon, EyeIcon, EyeSlashIcon } from '@heroicons/react/24/solid';
 import { useRouter } from 'next/navigation';
 
 // Cloudinary configuration
 const CLOUDINARY_UPLOAD_PRESET = process.env.NEXT_PUBLIC_CLOUDINARY_UPLOAD_PRESET || 'photoupload';
 const CLOUDINARY_CLOUD_NAME = process.env.NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME || 'dnqsoezfo';
 const CLOUDINARY_FOLDER = process.env.NEXT_PUBLIC_CLOUDINARY_FOLDER || 'photoss';
-
 
 const GYMForm = () => {
   const { t } = useContext(LanguageContext);
@@ -74,6 +73,11 @@ const GYMForm = () => {
   const [isSubmitted, setIsSubmitted] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
   const [photoPreview, setPhotoPreview] = useState(null);
+  const [showPassword, setShowPassword] = useState(false);
+  const [showCamera, setShowCamera] = useState(false);
+  const videoRef = useRef(null);
+  const canvasRef = useRef(null);
+  const fileInputRef = useRef(null);
   const router = useRouter();
 
   const steps = [
@@ -118,6 +122,35 @@ const GYMForm = () => {
     calculateBMI();
   }, [height, weight, setValue]);
 
+  // Initialize and cleanup camera stream
+  useEffect(() => {
+    let stream = null;
+
+    const startCamera = async () => {
+      try {
+        stream = await navigator.mediaDevices.getUserMedia({ video: true });
+        if (videoRef.current) {
+          videoRef.current.srcObject = stream;
+          videoRef.current.play();
+        }
+      } catch (error) {
+        console.error('Error accessing camera:', error);
+        toast.error('Unable to access camera. Please select an image instead.');
+        setShowCamera(false);
+      }
+    };
+
+    if (showCamera) {
+      startCamera();
+    }
+
+    return () => {
+      if (stream) {
+        stream.getTracks().forEach(track => track.stop());
+      }
+    };
+  }, [showCamera]);
+
   // Validate Firebase services and authentication
   useEffect(() => {
     if (!auth || !db) {
@@ -146,15 +179,103 @@ const GYMForm = () => {
     return () => unsubscribe();
   }, [t, setValue]);
 
+  const handlePhotoChange = (e) => {
+    console.log('Photo input changed:', e.target.files);
+    const file = e.target.files?.[0] || null;
+    if (!file) {
+      console.warn('No file selected');
+      setPhotoPreview(null);
+      setValue('photo', null, { shouldValidate: true });
+      toast.error('No photo selected.');
+      return;
+    }
+
+    const isImage = file.type.startsWith('image/');
+    const isUnderSizeLimit = file.size <= 5 * 1024 * 1024; // 5MB limit
+    if (!isImage) {
+      console.warn(`Invalid file type for ${file.name}`);
+      toast.error(`${file.name} is not a valid image file.`);
+      setPhotoPreview(null);
+      setValue('photo', null, { shouldValidate: true });
+      return;
+    }
+    if (!isUnderSizeLimit) {
+      console.warn(`File size too large for ${file.name}`);
+      toast.error(`${file.name} exceeds the 5MB size limit.`);
+      setPhotoPreview(null);
+      setValue('photo', null, { shouldValidate: true });
+      return;
+    }
+
+    const dataTransfer = new DataTransfer();
+    dataTransfer.items.add(file);
+    const newFileList = dataTransfer.files;
+
+    setValue('photo', newFileList, { shouldValidate: true });
+
+    const reader = new FileReader();
+    reader.onloadend = () => {
+      if (reader.result && typeof reader.result === 'string') {
+        setPhotoPreview(reader.result);
+      }
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const capturePhoto = () => {
+    if (!videoRef.current || !canvasRef.current || !fileInputRef.current) return;
+
+    const video = videoRef.current;
+    const canvas = canvasRef.current;
+    canvas.width = video.videoWidth;
+    canvas.height = video.videoHeight;
+    const ctx = canvas.getContext('2d');
+    if (ctx) {
+      ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+      canvas.toBlob((blob) => {
+        if (blob) {
+          const file = new File([blob], `capture-${Date.now()}.jpg`, { type: 'image/jpeg' });
+          const dataTransfer = new DataTransfer();
+          dataTransfer.items.add(file);
+          const newFileList = dataTransfer.files;
+
+          // Update the file input's files
+          fileInputRef.current.files = newFileList;
+
+          // Update form state
+          setValue('photo', newFileList, { shouldValidate: true });
+
+          // Update preview
+          const reader = new FileReader();
+          reader.onloadend = () => {
+            if (reader.result && typeof reader.result === 'string') {
+              setPhotoPreview(reader.result);
+            }
+          };
+          reader.readAsDataURL(file);
+
+          setShowCamera(false);
+          toast.success('Photo captured successfully.');
+        } else {
+          toast.error('Failed to capture photo.');
+        }
+      }, 'image/jpeg', 0.95); // Set quality to 95%
+    }
+  };
+
   const uploadToCloudinary = async (file) => {
-    if (!file) return null;
+    if (!file) {
+      console.error('No file provided for upload.');
+      toast.error('No photo selected for upload.');
+      return null;
+    }
     const maxSize = 5 * 1024 * 1024; // 5MB
     if (file.size > maxSize) {
-      toast.error(t.fileSizeError || 'File size exceeds 5MB limit.');
+      toast.error('File size exceeds 5MB limit.');
       return null;
     }
     if (!file.type.startsWith('image/')) {
-      toast.error(t.fileTypeError || 'Please upload a valid image file.');
+      toast.error('Please upload a valid image file.');
       return null;
     }
     setIsUploading(true);
@@ -163,46 +284,45 @@ const GYMForm = () => {
       formData.append('file', file);
       formData.append('upload_preset', CLOUDINARY_UPLOAD_PRESET);
       formData.append('folder', CLOUDINARY_FOLDER);
+      formData.append('resource_type', 'image');
+
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 30000);
 
       const response = await fetch(
         `https://api.cloudinary.com/v1_1/${CLOUDINARY_CLOUD_NAME}/image/upload`,
-        {
-          method: 'POST',
-          body: formData,
-        }
+        { method: 'POST', body: formData, signal: controller.signal }
       );
-      const responseJson = await response.json();
+      clearTimeout(timeoutId);
+      const data = await response.json();
       setIsUploading(false);
-      if (responseJson.secure_url) {
-        return responseJson.secure_url;
+      if (data.secure_url) {
+        toast.success('Photo uploaded successfully.');
+        return data.secure_url;
       } else {
-        toast.error(t.storageError || 'Failed to upload image.');
+        toast.error(`Failed to upload image: ${data.error?.message || 'Unknown error'}`);
         return null;
       }
     } catch (error) {
       setIsUploading(false);
-      toast.error(t.storageError || `Failed to upload image: ${error.message}`);
+      if (error.name === 'AbortError') {
+        toast.error('Upload timeout.');
+      } else {
+        toast.error(`Failed to upload image: ${error.message}`);
+      }
       return null;
-    }
-  };
-
-  const handlePhotoChange = (e) => {
-    const file = e.target.files[0];
-    if (file) {
-      setValue('photo', e.target.files);
-      const reader = new FileReader();
-      reader.onloadend = () => {
-        setPhotoPreview(reader.result);
-      };
-      reader.readAsDataURL(file);
-    } else {
-      setPhotoPreview(null);
     }
   };
 
   const submitRegistration = useCallback(
     async (data) => {
       setFormErrors({});
+      if (!data.photo || data.photo.length === 0) {
+        setFormErrors({ global: 'Please select or capture a photo.' });
+        toast.error('Please select or capture a photo.');
+        return;
+      }
+
       if (!db) {
         setFormErrors({ global: t.serviceError || 'Firestore database is not initialized.' });
         toast.error(t.serviceError || 'Firestore database is not initialized.', {
@@ -464,17 +584,26 @@ const GYMForm = () => {
                   </div>
                   <div>
                     <label className={`block text-sm font-medium ${theme === 'dark' ? 'text-gray-300' : 'text-gray-700'}`}>{t.password || 'Password'}</label>
-                    <input
-                      type="password"
-                      {...register('password', { 
-                        required: !isAuthenticated ? (t.passwordError || 'Password is required') : false,
-                        minLength: !isAuthenticated ? { value: 6, message: t.passwordMinLength || 'Password must be at least 6 characters' } : undefined
-                      })}
-                      className={`mt-1 block w-full px-4 py-3 border ${theme === 'dark' ? 'bg-gray-700 border-gray-600 focus:ring-yellow-400 focus:border-yellow-400' : 'bg-white border-gray-300 focus:ring-blue-500 focus:border-blue-500'} rounded-lg shadow-sm transition-all duration-300`}
-                      placeholder={t.passwordPlaceholder || 'Enter your password'}
-                      aria-label="Password"
-                      aria-describedby={errors.password ? 'password-error' : undefined}
-                    />
+                    <div className="relative">
+                      <input
+                        type={showPassword ? 'text' : 'password'}
+                        {...register('password', { 
+                          required: !isAuthenticated ? (t.passwordError || 'Password is required') : false,
+                          minLength: !isAuthenticated ? { value: 6, message: t.passwordMinLength || 'Password must be at least 6 characters' } : undefined
+                        })}
+                        className={`mt-1 block w-full px-4 py-3 pl-10 pr-10 border ${theme === 'dark' ? 'bg-gray-700 border-gray-600 focus:ring-yellow-400 focus:border-yellow-400' : 'bg-white border-gray-300 focus:ring-blue-500 focus:border-blue-500'} rounded-lg shadow-sm transition-all duration-300`}
+                        placeholder={t.passwordPlaceholder || 'Enter your password'}
+                        aria-label="Password"
+                        aria-describedby={errors.password ? 'password-error' : undefined}
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setShowPassword(!showPassword)}
+                        className={`absolute inset-y-0 right-3 flex items-center hover:bg-gray-200/50 rounded-full p-1 transition-colors ${theme === "light" ? "text-zinc-500" : "text-zinc-400"}`}
+                      >
+                        {showPassword ? <EyeOffIcon className="w-5 h-5" /> : <EyeIcon className="w-5 h-5" />}
+                      </button>
+                    </div>
                     {errors.password && <p id="password-error" className={`text-xs mt-1 ${theme === 'dark' ? 'text-red-400' : 'text-red-500'}`}>{errors.password.message}</p>}
                   </div>
                   <div className="sm:col-span-2">
@@ -694,7 +823,7 @@ const GYMForm = () => {
                         aria-describedby={errors.medicalConditionsDetails ? 'medicalConditionsDetails-error' : undefined}
                       />
                       {errors.medicalConditionsDetails && <p id="medicalConditionsDetails-error" className={`text-xs mt-1 ${theme === 'dark' ? 'text-red-400' : 'text-red-500'}`}>{errors.medicalConditionsDetails.message}</p>}
-                    </div>
+                  </div>
                   )}
                   <div className="sm:col-span-2">
                     <label className={`block text-sm font-medium ${theme === 'dark' ? 'text-gray-300' : 'text-gray-700'}`}>{t.healthIssues || 'Health Issues'}</label>
@@ -887,21 +1016,49 @@ const GYMForm = () => {
               <div className="space-y-6 animate-fade-in">
                 <h3 className={`text-xl font-semibold ${theme === 'dark' ? 'text-white' : 'text-gray-800'}`}>{t.review || 'Review Your Information'}</h3>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
-                  <div>
-                    <label className={`block text-sm font-medium ${theme === 'dark' ? 'text-gray-300' : 'text-gray-700'}`}>{t.photo || 'Photo'}</label>
-                    <input
-                      type="file"
-                      accept="image/*"
-                      {...register('photo')}
-                      onChange={handlePhotoChange}
-                      className={`mt-1 block w-full text-sm ${theme === 'dark' ? 'text-gray-300 file:bg-gray-600 file:text-yellow-400 hover:file:bg-gray-500' : 'text-gray-500 file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100'} file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-sm file:font-semibold transition-all duration-300`}
-                      aria-label="Photo Upload"
-                    />
-                    {photoPreview && (
-                      <img src={photoPreview} alt="Photo preview" className="mt-2 w-32 h-32 object-cover rounded-lg" />
+                  <div className="sm:col-span-2">
+                    <label className={`block text-sm font-medium ${theme === 'dark' ? 'text-gray-300' : 'text-gray-700'}`}>{t.photo || 'Photo (Required)'}</label>
+                    <div className="flex gap-4">
+                      <input
+                        {...register('photo', {
+                          required: 'A photo is required.',
+                          validate: (files) => files && files.length > 0 ? true : 'A photo is required.'
+                        })}
+                        ref={fileInputRef}
+                        type="file"
+                        accept="image/*"
+                        onChange={handlePhotoChange}
+                        className={`mt-1 block w-full px-4 py-2 rounded-lg border ${theme === "light" ? "bg-white border-gray-300 text-gray-900 file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100 focus:ring-2 focus:ring-blue-500 focus:border-blue-500" : "bg-gray-800 border-gray-700 text-gray-300 file:bg-gray-600 file:text-yellow-400 hover:file:bg-gray-500 focus:ring-2 focus:ring-yellow-400 focus:border-yellow-400"} transition-all duration-200`}
+                        aria-label="Photo"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setShowCamera(!showCamera)}
+                        className={`mt-1 px-4 py-2 rounded-lg font-medium transition-colors duration-200 flex items-center gap-2 ${theme === "light" ? "bg-blue-600 text-white hover:bg-blue-700 focus:ring-2 focus:ring-blue-500" : "bg-gray-700 text-white hover:bg-gray-600 focus:ring-2 focus:ring-yellow-400"}`}
+                      >
+                        <CameraIcon className="w-5 h-5" /> {showCamera ? 'Close Camera' : 'Take Photo'}
+                      </button>
+                    </div>
+                    {showCamera && (
+                      <div className="mt-4">
+                        <video ref={videoRef} className="w-full max-w-md rounded-lg" autoPlay />
+                        <canvas ref={canvasRef} className="hidden" />
+                        <button
+                          type="button"
+                          onClick={capturePhoto}
+                          className={`mt-2 px-4 py-2 rounded-lg font-medium transition-colors duration-200 flex items-center gap-2 ${theme === "light" ? "bg-blue-600 text-white hover:bg-blue-700 focus:ring-2 focus:ring-blue-500" : "bg-gray-700 text-white hover:bg-gray-600 focus:ring-2 focus:ring-yellow-400"}`}
+                        >
+                          <CameraIcon className="w-5 h-5" /> Capture
+                        </button>
+                      </div>
                     )}
-                    {isUploading && <p className={`text-xs mt-1 ${theme === 'dark' ? 'text-yellow-400' : 'text-blue-500'}`}>{t.uploading || 'Uploading image...'}</p>}
-                    {errors.photo && <p id="photo-error" className={`text-xs mt-1 ${theme === 'dark' ? 'text-red-400' : 'text-red-500'}`}>{errors.photo.message}</p>}
+                    {photoPreview && <img src={photoPreview} alt="Preview" className="mt-2 w-32 h-32 object-cover rounded" />}
+                    {isUploading && (
+                      <p className={`text-sm flex items-center gap-2 ${theme === "light" ? "text-blue-500" : "text-yellow-400"}`}>
+                        Uploading...
+                      </p>
+                    )}
+                    {errors.photo && <p id="photo-error" className={`text-xs mt-1 ${theme === "light" ? "text-red-500" : "text-red-400"}`}>{errors.photo.message}</p>}
                   </div>
                   <div>
                     <label className={`block text-sm font-medium ${theme === 'dark' ? 'text-gray-300' : 'text-gray-700'}`}>{t.preferredStartDate || 'Preferred Start Date'}</label>
@@ -1016,8 +1173,8 @@ const GYMForm = () => {
               ) : (
                 <button
                   type="submit"
-                  disabled={isUploading}
-                  className={`px-6 py-3 rounded-lg text-sm font-medium transition-all duration-300 ${!isUploading ? (theme === 'dark' ? 'bg-gray-700 text-white hover:bg-gray-600 focus:ring-2 focus:ring-yellow-400' : 'bg-blue-600 text-white hover:bg-blue-700 focus:ring-2 focus:ring-blue-500') : (theme === 'dark' ? 'bg-gray-600 text-gray-400 cursor-not-allowed' : 'bg-gray-400 text-gray-500 cursor-not-allowed')}`}
+                  disabled={isUploading || showCamera}
+                  className={`px-6 py-3 rounded-lg text-sm font-medium transition-all duration-300 ${!isUploading && !showCamera ? (theme === 'dark' ? 'bg-gray-700 text-white hover:bg-gray-600 focus:ring-2 focus:ring-yellow-400' : 'bg-blue-600 text-white hover:bg-blue-700 focus:ring-2 focus:ring-blue-500') : (theme === 'dark' ? 'bg-gray-600 text-gray-400 cursor-not-allowed' : 'bg-gray-400 text-gray-500 cursor-not-allowed')}`}
                 >
                   {t.submit || 'Submit'}
                 </button>
