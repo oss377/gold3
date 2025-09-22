@@ -601,7 +601,7 @@ const GYMForm = () => {
                         onClick={() => setShowPassword(!showPassword)}
                         className={`absolute inset-y-0 right-3 flex items-center hover:bg-gray-200/50 rounded-full p-1 transition-colors ${theme === "light" ? "text-zinc-500" : "text-zinc-400"}`}
                       >
-                        {showPassword ? <EyeOffIcon className="w-5 h-5" /> : <EyeIcon className="w-5 h-5" />}
+                        {showPassword ? <EyeSlashIcon className="w-5 h-5" /> : <EyeIcon className="w-5 h-5" />}
                       </button>
                     </div>
                     {errors.password && <p id="password-error" className={`text-xs mt-1 ${theme === 'dark' ? 'text-red-400' : 'text-red-500'}`}>{errors.password.message}</p>}

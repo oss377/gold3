@@ -17,6 +17,8 @@ import {
   Globe,
   Loader2,
   CreditCard,
+  User,
+  Users,
 } from 'lucide-react';
 import Link from 'next/link';
 import Image from 'next/image';
@@ -253,8 +255,19 @@ export default function UserDashboard() {
 
     fetchData();
   }, [isAuthorized, userEmail, t]);
-=======
->>>>>>> 6ad8c0f427699eee8a6c2db4967cbafc13f0fc0d
+
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (messageOptionsRef.current && !messageOptionsRef.current.contains(event.target as Node)) {
+        setShowMessageOptions(false);
+      }
+    };
+
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, []);
 
   const navItems = [
     { name: t.dashboard || 'Dashboard', icon: BarChart, href: '/user' },
@@ -292,10 +305,12 @@ export default function UserDashboard() {
 
   const handlePay = () => router.push('/payment');
 
-=======
->>>>>>> 6ad8c0f427699eee8a6c2db4967cbafc13f0fc0d
-  const handleMessageClick = async () => {
+  const handleMessageClick = () => {
     console.log('Message icon clicked! Navigating to messages...');
+    setShowMessageOptions((prev) => !prev);
+  };
+
+  const handleMessageNavigation = async (type: string) => {
     try {
       await router.push(
         type === 'personal'
