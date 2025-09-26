@@ -1,3 +1,4 @@
+
 'use client';
 
 import { useState, useEffect, useContext, useRef } from 'react';
@@ -20,6 +21,7 @@ import {
   User,
   ChevronLeft,
   ChevronRight,
+  Lock,
 } from 'lucide-react';
 import Link from 'next/link';
 import { toast } from 'react-toastify';
@@ -65,6 +67,11 @@ interface Translation {
   instructor?: string;
   statsOverview?: string;
   welcome?: string;
+  chooseMessageType?: string;
+  publicMessage?: string;
+  personalMessage?: string;
+  messages?: string;
+  navigationError?: string;
 }
 
 // Interface for Schedule
@@ -90,11 +97,13 @@ export default function GymDashboard() {
   const [isUploadModalOpen, setIsUploadModalOpen] = useState<boolean>(false);
   const [isRegisterModalOpen, setIsRegisterModalOpen] = useState<boolean>(false);
   const [isScheduleModalOpen, setIsScheduleModalOpen] = useState<boolean>(false);
+  const [isMessageOptionsOpen, setIsMessageOptionsOpen] = useState<boolean>(false);
   const [refreshTrigger, setRefreshTrigger] = useState<number>(0);
   const [isAuthorized, setIsAuthorized] = useState<boolean>(false);
   const [schedules, setSchedules] = useState<Schedule[]>([]);
   const [hasStats, setHasStats] = useState<boolean>(true);
   const [userName, setUserName] = useState<string>('Admin');
+  const [userEmail, setUserEmail] = useState<string>('');
   const router = useRouter();
   const { theme, toggleTheme } = useContext(ThemeContext);
   const { language, toggleLanguage, t } = useContext(LanguageContext);
@@ -119,6 +128,7 @@ export default function GymDashboard() {
 
         const data = await response.json();
         const email = data.email || 'Unknown';
+        setUserEmail(email);
         setIsAuthorized(true);
 
         // Fetch user data from GYM collection
@@ -178,7 +188,28 @@ export default function GymDashboard() {
   };
 
   const handleMessageClick = () => {
-    router.push('/adminMessage');
+    setIsMessageOptionsOpen(true);
+  };
+
+  const handlePublicMessage = () => {
+    try {
+      const userData = encodeURIComponent(JSON.stringify({ name: userName, email: userEmail }));
+      router.push(`/publicMessage?userData=${userData}`);
+      setIsMessageOptionsOpen(false);
+    } catch (error) {
+      console.error('Navigation to /publicMessage failed:', error);
+      toast.error(t.navigationError || 'Failed to navigate to public messages. Please try again.');
+    }
+  };
+
+  const handlePersonalMessage = () => {
+    try {
+      router.push('/adminMessage');
+      setIsMessageOptionsOpen(false);
+    } catch (error) {
+      console.error('Navigation to /adminMessage failed:', error);
+      toast.error(t.navigationError || 'Failed to navigate to personal messages. Please try again.');
+    }
   };
 
   const openUploadModal = () => setIsUploadModalOpen(true);
@@ -474,6 +505,62 @@ export default function GymDashboard() {
           theme={theme}
           t={t}
         />
+
+        {/* Message Options Modal */}
+        {isMessageOptionsOpen && (
+          <div
+            className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-60 backdrop-blur-sm transition-opacity duration-300"
+            onClick={() => setIsMessageOptionsOpen(false)}
+          >
+            <div
+              className={`rounded-3xl shadow-2xl p-8 max-w-md w-full mx-4 transform transition-all duration-500 scale-100 hover:scale-105 ${
+                theme === 'light'
+                  ? 'bg-gradient-to-br from-white to-blue-50 text-blue-900'
+                  : 'bg-gradient-to-br from-blue-900 to-teal-900 text-white'
+              }`}
+              onClick={(e) => e.stopPropagation()}
+              style={{
+                boxShadow: theme === 'light'
+                  ? '0 15px 40px rgba(59, 130, 246, 0.4)'
+                  : '0 15px 40px rgba(45, 212, 191, 0.4)',
+              }}
+            >
+              <div className="flex justify-between items-center mb-6">
+                <h3 className="text-2xl font-bold">{t['chooseMessageType'] || 'Choose Message Type'}</h3>
+                <button
+                  onClick={() => setIsMessageOptionsOpen(false)}
+                  className={`${theme === 'light' ? 'text-blue-600 hover:text-blue-900' : 'text-teal-300 hover:text-white'}`}
+                >
+                  <XCircle size={24} />
+                </button>
+              </div>
+              <div className="grid grid-cols-1 gap-4">
+                <button
+                  onClick={handlePublicMessage}
+                  className={`flex items-center justify-center p-4 rounded-2xl font-semibold transition-all duration-300 hover:scale-105 hover:shadow-lg ${
+                    theme === 'light'
+                      ? 'bg-teal-100 hover:bg-teal-200 text-teal-800'
+                      : 'bg-teal-800 hover:bg-teal-700 text-white'
+                  }`}
+                >
+                  <Globe size={24} className="mr-3" />
+                  {t['publicMessage'] || 'Public Message'}
+                </button>
+                <button
+                  onClick={handlePersonalMessage}
+                  className={`flex items-center justify-center p-4 rounded-2xl font-semibold transition-all duration-300 hover:scale-105 hover:shadow-lg ${
+                    theme === 'light'
+                      ? 'bg-blue-100 hover:bg-blue-200 text-blue-800'
+                      : 'bg-blue-800 hover:bg-blue-700 text-white'
+                  }`}
+                >
+                  <Lock size={24} className="mr-3" />
+                  {t['personalMessage'] || 'Personal Message'}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* Main Content Area */}
         <main
