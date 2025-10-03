@@ -1,11 +1,10 @@
 "use client";
 
-import { useState, useContext } from "react";
+import { useState, Dispatch, SetStateAction, FormEvent } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { Loader2, Mail, Lock, Eye, EyeOff, CheckCircle, XCircle } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
-import { ThemeContext } from "../context/ThemeContext";
 
 // Email validation function
 const validateEmail = (email: string): boolean => {
@@ -13,19 +12,20 @@ const validateEmail = (email: string): boolean => {
   return regex.test(email);
 };
 
-export default function LoginPage() {
+// Define props interface
+interface LoginProps {
+  onSubmit: (e: React.FormEvent<HTMLFormElement>) => void;
+  toggleAuthType: Dispatch<SetStateAction<string>>;
+  theme: "light" | "dark";
+}
+
+export default function LoginPage({ onSubmit, toggleAuthType, theme }: LoginProps) {
   const [email, setEmail] = useState<string>("");
   const [password, setPassword] = useState<string>("");
   const [error, setError] = useState<string>("");
   const [loading, setLoading] = useState<boolean>(false);
   const [showPassword, setShowPassword] = useState<boolean>(false);
   const router = useRouter();
-  const context = useContext(ThemeContext);
-
-  if (!context) {
-    throw new Error("ThemeContext must be used within a ThemeProvider");
-  }
-  const { theme } = context;
 
   const handleLogin = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
@@ -65,6 +65,9 @@ export default function LoginPage() {
         }
         return;
       }
+
+      // Call the passed onSubmit prop to allow parent component to handle additional logic
+      onSubmit(e);
 
       // Redirect based on role
       if (data.role === "admin") {
@@ -287,14 +290,14 @@ export default function LoginPage() {
             </Link>
             <p className={`text-sm ${theme === "light" ? "text-zinc-600" : "text-zinc-400"}`}>
               Don&apos;t have an account?{" "}
-              <Link
-                href="/signup"
+              <button
+                onClick={() => toggleAuthType("signup")}
                 className={`underline ${
                   theme === "light" ? "text-blue-600" : "text-blue-400"
                 } hover:text-blue-500`}
               >
                 Sign Up
-              </Link>
+              </button>
             </p>
           </div>
         </div>

@@ -8,8 +8,54 @@ import { toast } from 'react-toastify';
 import { ThemeContext } from '../../context/ThemeContext';
 import { LanguageContext } from '../../context/LanguageContext';
 
-// Ensure context providers are Client Components
-// Example: ThemeContext.tsx and LanguageContext.tsx should start with "use client"
+// Define interface for translations
+interface Translations {
+  messageDeleted: string;
+  pleaseLogin?: string;
+  fetchError?: string;
+  userDataNotFound?: string;
+  emptyMessage?: string;
+  messageSent?: string;
+  sendError?: string;
+  messagePinned?: string;
+  messageUnpinned?: string;
+  pinError?: string;
+  cannotDelete?: string;
+  deleteError?: string;
+  groupCreationError?: string;
+  groupCreated?: string;
+  loading?: string;
+  messages?: string;
+  welcome?: string;
+  newChat?: string;
+  createGroup?: string;
+  conversations?: string;
+  noConversations?: string;
+  noMessages?: string;
+  selectConversation?: string;
+  pinnedMessages?: string;
+  unpin?: string;
+  pin?: string;
+  reply?: string;
+  delete?: string;
+  backToConversations?: string;
+  selectRecipient?: string;
+  changeRecipient?: string;
+  replyingTo?: string;
+  cancel?: string;
+  messagePlaceholder?: string;
+  sendMessage?: string;
+  groupNamePlaceholder?: string;
+  selectUsers?: string;
+  create?: string;
+  noContent?: string;
+  noTimestamp?: string;
+}
+
+// Define interface for LanguageContext
+interface LanguageContextType {
+  t: Translations;
+}
 
 // Define interface for message
 interface Message {
@@ -72,7 +118,7 @@ export default function Messages() {
   }
 
   const { theme } = themeContext;
-  const { t = {} } = languageContext;
+  const { t } = languageContext as unknown as LanguageContextType; // Explicitly cast to the correct type
 
   // Generate consistent conversation ID
   const getConversationId = (email1: string, email2: string) => {

@@ -1,4 +1,3 @@
-
 'use client';
 
 import { useState, useEffect, useContext } from 'react';
@@ -6,7 +5,7 @@ import { doc, getDoc, setDoc, updateDoc, arrayUnion, collection, getDocs, onSnap
 import { db } from '../fconfig';
 import { toast } from 'react-toastify';
 import { ThemeContext } from '../../context/ThemeContext';
-import { LanguageContext } from '../../context/LanguageContext';
+import { LanguageContext,  } from '../../context/LanguageContext';
 
 // Define interface for message
 interface Message {
@@ -55,7 +54,7 @@ export default function Messages() {
   }
 
   const { theme } = themeContext;
-  const { t = {} } = languageContext;
+  const { t } = languageContext;
 
   // Generate consistent conversation ID
   const getConversationId = (email1: string, email2: string) => {

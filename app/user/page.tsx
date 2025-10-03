@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect, useContext, useRef } from 'react';
-import { useRouter, usePathname } from 'next/navigation'; // Added usePathname for active state
+import { useRouter, usePathname } from 'next/navigation';
 import {
   Menu,
   X,
@@ -27,7 +27,7 @@ import { collection, query, where, getDocs, doc, getDoc, orderBy, limit } from '
 import { db } from '../fconfig';
 import UserNotification from '../../components/UserNotification';
 import { ThemeContext } from '../../context/ThemeContext';
-import LanguageContext from '../../context/LanguageContext';
+import { LanguageContext } from '../../context/LanguageContext';
 
 // Define interfaces for type safety
 interface Schedule {
@@ -58,6 +58,79 @@ interface Stats {
   progress: number;
 }
 
+interface NavItem {
+  name: string;
+  icon: React.ElementType;
+  href?: string;
+}
+
+// Define interface for translations
+interface Translations {
+  pleaseLogin?: string;
+  userDataNotFound?: string;
+  nextSessionTime?: string;
+  nextSessionClass?: string;
+  indexError?: string;
+  fetchError?: string;
+  dashboard?: string;
+  profile?: string;
+  schedules?: string;
+  workouts?: string;
+  settings?: string;
+  logout?: string;
+  logoutSuccess?: string;
+  logoutFailed?: string;
+  logoutError?: string;
+  errorMessage?: string;
+  loading?: string;
+  appTitle?: string;
+  closeSidebar?: string;
+  openSidebar?: string;
+  darkMode?: string;
+  lightMode?: string;
+  switchAmharic?: string;
+  switchEnglish?: string;
+  welcome?: string;
+  category?: string;
+  searchPlaceholder?: string;
+  messages?: string;
+  selectMessageType?: string;
+  personalMessage?: string;
+  personalMessageDesc?: string;
+  publicMessage?: string;
+  publicMessageDesc?: string;
+  pay?: string;
+  getConsultancy?: string;
+  workoutsCompleted?: string;
+  changeWorkouts?: string;
+  classesAttended?: string;
+  changeClasses?: string;
+  nextSession?: string;
+  progress?: string;
+  changeProgress?: string;
+  workoutSchedule?: string;
+  schedulesFound?: string;
+  yogaClass?: string;
+  yogaTime?: string;
+  instructor?: string;
+  yogaInstructor?: string;
+  noSchedules?: string;
+  recentActivities?: string;
+  activity?: string;
+  date?: string;
+  trainer?: string;
+  status?: string;
+  completed?: string;
+  noActivities?: string;
+}
+
+// Define interface for LanguageContext
+interface LanguageContextType {
+  language: string;
+  toggleLanguage: () => void;
+  t: Translations;
+}
+
 export default function UserDashboard() {
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [notifications, setNotifications] = useState(3);
@@ -77,16 +150,16 @@ export default function UserDashboard() {
   const [nextSession, setNextSession] = useState<NextSession>({ time: '', class: '' });
   const [schedules, setSchedules] = useState<Schedule[]>([]);
   const [recentActivities, setRecentActivities] = useState<Activity[]>([]);
-  const [showMessageOptions, setShowMessageOptions] = useState(false); // New state for message options
+  const [showMessageOptions, setShowMessageOptions] = useState(false);
   const router = useRouter();
-  const pathname = usePathname(); // Added to track current route for active state
+  const pathname = usePathname();
   const themeContext = useContext(ThemeContext);
   const languageContext = useContext(LanguageContext);
   const messageOptionsRef = useRef<HTMLDivElement>(null);
 
   // Refs for logo image fallbacks
-  const sidebarIconRef = useRef(null);
-  const headerIconRef = useRef(null);
+  const sidebarIconRef = useRef<SVGSVGElement>(null) as React.RefObject<SVGSVGElement>;
+  const headerIconRef = useRef<SVGSVGElement>(null) as React.RefObject<SVGSVGElement>;
 
   // Check for ThemeContext
   if (!themeContext) {
@@ -99,7 +172,7 @@ export default function UserDashboard() {
   }
 
   const { theme, toggleTheme } = themeContext;
-  const { language = 'en', toggleLanguage = () => {}, t = {} } = languageContext;
+  const { language = 'en', toggleLanguage = () => {}, t } = languageContext as LanguageContextType; // Cast to correct type
 
   // Handle image load errors
   const handleImageError = (e: React.SyntheticEvent<HTMLImageElement>, ref: React.RefObject<SVGSVGElement>) => {
@@ -238,15 +311,16 @@ export default function UserDashboard() {
               `Unable to fetch activities due to a missing database index. Please create it in the Firebase Console: ${indexUrl}`
             );
             console.error('Index creation required. Visit:', indexUrl);
-            setRecentActivities([]); // Fallback to empty array to continue loading dashboard
+            setRecentActivities([]);
           } else {
             toast.error(t.fetchError || 'Failed to fetch recent activities');
-            setRecentActivities([]); // Fallback to empty array
+            setRecentActivities([]);
           }
         }
       } catch (error) {
         console.error('Error fetching dashboard data:', error);
         toast.error(t.fetchError || 'Failed to fetch dashboard data');
+        setRecentActivities([]);
       } finally {
         setLoading(false);
         console.log('Data loading completed');
@@ -254,7 +328,7 @@ export default function UserDashboard() {
     };
 
     fetchData();
-  }, [isAuthorized, userEmail, t]);
+  }, [isAuthorized, userEmail, userCategory, t]);
 
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
@@ -269,9 +343,9 @@ export default function UserDashboard() {
     };
   }, []);
 
-  const navItems = [
+  const navItems: NavItem[] = [
     { name: t.dashboard || 'Dashboard', icon: BarChart, href: '/user' },
-    { name: t.profile || 'Profile', icon: User, href: '/user/profile' }, // Added Profile nav item
+    { name: t.profile || 'Profile', icon: User, href: '/user/profile' },
     { name: t.schedules || 'Schedules', icon: Calendar, href: '/user/schedules' },
     { name: t.workouts || 'Workouts', icon: Dumbbell, href: '/user/workouts' },
     { name: t.settings || 'Settings', icon: Settings, href: '/user/settings' },
@@ -317,7 +391,7 @@ export default function UserDashboard() {
           ? `/userMessage?email=${encodeURIComponent(userEmail)}&name=${encodeURIComponent(userName)}`
           : `/publicMessage?email=${encodeURIComponent(userEmail)}&name=${encodeURIComponent(userName)}`
       );
-      setShowMessageOptions(false); // Close options after navigation
+      setShowMessageOptions(false);
     } catch (error) {
       setErrorMessage(t.errorMessage || `${type.charAt(0).toUpperCase() + type.slice(1)} messages page is currently unavailable. Please try again later.`);
       setTimeout(() => setErrorMessage(''), 5000);
@@ -415,25 +489,7 @@ export default function UserDashboard() {
         </div>
         <nav className="mt-8 space-y-2 px-4">
           {navItems.map((item, index) =>
-            item.name === (t.logout || 'Logout') ? (
-              <button
-                key={item.name}
-                onClick={handleLogout}
-                className={`flex items-center w-full px-4 py-3 rounded-xl text-sm font-medium transition-all duration-300 group hover:bg-gradient-to-r hover:from-teal-500 hover:to-blue-500 hover:text-white transform hover:-translate-y-0.5 hover:shadow-lg ${
-                  theme === 'light' ? 'text-blue-900' : 'text-teal-200'
-                } ${isSidebarOpen ? 'animate-slide-in' : ''}`}
-                style={{ animationDelay: `${index * 50}ms` }}
-                aria-label={t.logout || 'Logout'}
-              >
-                <item.icon
-                  size={20}
-                  className={`mr-3 transition-colors duration-300 group-hover:text-white ${
-                    theme === 'light' ? 'text-teal-600' : 'text-teal-300'
-                  }`}
-                />
-                <span>{item.name}</span>
-              </button>
-            ) : (
+            item.href ? (
               <Link
                 key={item.name}
                 href={item.href}
@@ -457,6 +513,24 @@ export default function UserDashboard() {
                 />
                 <span>{item.name}</span>
               </Link>
+            ) : (
+              <button
+                key={item.name}
+                onClick={handleLogout}
+                className={`flex items-center w-full px-4 py-3 rounded-xl text-sm font-medium transition-all duration-300 group hover:bg-gradient-to-r hover:from-teal-500 hover:to-blue-500 hover:text-white transform hover:-translate-y-0.5 hover:shadow-lg ${
+                  theme === 'light' ? 'text-blue-900' : 'text-teal-200'
+                } ${isSidebarOpen ? 'animate-slide-in' : ''}`}
+                style={{ animationDelay: `${index * 50}ms` }}
+                aria-label={t.logout || 'Logout'}
+              >
+                <item.icon
+                  size={20}
+                  className={`mr-3 transition-colors duration-300 group-hover:text-white ${
+                    theme === 'light' ? 'text-teal-600' : 'text-teal-300'
+                  }`}
+                />
+                <span>{item.name}</span>
+              </button>
             )
           )}
           <button
@@ -476,7 +550,9 @@ export default function UserDashboard() {
           </button>
           <button
             onClick={toggleLanguage}
-            className={`flex items-center w-full px-4 py-3 rounded-xl text-sm font-medium transition-all duration-300 group hover:bg-gradient-to-r hover:from-teal-500 hover:to-blue-500 hover:text-white transform hover:-translate-y-0.5 hover:shadow-lg ${
+            className={`flex items-center w-full px-4 py-3 rounded-xl text-sm font-medium transition-all duration-300 group hover:bg-gradient-to-r hover:from-teal-500 hover:to-blue-500 hover:text-white transform
+
+ hover:-translate-y-0.5 hover:shadow-lg ${
               theme === 'light' ? 'text-blue-900' : 'text-teal-200'
             } ${isSidebarOpen ? 'animate-slide-in' : ''}`}
             style={{ animationDelay: `${(navItems.length + 1) * 50}ms` }}

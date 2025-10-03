@@ -19,14 +19,9 @@ interface Video {
   duration: string;
 }
 
-// Define types for component props
-interface VideoFetchProps {
-  setWorkouts?: React.Dispatch<React.SetStateAction<Record<string, Video[]>>>; // Made optional
-  setLoading?: React.Dispatch<React.SetStateAction<boolean>>;
-  loading?: boolean;
-}
-
-export default function VideoFetch({ setWorkouts, setLoading, loading }: VideoFetchProps) {
+export default function VideoFetch() {
+  const [workouts, setWorkouts] = useState<Record<string, Video[]>>({});
+  const [loading, setLoading] = useState<boolean>(true);
   const [videos, setVideos] = useState<Record<string, Video[]>>({});
   const [expandedCategories, setExpandedCategories] = useState<Record<string, boolean>>({});
   const [playing, setPlaying] = useState<Record<string, boolean>>({});
@@ -61,7 +56,7 @@ export default function VideoFetch({ setWorkouts, setLoading, loading }: VideoFe
   useEffect(() => {
     const fetchVideos = async () => {
       try {
-        setLoading?.(true);
+        setLoading(true);
         const querySnapshot = await getDocs(collection(db, 'videos'));
         const fetchedVideos: Video[] = querySnapshot.docs.map((doc) => ({
           id: doc.id,
@@ -79,7 +74,7 @@ export default function VideoFetch({ setWorkouts, setLoading, loading }: VideoFe
         }, {});
 
         setVideos(groupedVideos);
-        setWorkouts?.(groupedVideos);
+        setWorkouts(groupedVideos);
 
         const initialStates = fetchedVideos.reduce((acc: {
           playing: Record<string, boolean>;
@@ -113,11 +108,11 @@ export default function VideoFetch({ setWorkouts, setLoading, loading }: VideoFe
       } catch (error: unknown) {
         console.error('Error fetching videos:', error);
       } finally {
-        setLoading?.(false);
+        setLoading(false);
       }
     };
     fetchVideos();
-  }, [setWorkouts, setLoading]);
+  }, []);
 
   const toggleCategoryExpansion = (category: string): void => {
     setExpandedCategories((prev) => ({

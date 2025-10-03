@@ -1,26 +1,171 @@
-"use client";
+'use client';
 
 import { createContext, useState, useEffect, ReactNode } from 'react';
+
+// Define the Translation interface to include required properties
+interface Translation {
+  basic: string;
+  premium: string;
+  vip: string;
+  error: string;
+  fetchUsersError: string;
+  fetchConversationUsersError: string;
+  fetchError: string;
+  emptyMessage: string;
+  selectUser: string;
+  messageSent: string;
+  sendError: string;
+  noContent: string;
+  noTimestamp: string;
+  noMessages: string;
+  backToChats: string;
+  messagePlaceholder: string;
+  searchPlaceholder: string;
+  conversationUsers: string;
+  noConversationUsers: string;
+  allUsers: string;
+  noUsers: string;
+  newConversation: string;
+  [key: string]: string | undefined; // Allow additional properties
+  dashboard?: string;
+  members?: string;
+  classes?: string;
+  settings?: string;
+  logout?: string;
+  profile?: string;
+  adminDashboard?: string;
+  darkMode?: string;
+  uploadVideo?: string;
+  registerMember?: string;
+  uploadSchedule?: string;
+  activeMembers?: string;
+  classesToday?: string;
+  newSignups?: string;
+  revenue?: string;
+  changeMembers?: string;
+  changeClasses?: string;
+  changeSignups?: string;
+  changeRevenue?: string;
+  permissionDenied?: string;
+  fetchSchedulesError?: string;
+  fetchStatsError?: string;
+  todaysSchedule?: string;
+  loading?: string;
+  noSchedules?: string;
+  instructor?: string;
+  statsOverview?: string;
+  welcome?: string;
+  chooseMessageType?: string;
+  publicMessage?: string;
+  personalMessage?: string;
+  messages?: string;
+  navigationError?: string;
+  namePlaceholder?: string;
+  emailPlaceholder?: string;
+  passwordPlaceholder?: string;
+  subadmin?: string;
+  phonePlaceholder?: string;
+  addressPlaceholder?: string;
+  registerButton?: string;
+  registrationSuccess?: string;
+  registrationError?: string;
+  userDataNotFound?: string;
+  logoutSuccess?: string;
+  logoutError?: string;
+  welcomeMessage?: string;
+  getStarted?: string;
+  quickActions?: string;
+  enlargedProfile?: string;
+  timePlaceholder?: string;
+  addTime?: string;
+  descriptionPlaceholder?: string;
+  titlePlaceholder?: string;
+  datePlaceholder?: string;
+  errorMessage?: string;
+  fixErrors?: string;
+  title: string;
+  titleRequired: string;
+  instructorRequired: string;
+  date: string;
+  description: string;
+  instructorPlaceholder?: string;
+  category: string;
+  categoryRequired: string;
+  selectCategory: string;
+  weeklySchedule: string;
+  timeInvalid: string;
+  timeRequired: string;
+  upload: string;
+  uploading: string;
+  cancel: string;
+  close: string;
+  success: string;
+  
+
+}
 
 // Define the shape of the context using TypeScript
 type LanguageContextType = {
   language: 'en' | 'am';
   toggleLanguage: () => void;
-  t: { [key: string]: string };
+  t: Translation;
 };
 
 // Create the context with a default value
 export const LanguageContext = createContext<LanguageContextType>({
   language: 'en',
   toggleLanguage: () => {},
-  t: {},
+  t: {
+    basic: "",
+    premium: "",
+    vip: "",
+    error: "",
+    fetchUsersError: "",
+    fetchConversationUsersError: "",
+    fetchError: "",
+    emptyMessage: "",
+    selectUser: "",
+    messageSent: "",
+    sendError: "",
+    noContent: "",
+    noTimestamp: "",
+    noMessages: "",
+    backToChats: "",
+    messagePlaceholder: "",
+    searchPlaceholder: "",
+    conversationUsers: "",
+    noConversationUsers: "",
+    allUsers: "",
+    noUsers: "",
+    newConversation: "",
+    enlargedProfile: "Enlarged Profile",
+    fixErrors: "Please fix the errors above.",
+    title: '',
+    titleRequired: '',
+    instructorRequired: '',
+    date: '',
+    description: '',
+    category: '',
+    categoryRequired: '',
+    selectCategory: '',
+    weeklySchedule: '',
+    timeInvalid: '',
+    timeRequired: '',
+    upload: '',
+    uploading: '',
+    cancel: '',
+    close: '',
+    success: ''
+  },
 });
 
-// Combined translation dictionary with existing and new terms
+// Combined translation dictionary with all required terms
 const translations: { [key: string]: { en: string; am: string } } = {
-  // Original translations
+  // Existing translations
+  
   welcome: { en: "Welcome to Your Fitness Journey", am: "ወደ እርስዎ የአካል ብቃት ጉዞ እንኳን ደህና መጡ" },
   getStarted: { en: "Get Started Today", am: "ዛሬ ይጀምሩ" },
+  enlargedProfile: { en: "Enlarged Profile", am: "የታሸገ መገለጫ" },
   discoverWorkouts: { en: "Discover a variety of workouts tailored to your fitness goals.", am: "ለእርስዎ የአካል ብቃት ግቦች የተዘጋጁ የተለያዩ የአካል ብቃት እንቅስቃሴዎችን ያግኙ።" },
   startConsultancy: { en: "Start Consultancy", am: "ምክክር ጀምር" },
   browseWorkouts: { en: "Browse Workouts", am: "የአካል ብቃት እንቅስቃሴዎችን ያስሱ" },
@@ -29,10 +174,20 @@ const translations: { [key: string]: { en: string; am: string } } = {
   joinChat: { en: "Join Chat", am: "ውይይት ይቀላቀሉ" },
   appTitle: { en: "Workout App", am: "የአካል ብቃት መተግበሪያ" },
   home: { en: "Home", am: "መነሻ" },
+  fixErrors: { en: "Please fix the errors above.", am: "እባክዎ ላይ ያሉትን ስህተቶች ያስተካክሉ።" },
   workouts: { en: "Workouts", am: "የአካል ብቃት እንቅስቃሴዎች" },
   favorites: { en: "Favorites", am: "ተወዳጆች" },
   login: { en: "Login", am: "መግባት" },
   register: { en: "Register", am: "መመዝገብ" },
+  instructorPlaceholder: { en: "Select an instructor", am: "አሰልጣኝ ይምረጡ" },
+  timePlaceholder: { en: "Select time range", am: "የጊዜ ክልል ይምረጡ" },
+  addTime: { en: "Add Time Slot", am: "የጊዜ ክፍል አክል" },
+  descriptionPlaceholder: { en: "Enter class description", am: "የክፍል መግለጫ ያስገቡ" },
+titlePlaceholder: { en: "Class Title", am: "የክፍል ርዕስ" },
+datePlaceholder: { en: "Select a date", am: "ቀን ይምረጡ" },
+errorMessage: { en: "Please fill out all required fields.", am: "እባክዎ ሁሉንም ያስፈልጉ መስኮቶች ይሙሉ." },
+
+
   darkMode: { en: "Dark Mode", am: "ጨለማ ሁነታ" },
   lightMode: { en: "Light Mode", am: "ብርሃን ሁነታ" },
   joinNow: { en: "Join Our Community", am: "አሁን ይቀላቀሉ" },
@@ -138,7 +293,11 @@ const translations: { [key: string]: { en: string; am: string } } = {
   uploadedVideos: { en: "Uploaded Videos", am: "የተጫኑ ቪዲዮዎች" },
   allVideosUploaded: { en: "All videos uploaded successfully", am: "ሁሉም ቪዲዮዎች በተሳካ ሁኔታ ተጭነዋል" },
   upload: { en: "Upload", am: "ጫን" },
-  // New translations for PersonalTrainingForm
+  categoryPlaceholder: { en: "Select a category", am: "ምድብ ይምረጡ" },
+  timePlaceholder24: { en: "Select time (24-hour format)", am: "ጊዜ ይምረጡ (24-ሰዓት ቅርጸት)" },
+  addTimeSlot: { en: "Add Time Slot", am: "የጊዜ ክፍል አክል" },
+  // New translations for the multi-step form
+  
   title: { en: "Personal Training Consultation Form", am: "የግል ስልጠና ምክክር ቅጽ" },
   heading: { en: "Personal Training Consultation", am: "የግል ስልጠና ምክክር" },
   registrationComplete: { en: "Registration Complete!", am: "ምዝገባ ተጠናቀቀ!" },
@@ -160,7 +319,6 @@ const translations: { [key: string]: { en: string; am: string } } = {
   city: { en: "City", am: "ከተማ" },
   country: { en: "Country", am: "ሀገር" },
   jobType: { en: "Job Type", am: "የሥራ ዓይነት" },
-  // email: { en: "Email", am: "ኢሜይል" },
   emergencyName: { en: "Emergency Contact Name", am: "የድንገተኛ ግንኙነት ስም" },
   emergencyPhone: { en: "Emergency Phone Number", am: "የድንገተኛ ስልክ ቁጥር" },
   gender: { en: "Gender", am: "ጾታ" },
@@ -186,7 +344,7 @@ const translations: { [key: string]: { en: string; am: string } } = {
   trainingType: { en: "Describe the type of training", am: "የስልጠናውን ዓይነት ይግለፁ" },
   preferredTrainingTime: { en: "Preferred Training Time", am: "ተመራጭ የስልጠና ጊዜ" },
   trainerExpectations: { en: "Expectations of Personal Trainer", am: "የግል አሰልጣኝ ተስፋዎች" },
-  agreeTerms: { en: "I agree to the terms & conditions", am: "የውሎች እና ሁኔታዎችን እስማማለሁ" },
+  agreeTerms: { en: "I agree to the terms & conditions", am: "ውሎችን እስማማለሁ" },
   preferredStartDate: { en: "Preferred Start Date", am: "ተመራጭ የመጀመሪያ ቀን" },
   signature: { en: "Client Signature", am: "የደንበኛ ፊርማ" },
   firstNamePlaceholder: { en: "Enter your first name", am: "የመጀመሪያ ስምዎን ያስገቡ" },
@@ -240,17 +398,17 @@ const translations: { [key: string]: { en: string; am: string } } = {
   goalWeightPositive: { en: "Goal weight must be positive", am: "የግብ ክብደት አዎንታዊ መሆን አለበት" },
   workScheduleError: { en: "Work schedule is required", am: "የሥራ መርሃ ግብር ያሸፈልጋል" },
   travelFrequencyError: { en: "Travel frequency is required", am: "የጉዞ ድግግሞሽ ያስፈልጋል" },
-  medicalConditionsError: { en: "Medical conditions selection is required", am: "የሕክምና ሁኔታዎች ምርጫ ያስፈልጋል" },
+  medicalConditionsError: { en: "Medical conditions selection is required", am: "የሕክምና ሁኔታዎች ምርጫ ያሸፈልጋል" },
   medicalConditionsDetailsError: { en: "Medical condition details are required", am: "የሕክምና ሁኔታዎች ዝርዝሮች ያሸፈልጋል" },
   trainingGoalError: { en: "Training goal is required", am: "የስልጠና ግብ ያስፈልጋል" },
   goalReasonError: { en: "Goal reason is required", am: "የግብ ምክንያት ያስፈልጋል" },
   goalTimelineError: { en: "Goal timeline is required", am: "የግብ ጊዜ ሰሌዳ ያሸፈልጋል" },
   previousTrainingError: { en: "Previous training selection is required", am: "ያለፈ ስልጠና ምርጫ ያስፈልጋል" },
-  trainingTypeError: { en: "Training type is required", am: "የስልጠና ዓይነት ያስፈልጋል" },
-  trainerExpectationsError: { en: "Trainer expectations are required", am: "የአሰልጣኝ ተስፋዎች ያስፈልጋል" },
+  trainingTypeError: { en: "Training type is required", am: "የስልጠና ዓይነት ያሸፈልጋል" },
+  trainerExpectationsError: { en: "Trainer expectations are required", am: "የአሰልጣኝ ተስፋዎች ያሸፈልጋል" },
   agreeTermsError: { en: "You must agree to terms", am: "ውሎችን መቀበል አለብዎት" },
   preferredStartDateError: { en: "Start date is required", am: "የመጀመሪያ ቀን ያሸፈልጋል" },
-  signatureError: { en: "Signature is required", am: "ፊርማ ያስፈልጋል" },
+  signatureError: { en: "Signature is required", am: "ፊርማ ያሸፈልጋል" },
   fileSizeError: { en: "File size exceeds 5MB limit.", am: "የፋይል መጠን ከ5ሜባ በላይ ነው።" },
   fileTypeError: { en: "Please upload a valid image file.", am: "እባክዎ ትክክለኛ የምስል ፋይል ይጫኑ።" },
   uploadError: { en: "Failed to upload image.", am: "ምስል መጫን አልተሳካም።" },
@@ -261,6 +419,167 @@ const translations: { [key: string]: { en: string; am: string } } = {
   serviceError: { en: "Firebase service is unavailable.", am: "የፋየርቤዝ አገልግሎት አይገኝም።" },
   invalidDataError: { en: "Invalid data provided.", am: "ልክ ያልሆነ መረጃ ቀርቧል።" },
   storageError: { en: "Storage permission denied.", am: "የማከማቻ ፍቃድ ተከልክሏል።" },
+  namePlaceholder: { en: "Enter member's name", am: "የአባል ስም ያስገቡ" },
+  passwordPlaceholder: { en: "Enter password", am: "የይለፍ ቃል ያስገቡ" },
+  subadmin: { en: "Subadmin", am: "ንዑስ አስተዳዳሪ" },
+  phonePlaceholder: { en: "Enter phone number", am: "ስልክ ቁጥር ያስገቡ" },
+  registerButton: { en: "Register Member", am: "አባል መዝግብ" },
+  registrationSuccess: { en: "Member registered successfully", am: "አባል በተሳካ ሁኔታ ተመዝግቧል" },
+  registrationError: { en: "Failed to register member", am: "አባል መመዝገብ አልተሳካም" },
+  userDataNotFound: { en: "User data not found", am: "የተጠቃሚ መረጃ አልተገኘም" },
+  logoutSuccess: { en: "Logged out successfully", am: "በተሳካ ሁኔታ ወጥቷል" },
+  logoutError: { en: "Logout failed", am: "መውጣት አልተሳካም" },
+  success: { en: "Success", am: "ስኬት" },
+  time: { en: "Time", am: "ጊዜ" },
+  timeRequired: { en: "Time is required", am: "ጊዜ ያስፈልጋል" },
+  dateRequired: { en: "Date is required", am: "ቀን ያስፈልጋል" },
+  submitSuccess: { en: "Schedule submitted successfully", am: "መርሃ ግብር በተሳካ ሁኔታ ተልኳል" },
+  selectCategory: { en: "Select Category", am: "ምድብ ይምረጡ" },
+  selectTime: { en: "Select Time", am: "ጊዜ ይምረጡ" },
+  selectDate: { en: "Select Date", am: "ቀን ይምረጡ" },
+  edit: { en: "Edit", am: "አርትዕ" },
+  confirmDelete: { en: "Are you sure you want to delete this schedule?", am: "እርግጠኛ ነዎት ይህን መርሃ ግብር ማስወገድ ይፈልጋሉ?" },
+  deleteSuccess: { en: "Schedule deleted successfully", am: "መርሃ ግብር በተሳካ ሁኔታ ተሰርዟል" },
+  deleteError: { en: "Failed to delete schedule", am: "መርሃ ግብር ማስወገድ አልተሳካም" },
+  uploading: { en: "Uploading...", am: "በማጫን ላይ..." },
+  timeInvalid: { en: "Invalid time format", am: "ልክ ያልሆነ የጊዜ ቅርጸት" },
+ 
+
+
+  permissionDenied: { en: "Permission denied: Please log in", am: "ፍቃድ ተከልክሏል፡ እባክዎ ይግቡ" },
+  fetchSchedulesError: { en: "Failed to fetch schedules", am: "መርሃ ግብሮችን መግኘት አልተሳካም" },
+  fetchStatsError: { en: "Failed to fetch stats", am: "ስታቲስቲክስ መግኘት አልተሳካም" },
+  todaysSchedule: { en: "Today's Schedule", am: "የዛሬ መርሃ ግብር" },
+  noSchedules: { en: "No schedules available", am: "ምንም መርሃ ግብሮች የሉም" },
+  statsOverview: { en: "Stats Overview", am: "የስታቲስቲክስ አጠቃላይ እይታ" },
+  chooseMessageType: { en: "Choose Message Type", am: "የመልእክት አይነት ይምረጡ" },
+  publicMessage: { en: "Public Message", am: "የህዝብ መልእክት" },
+  personalMessage: { en: "Personal Message", am: "የግል መልእክት" },
+  messages: { en: "Messages", am: "መልእክቶች" },
+  navigationError: { en: "Failed to navigate", am: "መጓዝ አልተሳካም" },
+  welcomeMessage: { en: "Track progress, manage members, and grow your fitness community", am: "እድገትን ይከታተሉ፣ አባላትን ያስተዳድሩ፣ እና የአካል ብቃት ማህበረሰብዎን ያሳድጉ" },
+  quickActions: { en: "Quick Actions", am: "ፈጣን ተግባራት" },
+  profile: { en: "Profile", am: "መገለጫ" },
+  changeMembers: { en: "+12% this month", am: "+12% በዚህ ወር" },
+  changeClasses: { en: "+3 from yesterday", am: "+3 ከትናንት" },
+  changeSignups: { en: "+15% this week", am: "+15% በዚህ ሳምንት" },
+  changeRevenue: { en: "+7% this month", am: "+7% በዚህ ወር" },
+  basic: { en: "Basic", am: "መሠረታዊ" },
+  standard: { en: "Standard", am: "መደበኛ" },
+  premium: { en: "Premium", am: "ፕሪሚየም" },
+  vip: { en: "VIP", am: "ቪአይፒ" },
+  error: { en: "an error", am: "ስህተት" },
+  info: { en: "Info", am: "መረጃ" },
+  warning: { en: "Warning", am: "ማስጠንቀቂያ" },
+  // New translations for adminMessage/page.tsx
+  fetchUsersError: { en: "Failed to fetch users", am: "ተጠቃሚዎችን መግኘት አልተሳካም" },
+  fetchConversationUsersError: { en: "Failed to fetch conversations", am: "ውይይቶችን መግኘት አልተሳካም" },
+  fetchError: { en: "Failed to fetch messages", am: "መልእክቶችን መግኘት አልተሳካም" },
+  emptyMessage: { en: "Message cannot be empty", am: "መልእክት ባዶ መሆን አይችልም" },
+  selectUser: { en: "Please select a user to message", am: "እባክዎ መልእክት ለመላክ ተጠቃሚ ይምረጡ" },
+  messageSent: { en: "Message sent successfully", am: "መልእክት በተሳካ ሁኔታ ተልኳል" },
+  sendError: { en: "Failed to send message", am: "መልእክት መላክ አልተሳካም" },
+  noContent: { en: "No content", am: "ምንም ይዘት የለም" },
+  noTimestamp: { en: "No timestamp", am: "ምንም የጊዜ ማህተም የለም" },
+  noMessages: { en: "No messages yet. Start the conversation!", am: "ገና ምንም መልእክቶች የሉም። ውይይቱን ይጀምሩ!" },
+  backToChats: { en: "Back to Chats", am: "ወደ ውይይቶች ተመለስ" },
+  messagePlaceholder: { en: "Type a message...", am: "መልእክት ይተይቡ..." },
+  conversationUsers: { en: "Conversations", am: "ውይይቶች" },
+  noConversationUsers: { en: "No active conversations.", am: "ምንም ንቁ ውይይቶች የሉም።" },
+  allUsers: { en: "All Users", am: "ሁሉም ተጠቃሚዎች" },
+  noUsers: { en: "No users found.", am: "ምንም ተጠቃሚዎች አልተገኙም።" },
+  newConversation: { en: "Start new conversation", am: "አዲስ ውይይት ጀምር" },
+};
+
+// Default translations to ensure all required keys are present
+const defaultTranslations: Translation = {
+  basic: "Basic",
+  premium: "Premium",
+  vip: "VIP",
+  error: "an error",
+  fetchUsersError: "Failed to fetch users",
+  fetchConversationUsersError: "Failed to fetch conversations",
+  fetchError: "Failed to fetch messages",
+  emptyMessage: "Message cannot be empty",
+  selectUser: "Please select a user to message",
+  messageSent: "Message sent successfully",
+  sendError: "Failed to send message",
+  noContent: "No content",
+  noTimestamp: "No timestamp",
+  noMessages: "No messages yet. Start the conversation!",
+  backToChats: "Back to Chats",
+  messagePlaceholder: "Type a message...",
+  searchPlaceholder: "Search conversations...",
+  conversationUsers: "Conversations",
+  noConversationUsers: "No active conversations.",
+  allUsers: "All Users",
+  noUsers: "No users found.",
+  newConversation: "Start new conversation",
+  dashboard: "Dashboard",
+  members: "Members",
+  classes: "Classes",
+  settings: "Settings",
+  logout: "Logout",
+  profile: "Profile",
+  adminDashboard: "Admin Dashboard",
+  darkMode: "Dark Mode",
+  uploadVideo: "Upload Video",
+  registerMember: "Register Member",
+  uploadSchedule: "Upload Schedule",
+  activeMembers: "Active Members",
+  classesToday: "Classes Today",
+  newSignups: "New Signups",
+  revenue: "Revenue",
+  changeMembers: "+12% this month",
+  changeClasses: "+3 from yesterday",
+  changeSignups: "+15% this week",
+  changeRevenue: "+7% this month",
+  permissionDenied: "Please log in to access this page",
+  fetchSchedulesError: "Failed to fetch schedules",
+  fetchStatsError: "Failed to fetch stats",
+  todaysSchedule: "Today's Schedule",
+  loading: "Loading",
+  noSchedules: "No schedules available",
+  instructor: "Instructor",
+  statsOverview: "Stats Overview",
+  welcome: "Welcome",
+  chooseMessageType: "Choose Message Type",
+  publicMessage: "Public Message",
+  personalMessage: "Personal Message",
+  messages: "Messages",
+  navigationError: "Failed to navigate",
+  namePlaceholder: "Enter member's name",
+  emailPlaceholder: "Enter your email",
+  passwordPlaceholder: "Enter password",
+  subadmin: "Subadmin",
+  phonePlaceholder: "Enter phone number",
+  addressPlaceholder: "Enter your address",
+  registerButton: "Register Member",
+  registrationSuccess: "Member registered successfully",
+  registrationError: "Failed to register member",
+  userDataNotFound: "User data not found",
+  logoutSuccess: "Logged out successfully",
+  logoutError: "Logout failed",
+  welcomeMessage: "Track progress, manage members, and grow your fitness community",
+  getStarted: "Get Started",
+  quickActions: "Quick Actions",
+  fixErrors: "Please fix the errors in the form",
+  title: '',
+  titleRequired: '',
+  instructorRequired: '',
+  date: '',
+  description: '',
+  category: '',
+  categoryRequired: '',
+  selectCategory: '',
+  weeklySchedule: '',
+  timeInvalid: '',
+  timeRequired: '',
+  upload: '',
+  uploading: '',
+  cancel: '',
+  close: '',
+  success: ''
 };
 
 export function LanguageProvider({ children }: { children: ReactNode }) {
@@ -282,10 +601,13 @@ export function LanguageProvider({ children }: { children: ReactNode }) {
   };
 
   // Transform translations to a flat object based on the selected language
-  const t = Object.keys(translations).reduce((acc, key) => {
-    acc[key] = translations[key][language];
-    return acc;
-  }, {} as { [key: string]: string });
+  const t: Translation = {
+    ...defaultTranslations,
+    ...Object.keys(translations).reduce((acc, key) => {
+      acc[key] = translations[key][language];
+      return acc;
+    }, {} as Translation),
+  };
 
   return (
     <LanguageContext.Provider value={{ language, toggleLanguage, t }}>
@@ -295,3 +617,4 @@ export function LanguageProvider({ children }: { children: ReactNode }) {
 }
 
 export default LanguageContext;
+export type { Translation };

@@ -1,4 +1,3 @@
-
 'use client';
 
 import { useState, useEffect, useContext, useRef, Dispatch, SetStateAction } from 'react';
@@ -80,9 +79,7 @@ interface NavItem {
 
 // Interface for Workouts State
 interface Workouts {
-  karate: Workout[];
-  aerobics: Workout[];
-  gym: Workout[];
+  [category: string]: Workout[];
 }
 
 // Interface for VideoFetch Props
@@ -90,9 +87,6 @@ interface VideoFetchProps {
   setWorkouts: Dispatch<SetStateAction<Workouts>>;
   setLoading: Dispatch<SetStateAction<boolean>>;
   loading: boolean;
-  categories: Category[];
-  handleDelete: (categoryId: string, workoutId: string) => Promise<void>;
-  handleTogglePending: (categoryId: string, workoutId: string, currentStatus: boolean) => Promise<void>;
 }
 
 // Interface for Login Props
@@ -554,7 +548,9 @@ export default function Home() {
               </p>
               <button
                 onClick={() => toggleAuthModal('register')}
-                className={`{ mt-6 px-8 py-3 rounded-2xl font-semibold transition-all duration-300 hover:scale-105 hover:shadow-lg ${ theme === 'light' ? 'bg-teal-600 hover:bg-teal-700 text-white' : 'bg-teal-800 hover:bg-teal-700 text-white'}`}
+                className={`mt-6 px-8 py-3 rounded-2xl font-semibold transition-all duration-300 hover:scale-105 hover:shadow-lg ${
+                  theme === 'light' ? 'bg-teal-600 hover:bg-teal-700 text-white' : 'bg-teal-800 hover:bg-teal-700 text-white'
+                }`}
               >
                 {t.getStartedButton || 'Join Now'}
               </button>
@@ -571,9 +567,6 @@ export default function Home() {
               setWorkouts={setWorkouts}
               setLoading={setLoading}
               loading={loading}
-              categories={categories}
-              handleDelete={handleDelete}
-              handleTogglePending={handleTogglePending}
             />
           </section>
 
@@ -818,4 +811,6 @@ export default function Home() {
           </div>
         )}
       </div>
-    </div> );}
+    </div>
+  );
+}

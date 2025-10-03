@@ -2,13 +2,30 @@ import { NextResponse } from 'next/server';
 import { v4 as uuidv4 } from 'uuid';
 import axios from 'axios';
 
-const CHAPA_SECRET_KEY = 'CHASECK_TEST-58lnUfVn9htMOD7XTnYeytLzgWSLlR7P';
+// TypeScript interface for translation
+interface Translation {
+  invalidData?: string;
+  invalidEmail?: string;
+  invalidAmount?: string;
+  invalidCurrency?: string;
+  invalidCallbackUrl?: string;
+  invalidReturnUrl?: string;
+  duplicateTransaction?: string;
+  paymentInitializationFailed?: string;
+  invalidChapaResponse?: string;
+  serverError?: string;
+  [key: string]: string | undefined;
+}
 
-const ALLOWED_CURRENCIES = ['ETB', 'USD'] as const;
-type AllowedCurrency = typeof ALLOWED_CURRENCIES[number];
+// Interface for customization
+interface Customization {
+  title?: string;
+  description?: string;
+}
 
+// Interface for payment validation
 interface PaymentValidation {
-  amount: number;
+  amount: number | string; // Allow string to handle raw JSON input
   currency: AllowedCurrency;
   email: string;
   first_name?: string;
@@ -17,30 +34,38 @@ interface PaymentValidation {
   return_url?: string;
   order_id?: string;
   metadata?: Record<string, any>;
+  customization?: Customization; // Add customization field
+  t?: Translation; // Optional translation prop
 }
+
+const CHAPA_SECRET_KEY = 'CHASECK_TEST-58lnUfVn9htMOD7XTnYeytLzgWSLlR7P';
+
+const ALLOWED_CURRENCIES = ['ETB', 'USD'] as const;
+type AllowedCurrency = typeof ALLOWED_CURRENCIES[number];
 
 // Validation functions
 const validatePaymentData = (data: any): data is PaymentValidation => {
   const errors: string[] = [];
+  const t = data.t || {}; // Use provided translations or fallback to empty object
 
   if (!data.email || !validateEmail(data.email)) {
-    errors.push('Invalid or missing email address');
+    errors.push(t.invalidEmail || 'Invalid or missing email address');
   }
 
-  if (!data.amount || isNaN(parseFloat(data.amount)) || parseFloat(data.amount) <= 0) {
-    errors.push('Invalid or missing amount');
+  if (!data.amount || (typeof data.amount !== 'string' && typeof data.amount !== 'number') || isNaN(parseFloat(String(data.amount))) || parseFloat(String(data.amount)) <= 0) {
+    errors.push(t.invalidAmount || 'Invalid or missing amount');
   }
 
   if (!data.currency || !ALLOWED_CURRENCIES.includes(data.currency)) {
-    errors.push(`Invalid currency. Allowed currencies: ${ALLOWED_CURRENCIES.join(', ')}`);
+    errors.push(t.invalidCurrency || `Invalid currency. Allowed currencies: ${ALLOWED_CURRENCIES.join(', ')}`);
   }
 
   if (!data.callback_url || !isValidUrl(data.callback_url)) {
-    errors.push('Invalid or missing callback URL');
+    errors.push(t.invalidCallbackUrl || 'Invalid or missing callback URL');
   }
 
   if (data.return_url && !isValidUrl(data.return_url)) {
-    errors.push('Invalid return URL');
+    errors.push(t.invalidReturnUrl || 'Invalid return URL');
   }
 
   return errors.length === 0;
@@ -103,8 +128,8 @@ export async function POST(req: Request) {
     if (!validatePaymentData(body)) {
       console.error(`[${requestId}] Validation failed for request`);
       return NextResponse.json({
-        error: 'Validation failed',
-        message: 'Invalid payment data provided',
+        error: body.t?.invalidData || 'Validation failed',
+        message: body.t?.invalidData || 'Invalid payment data provided',
         code: 'INVALID_DATA',
         request_id: requestId,
       }, { status: 400 });
@@ -115,18 +140,18 @@ export async function POST(req: Request) {
     if (payments[tx_ref]) {
       console.warn(`[${requestId}] Duplicate transaction detected for tx_ref: ${tx_ref}`);
       return NextResponse.json({
-        error: 'Duplicate transaction',
-        message: 'This transaction reference already exists',
+        error: body.t?.duplicateTransaction || 'Duplicate transaction',
+        message: body.t?.duplicateTransaction || 'This transaction reference already exists',
         code: 'DUPLICATE_TX_REF',
         request_id: requestId,
       }, { status: 409 });
     }
 
-    const amount = parseFloat(body.amount);
+    const amount = parseFloat(String(body.amount)); // Convert to string to handle both number and string inputs
     const threePercentValue = (amount * 0.03).toFixed(2);
 
     const paymentData = {
-      amount: body.amount.toString(),
+      amount: amount.toString(), // Chapa API expects string
       currency: body.currency,
       email: body.email,
       first_name: body.first_name || "Guest",
@@ -140,7 +165,7 @@ export async function POST(req: Request) {
 
     const paymentRecord = {
       tx_ref,
-      amount: amount,
+      amount,
       currency: body.currency,
       email: body.email,
       first_name: body.first_name || "Guest",
@@ -175,8 +200,8 @@ export async function POST(req: Request) {
     if (!response.data?.data?.checkout_url) {
       console.error(`[${requestId}] Invalid Chapa API response:`, JSON.stringify(response.data, null, 2));
       return NextResponse.json({
-        error: 'Payment initialization failed',
-        message: 'Invalid response from payment gateway',
+        error: body.t?.invalidChapaResponse || 'Payment initialization failed',
+        message: body.t?.invalidChapaResponse || 'Invalid response from payment gateway',
         code: 'INVALID_CHAPA_RESPONSE',
         request_id: requestId,
       }, { status: 502 });
@@ -228,8 +253,16 @@ export async function POST(req: Request) {
     const errorMessage = error.response?.data?.message || error.message || 'Unknown server error';
     console.error(`[${requestId}] Payment initialization failed after ${Date.now() - startTime}ms:`, errorMessage, error.stack);
 
+    // Try to parse the request body again for translation, fallback to empty object if fails
+    let body: any = {};
+    try {
+      body = await req.json();
+    } catch {
+      body = {};
+    }
+
     return NextResponse.json({
-      error: 'Payment initialization failed',
+      error: body.t?.serverError || 'Payment initialization failed',
       message: errorMessage,
       request_id: requestId,
       code: 'INITIALIZATION_FAILED',

@@ -1,12 +1,15 @@
-import { NextApiRequest, NextApiResponse } from "next";
-import { db } from "../../../fconfig";
-import { collection, query, where, getDocs, runTransaction, doc } from "firebase/firestore";
+import { NextRequest, NextResponse } from "next/server";
+import { db } from "../../../fconfig"; // ✅ adjust import path if needed
+import {
+  collection,
+  query,
+  where,
+  getDocs,
+  runTransaction,
+  doc,
+} from "firebase/firestore";
 
-export default async function handler(req: NextApiRequest, res: NextApiResponse) {
-  if (req.method !== "POST") {
-    return res.status(405).json({ error: "Method not allowed" });
-  }
-
+export async function POST(req: NextRequest) {
   try {
     // Find pending payments that have expired
     const now = new Date().toISOString();
@@ -41,20 +44,27 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
           const arrangementRef = doc(db, "seatArrangements", arrangementDoc.id);
           const arrangement = arrangementDoc.data();
-          const updatedSeats = arrangement.seats.map((s: { id: string; state: string }) =>
-            s.id === seatId ? { ...s, state: "available" } : s
+          const updatedSeats = arrangement.seats.map(
+            (s: { id: string; state: string }) =>
+              s.id === seatId ? { ...s, state: "available" } : s
           );
           transaction.update(arrangementRef, { seats: updatedSeats });
         }
 
         const paymentRef = doc(db, "payments", paymentId);
-        transaction.update(paymentRef, { status: "timeout", updatedAt: new Date().toISOString() });
+        transaction.update(paymentRef, {
+          status: "timeout",
+          updatedAt: new Date().toISOString(),
+        });
       });
     }
 
-    res.status(200).json({ message: "Processed expired payments" });
+    return NextResponse.json({ message: "Processed expired payments" });
   } catch (error: any) {
     console.error("Error in payment timeout:", error.message);
-    res.status(500).json({ error: "Failed to process payment timeouts" });
+    return NextResponse.json(
+      { error: "Failed to process payment timeouts" },
+      { status: 500 }
+    );
   }
 }

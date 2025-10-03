@@ -1,7 +1,6 @@
-
 'use client';
 
-import { useState, useEffect, useContext, useRef } from 'react';
+import { useState, useEffect, useContext, useRef, Dispatch, SetStateAction } from 'react';
 import { useRouter } from 'next/navigation';
 import {
   Dumbbell,
@@ -37,41 +36,76 @@ import SearchComponent from '../../components/SearchComponent';
 import { ThemeContext } from '../../context/ThemeContext';
 import { LanguageContext } from '../../context/LanguageContext';
 
-// Interface for Translation
+// Interface for Translation (aligned with LanguageContext)
 interface Translation {
-  dashboard?: string;
-  members?: string;
-  classes?: string;
-  settings?: string;
-  logout?: string;
-  profile?: string;
-  adminDashboard?: string;
-  darkMode?: string;
-  uploadVideo?: string;
-  registerMember?: string;
-  uploadSchedule?: string;
-  activeMembers?: string;
-  classesToday?: string;
-  newSignups?: string;
-  revenue?: string;
-  changeMembers?: string;
-  changeClasses?: string;
-  changeSignups?: string;
-  changeRevenue?: string;
-  permissionDenied?: string;
-  fetchSchedulesError?: string;
-  fetchStatsError?: string;
-  todaysSchedule?: string;
-  loading?: string;
-  noSchedules?: string;
-  instructor?: string;
-  statsOverview?: string;
-  welcome?: string;
-  chooseMessageType?: string;
-  publicMessage?: string;
-  personalMessage?: string;
-  messages?: string;
-  navigationError?: string;
+  [key: string]: string;
+  dashboard: string;
+  members: string;
+  classes: string;
+  settings: string;
+  logout: string;
+  profile: string;
+  adminDashboard: string;
+  darkMode: string;
+  uploadVideo: string;
+  registerMember: string;
+  uploadSchedule: string;
+  activeMembers: string;
+  classesToday: string;
+  newSignups: string;
+  revenue: string;
+  changeMembers: string;
+  changeClasses: string;
+  changeSignups: string;
+  changeRevenue: string;
+  permissionDenied: string;
+  fetchSchedulesError: string;
+  fetchStatsError: string;
+  todaysSchedule: string;
+  loading: string;
+  noSchedules: string;
+  instructor: string;
+  statsOverview: string;
+  welcome: string;
+  chooseMessageType: string;
+  publicMessage: string;
+  personalMessage: string;
+  messages: string;
+  navigationError: string;
+  namePlaceholder: string;
+  emailPlaceholder: string;
+  passwordPlaceholder: string;
+  subadmin: string;
+  phonePlaceholder: string;
+  addressPlaceholder: string;
+  registerButton: string;
+  registrationSuccess: string;
+  registrationError: string;
+  userDataNotFound: string;
+  logoutSuccess: string;
+  logoutError: string;
+  welcomeMessage: string;
+  getStarted: string;
+  quickActions: string;
+  newRegistrations: string;
+  aerobics: string;
+  gym: string;
+  karate: string;
+  registrationDetails: string;
+  name: string;
+  email: string;
+  collection: string;
+  registrationDate: string;
+  details: string;
+  enlargedProfile: string;
+  instructorPlaceholder: string;
+  timePlaceholder: string;
+  addTime: string;
+  descriptionPlaceholder: string;
+  titlePlaceholder: string;
+  datePlaceholder: string;
+  errorMessage: string;
+  fixErrors: string;
 }
 
 // Interface for Schedule
@@ -87,6 +121,22 @@ interface NavItem {
   name: string;
   href?: string;
   icon: React.ComponentType<{ size: number; className?: string }>;
+}
+
+// Interface for Modal Props
+interface ModalProps {
+  isOpen: boolean;
+  onClose: () => void;
+  theme: string;
+  t: Translation;
+}
+
+// Interface for Notifications props
+interface NotificationsProps {
+  notificationCount: number;
+  setNotificationCount: Dispatch<SetStateAction<number>>;
+  theme: string;
+  t: Translation;
 }
 
 export default function GymDashboard() {
@@ -429,7 +479,6 @@ export default function GymDashboard() {
             </h2>
           </div>
           <div className="flex items-center space-x-4">
-            {/* @ts-ignore */}
             <Notifications
               notificationCount={notifications}
               setNotificationCount={setNotifications}
@@ -494,11 +543,8 @@ export default function GymDashboard() {
         </header>
 
         {/* Modals */}
-        {/* @ts-ignore */}
         <VideoUploadModal isOpen={isUploadModalOpen} onClose={closeUploadModal} theme={theme} t={t} />
-        {/* @ts-ignore */}
         <RegisterMember isOpen={isRegisterModalOpen} onClose={closeRegisterModal} theme={theme} t={t} />
-        {/* @ts-ignore */}
         <UploadSchedule
           isOpen={isScheduleModalOpen}
           onClose={closeScheduleModal}
@@ -591,12 +637,10 @@ export default function GymDashboard() {
           </div>
 
           {/* Search Component */}
-          {/* @ts-ignore */}
           <SearchComponent searchQuery={searchQuery} setSearchQuery={setSearchQuery} theme={theme} t={t} />
 
           {/* Stats Cards or Placeholder */}
           {hasStats ? (
-          
             <DataFetcher
               refreshTrigger={refreshTrigger}
               searchQuery={searchQuery}

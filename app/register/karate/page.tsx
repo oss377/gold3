@@ -2,10 +2,10 @@
 
 import { useState, useEffect, useContext, useCallback, useRef } from "react";
 import { db, auth } from "../../fconfig";
-import { createUserWithEmailAndPassword, onAuthStateChanged, User } from "firebase/auth";
-import { collection, addDoc, query, where, getDocs } from "firebase/firestore";
+import { createUserWithEmailAndPassword, onAuthStateChanged, User, updateProfile } from "firebase/auth";
+import { doc, setDoc } from "firebase/firestore";
 import { useForm } from "react-hook-form";
-import { Loader2, Mail, User, Lock, Eye, EyeOff, ChevronLeft, ChevronRight, CheckCircle, Upload, Camera } from "lucide-react";
+import { Loader2, Mail, User as UserIcon, Lock, Eye, EyeOff, ChevronLeft, ChevronRight, CheckCircle, Upload, Camera } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { motion } from "framer-motion";
 import Link from "next/link";
@@ -49,6 +49,15 @@ interface FormData {
   category: string;
   payment: string;
   agreeTerms: boolean;
+  yearsTraining: string;
+  behavioralIssues: string;
+  rank: string;
+  smokes: boolean;
+  recentSurgery: boolean;
+  drinksAlcohol: boolean;
+  hasHeartDisease: boolean;
+  hasHearingProblem: boolean;
+  hasVisionProblem: boolean;
 }
 
 export default function GymRegisterForm() {
@@ -96,9 +105,18 @@ export default function GymRegisterForm() {
       email: "",
       password: "",
       role: "user",
-      category: "gym",
+      category: "karate",
       payment: "not payed",
       agreeTerms: false,
+      yearsTraining: "",
+      behavioralIssues: "",
+      rank: "",
+      smokes: false,
+      recentSurgery: false,
+      drinksAlcohol: false,
+      hasHeartDisease: false,
+      hasHearingProblem: false,
+      hasVisionProblem: false,
     },
   });
 
@@ -109,7 +127,10 @@ export default function GymRegisterForm() {
     },
     {
       name: "Health Info",
-      fields: ["age", "height", "weight", "bmi", "bloodType", "goalWeight", "medicalConditions", "hasMedicalConditions"],
+      fields: [
+        "age", "height", "weight", "bmi", "bloodType", "goalWeight", "medicalConditions", "hasMedicalConditions",
+        "yearsTraining", "behavioralIssues", "rank", "smokes", "recentSurgery", "drinksAlcohol", "hasHeartDisease", "hasHearingProblem", "hasVisionProblem"
+      ],
     },
     {
       name: "Membership",
@@ -256,7 +277,9 @@ export default function GymRegisterForm() {
           dataTransfer.items.add(file);
           const newFileList = dataTransfer.files;
 
-          fileInputRef.current.files = newFileList;
+          if (fileInputRef.current) {
+            fileInputRef.current.files = newFileList;
+          }
           setValue("photo", newFileList, { shouldValidate: true });
           trigger("photo");
 
@@ -328,10 +351,16 @@ export default function GymRegisterForm() {
   };
 
   const completeRegistration = useCallback(
-    async (userId?: string) => {
+    async (user: User, formData: FormData) => {
+      console.log("Starting completeRegistration with user:", user.uid);
       try {
+        // Update user profile with display name
+        await updateProfile(user, {
+          displayName: `${formData.firstName} ${formData.lastName}`,
+        });
+
         let photoURL = "";
-        const photoFile = watch("photo")?.[0];
+        const photoFile = formData.photo?.[0];
         if (photoFile) {
           photoURL = await uploadToCloudinary(photoFile);
           if (!photoURL) throw new Error("Image upload failed.");
@@ -343,29 +372,51 @@ export default function GymRegisterForm() {
           throw new Error("Firestore database not initialized.");
         }
 
-        const formData = watch();
-        const normalizedEmail = formData.email.toLowerCase().trim();
-
-        // Check for existing user by email to prevent duplicates
-        const q = query(collection(db, "GYM"), where("email", "==", normalizedEmail));
-        const querySnapshot = await getDocs(q);
-        if (!querySnapshot.empty) {
-          throw new Error("Email already registered.");
-        }
-
-        const docRef = await addDoc(collection(db, "GYM"), {
-          uid: userId || currentUser?.uid || "anonymous",
-          ...formData,
-          email: normalizedEmail,
+        // Create user document in Firestore with user ID as document ID
+        const userDocRef = doc(db, "GYM", user.uid);
+        await setDoc(userDocRef, {
+          uid: user.uid,
+          firstName: formData.firstName,
+          lastName: formData.lastName,
+          phoneNumber: formData.phoneNumber,
           photoURL,
-          photo: null,
-          payment: "not payed",
-          category: "gym",
+          address: formData.address,
+          city: formData.city,
+          country: formData.country,
+          jobType: formData.jobType,
+          gender: formData.gender,
+          height: formData.height,
+          weight: formData.weight,
+          age: formData.age,
+          bmi: formData.bmi,
+          bloodType: formData.bloodType,
+          goalWeight: formData.goalWeight,
+          emergencyName: formData.emergencyName,
+          emergencyPhone: formData.emergencyPhone,
+          relationship: formData.relationship,
+          medicalConditions: formData.medicalConditions,
+          hasMedicalConditions: formData.hasMedicalConditions,
+          membershipType: formData.membershipType,
+          startDate: formData.startDate,
+          signature: formData.signature,
+          email: formData.email.toLowerCase().trim(),
+          role: formData.role,
+          category: formData.category,
+          payment: formData.payment,
+          yearsTraining: formData.yearsTraining,
+          behavioralIssues: formData.behavioralIssues,
+          rank: formData.rank,
+          smokes: formData.smokes,
+          recentSurgery: formData.recentSurgery,
+          drinksAlcohol: formData.drinksAlcohol,
+          hasHeartDisease: formData.hasHeartDisease,
+          hasHearingProblem: formData.hasHearingProblem,
+          hasVisionProblem: formData.hasVisionProblem,
           registrationDate: new Date().toISOString(),
         });
 
-        sessionStorage.setItem("pendingDocId", docRef.id);
-        sessionStorage.setItem("pendingUserId", userId || currentUser?.uid || "anonymous");
+        console.log(`Firestore document created with ID: ${user.uid}`);
+        sessionStorage.setItem("pendingUserId", user.uid);
 
         toast.success("Registration successful! Redirecting to payment...");
         setIsSubmitted(true);
@@ -374,72 +425,67 @@ export default function GymRegisterForm() {
           router.push("/payment");
         }, 3000);
       } catch (error: any) {
-        console.error("Registration error:", {
-          message: error.message,
-          code: error.code,
-          stack: error.stack,
-        });
+        console.error("Registration error:", error);
         setFormErrors({ global: `Registration failed: ${error.message || "Unknown error"}` });
         toast.error(`Registration failed: ${error.message || "Unknown error"}`);
+        throw error;
       }
     },
-    [watch, currentUser, router]
+    [router]
   );
 
   const onSubmit = useCallback(
     async (data: FormData) => {
+      console.log("onSubmit triggered with data:", data);
       setFormErrors({});
+
+      if (!data.agreeTerms) {
+        setFormErrors({ global: "You must agree to the terms and conditions." });
+        toast.error("You must agree to the terms and conditions.");
+        return;
+      }
+
       if (!data.photo || data.photo.length === 0) {
         setFormErrors({ global: "Please select or capture a photo." });
         toast.error("Please select or capture a photo.");
         return;
       }
 
+      if (!data.email || !data.password) {
+        setFormErrors({ global: "Email and password are required." });
+        toast.error("Email and password are required.");
+        return;
+      }
+
       try {
-        let userId = currentUser?.uid;
-        if (!isAuthenticated) {
-          if (!auth) throw new Error("Auth not initialized.");
-          if (data.email && data.password) {
-            const normalizedEmail = data.email.toLowerCase().trim();
-            const credential = await createUserWithEmailAndPassword(auth, normalizedEmail, data.password);
-            userId = credential.user.uid;
-          } else {
-            throw new Error("Email and password are required.");
-          }
+        if (!auth) {
+          throw new Error("Auth not initialized.");
         }
 
-        await completeRegistration(userId);
+        // Create user with email and password
+        const credential = await createUserWithEmailAndPassword(auth, data.email.toLowerCase().trim(), data.password);
+        const user = credential.user;
+        console.log(`User created with ID: ${user.uid}`);
+
+        // Complete registration
+        await completeRegistration(user, data);
       } catch (error: any) {
-        console.error("Registration error:", {
-          message: error.message,
-          code: error.code,
-          stack: error.stack,
-        });
+        console.error("Registration error:", error);
         let message = "Registration failed.";
-        switch (error.code) {
-          case "auth/email-already-in-use":
-            message = "Email already in use.";
-            break;
-          case "auth/weak-password":
-            message = "Password must be at least 6 characters.";
-            break;
-          case "auth/invalid-email":
-            message = "Invalid email format.";
-            break;
-          case "auth/operation-not-allowed":
-            message = "Email/password accounts are not enabled.";
-            break;
-          case "auth/too-many-requests":
-            message = "Too many attempts. Please try again later.";
-            break;
-          default:
-            message = `Registration failed: ${error.message || "Unknown error"}`;
+        if (error.code === "auth/email-already-in-use") {
+          message = "This email is already registered. Please use a different email or log in.";
+        } else if (error.code === "auth/weak-password") {
+          message = "Password is too weak. Please use a stronger password (minimum 6 characters).";
+        } else if (error.code === "auth/invalid-email") {
+          message = "Invalid email format.";
+        } else if (error.code === "auth/operation-not-allowed") {
+          message = "Email/password accounts are not enabled. Please contact support.";
         }
         setFormErrors({ global: message });
         toast.error(message);
       }
     },
-    [isAuthenticated, currentUser, completeRegistration]
+    [completeRegistration]
   );
 
   const nextStep = async () => {
@@ -596,13 +642,13 @@ export default function GymRegisterForm() {
                               theme === "light"
                                 ? "border-zinc-300 bg-white focus:ring-blue-500"
                                 : "border-zinc-700 bg-gray-800 focus:ring-yellow-400"
-                            } ${errors[field] ? "border-red-500" : ""}`}
+                            } ${(errors as Record<string, any>)[field] ? "border-red-500" : ""}`}
                             placeholder={field.replace(/([A-Z])/g, " $1").replace(/^./, str => str.toUpperCase())}
                             {...(field === "email" && { onChange: (e) => setValue("email", e.target.value.toLowerCase().trim()) })}
                           />
                         )}
                         {(field === "firstName" || field === "lastName") && (
-                          <User
+                          <UserIcon
                             className={`absolute left-3 top-1/2 transform -translate-y-1/2 ${
                               theme === "light" ? "text-zinc-500" : "text-zinc-400"
                             } w-5 h-5`}
@@ -616,9 +662,9 @@ export default function GymRegisterForm() {
                           />
                         )}
                       </div>
-                      {errors[field] && (
+                      {(errors as Record<string, any>)[field] && (
                         <p className={`text-xs mt-1 ${theme === "light" ? "text-red-500" : "text-red-400"}`}>
-                          {errors[field]?.message || "Required"}
+                          {(errors as Record<string, any>)[field]?.message || "Required"}
                         </p>
                       )}
                     </div>
@@ -731,6 +777,51 @@ export default function GymRegisterForm() {
                     <p className={`text-xs mt-1 ${theme === "light" ? "text-red-500" : "text-red-400"}`}>{errors.goalWeight.message}</p>
                   )}
                 </div>
+                <div>
+                  <label className={`block text-sm font-medium ${theme === "light" ? "text-zinc-700" : "text-zinc-300"}`} htmlFor="yearsTraining">
+                    Years Training
+                  </label>
+                  <input
+                    {...register("yearsTraining", { required: "Years training is required", min: { value: 0, message: "Years training must be at least 0" } })}
+                    type="number"
+                    id="yearsTraining"
+                    className={`mt-1 block w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 ${
+                      theme === "light" ? "border-zinc-300 bg-white focus:ring-blue-500" : "border-zinc-700 bg-gray-800 focus:ring-yellow-400"
+                    } ${errors.yearsTraining ? "border-red-500" : ""}`}
+                  />
+                  {errors.yearsTraining && (
+                    <p className={`text-xs mt-1 ${theme === "light" ? "text-red-500" : "text-red-400"}`}>{errors.yearsTraining.message}</p>
+                  )}
+                </div>
+                <div>
+                  <label className={`block text-sm font-medium ${theme === "light" ? "text-zinc-700" : "text-zinc-300"}`} htmlFor="rank">
+                    Rank
+                  </label>
+                  <select
+                    {...register("rank", { required: "Rank is required" })}
+                    id="rank"
+                    className={`mt-1 block w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 ${
+                      theme === "light" ? "border-zinc-300 bg-white focus:ring-blue-500" : "border-zinc-700 bg-gray-800 focus:ring-yellow-400"
+                    } ${errors.rank ? "border-red-500" : ""}`}
+                  >
+                    <option value="">Select Rank</option>
+                    <option value="White belt - no stripe">White belt - no stripe</option>
+                    <option value="Yellow belt - no stripe">Yellow belt - no stripe</option>
+                    <option value="Yellow belt - one stripe">Yellow belt - one stripe</option>
+                    <option value="Green belt - no stripe">Green belt - no stripe</option>
+                    <option value="Green belt - one stripe">Green belt - one stripe</option>
+                    <option value="Blue belt - no stripe">Blue belt - no stripe</option>
+                    <option value="Blue belt - one stripe">Blue belt - one stripe</option>
+                    <option value="Red belt - no stripe">Red belt - no stripe</option>
+                    <option value="Red belt - one stripe">Red belt - one stripe</option>
+                    <option value="Brown belt - no stripe">Brown belt - no stripe</option>
+                    <option value="Brown belt - one stripe">Brown belt - one stripe</option>
+                    <option value="Black belt">Black belt</option>
+                  </select>
+                  {errors.rank && (
+                    <p className={`text-xs mt-1 ${theme === "light" ? "text-red-500" : "text-red-400"}`}>{errors.rank.message}</p>
+                  )}
+                </div>
                 <div className="md:col-span-2">
                   <label
                     className={`block text-sm font-medium ${theme === "light" ? "text-zinc-700" : "text-zinc-300"}`}
@@ -741,6 +832,22 @@ export default function GymRegisterForm() {
                   <textarea
                     {...register("medicalConditions")}
                     id="medicalConditions"
+                    className={`mt-1 block w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 ${
+                      theme === "light" ? "border-zinc-300 bg-white focus:ring-blue-500" : "border-zinc-700 bg-gray-800 focus:ring-yellow-400"
+                    }`}
+                    rows={3}
+                  />
+                </div>
+                <div className="md:col-span-2">
+                  <label
+                    className={`block text-sm font-medium ${theme === "light" ? "text-zinc-700" : "text-zinc-300"}`}
+                    htmlFor="behavioralIssues"
+                  >
+                    Behavioral Issues
+                  </label>
+                  <textarea
+                    {...register("behavioralIssues")}
+                    id="behavioralIssues"
                     className={`mt-1 block w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 ${
                       theme === "light" ? "border-zinc-300 bg-white focus:ring-blue-500" : "border-zinc-700 bg-gray-800 focus:ring-yellow-400"
                     }`}
@@ -759,6 +866,90 @@ export default function GymRegisterForm() {
                     htmlFor="hasMedicalConditions"
                   >
                     Has Medical Conditions
+                  </label>
+                </div>
+                <div className="flex items-center">
+                  <input
+                    {...register("smokes")}
+                    type="checkbox"
+                    id="smokes"
+                    className={`h-4 w-4 ${theme === "light" ? "text-blue-600 focus:ring-blue-500" : "text-yellow-400 focus:ring-yellow-400"} border-gray-300 rounded`}
+                  />
+                  <label
+                    className={`ml-2 text-sm ${theme === "light" ? "text-gray-700" : "text-gray-300"}`}
+                    htmlFor="smokes"
+                  >
+                    Do you smoke?
+                  </label>
+                </div>
+                <div className="flex items-center">
+                  <input
+                    {...register("recentSurgery")}
+                    type="checkbox"
+                    id="recentSurgery"
+                    className={`h-4 w-4 ${theme === "light" ? "text-blue-600 focus:ring-blue-500" : "text-yellow-400 focus:ring-yellow-400"} border-gray-300 rounded`}
+                  />
+                  <label
+                    className={`ml-2 text-sm ${theme === "light" ? "text-gray-700" : "text-gray-300"}`}
+                    htmlFor="recentSurgery"
+                  >
+                    Have you had any surgery in the past year?
+                  </label>
+                </div>
+                <div className="flex items-center">
+                  <input
+                    {...register("drinksAlcohol")}
+                    type="checkbox"
+                    id="drinksAlcohol"
+                    className={`h-4 w-4 ${theme === "light" ? "text-blue-600 focus:ring-blue-500" : "text-yellow-400 focus:ring-yellow-400"} border-gray-300 rounded`}
+                  />
+                  <label
+                    className={`ml-2 text-sm ${theme === "light" ? "text-gray-700" : "text-gray-300"}`}
+                    htmlFor="drinksAlcohol"
+                  >
+                    Do you drink alcohol?
+                  </label>
+                </div>
+                <div className="flex items-center">
+                  <input
+                    {...register("hasHeartDisease")}
+                    type="checkbox"
+                    id="hasHeartDisease"
+                    className={`h-4 w-4 ${theme === "light" ? "text-blue-600 focus:ring-blue-500" : "text-yellow-400 focus:ring-yellow-400"} border-gray-300 rounded`}
+                  />
+                  <label
+                    className={`ml-2 text-sm ${theme === "light" ? "text-gray-700" : "text-gray-300"}`}
+                    htmlFor="hasHeartDisease"
+                  >
+                    Do you have heart disease?
+                  </label>
+                </div>
+                <div className="flex items-center">
+                  <input
+                    {...register("hasHearingProblem")}
+                    type="checkbox"
+                    id="hasHearingProblem"
+                    className={`h-4 w-4 ${theme === "light" ? "text-blue-600 focus:ring-blue-500" : "text-yellow-400 focus:ring-yellow-400"} border-gray-300 rounded`}
+                  />
+                  <label
+                    className={`ml-2 text-sm ${theme === "light" ? "text-gray-700" : "text-gray-300"}`}
+                    htmlFor="hasHearingProblem"
+                  >
+                    Do you have a hearing problem?
+                  </label>
+                </div>
+                <div className="flex items-center">
+                  <input
+                    {...register("hasVisionProblem")}
+                    type="checkbox"
+                    id="hasVisionProblem"
+                    className={`h-4 w-4 ${theme === "light" ? "text-blue-600 focus:ring-blue-500" : "text-yellow-400 focus:ring-yellow-400"} border-gray-300 rounded`}
+                  />
+                  <label
+                    className={`ml-2 text-sm ${theme === "light" ? "text-gray-700" : "text-gray-300"}`}
+                    htmlFor="hasVisionProblem"
+                  >
+                    Do you have a vision problem?
                   </label>
                 </div>
               </div>

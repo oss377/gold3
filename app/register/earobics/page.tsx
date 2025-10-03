@@ -2,8 +2,8 @@
 
 import { useState, useEffect, useContext, useCallback, useRef } from "react";
 import { db, auth } from "../../fconfig";
-import { createUserWithEmailAndPassword, onAuthStateChanged, User } from "firebase/auth";
-import { collection, addDoc } from "firebase/firestore";
+import { createUserWithEmailAndPassword, onAuthStateChanged, User, updateProfile } from "firebase/auth";
+import { collection, doc, setDoc } from "firebase/firestore";
 import { useForm } from 'react-hook-form';
 import { Loader2, Mail, User as UserIcon, Lock, Eye, EyeOff, ChevronLeft, ChevronRight, CheckCircle, Upload, Camera } from "lucide-react";
 import { useRouter } from "next/navigation";
@@ -56,6 +56,7 @@ interface FormData {
   eatingReasons: string[];
   membershipType: string;
   exerciseDuration: string;
+  exerciseMonths: string;
   startMonth: string;
   photos: FileList | null;
   signature: string;
@@ -63,6 +64,8 @@ interface FormData {
   category: string;
   payment: string;
   agreeTerms: boolean;
+  age: string;
+  jobType: string;
 }
 
 export default function RegisterForm() {
@@ -126,20 +129,23 @@ export default function RegisterForm() {
       eatingReasons: [],
       membershipType: '',
       exerciseDuration: '',
+      exerciseMonths: '',
       startMonth: '',
       photos: null,
       signature: '',
       role: "user",
       category: "aerobics",
-      payment: "not payed",
+      payment: "not paid",
       agreeTerms: false,
+      age: '',
+      jobType: '',
     },
   });
 
   const steps = [
     {
       name: 'Personal Info',
-      fields: ['firstName', 'lastName', 'email', 'password', 'phoneNumber', 'streetAddress', 'streetAddress2', 'city', 'state', 'zipCode', 'emergencyName', 'emergencyPhone'],
+      fields: ['firstName', 'lastName', 'email', 'password', 'phoneNumber', 'streetAddress', 'streetAddress2', 'city', 'state', 'zipCode', 'emergencyName', 'emergencyPhone', 'age', 'jobType'],
     },
     {
       name: 'Health Info',
@@ -151,7 +157,7 @@ export default function RegisterForm() {
     },
     {
       name: 'Training Goals',
-      fields: ['trainingGoals', 'eatingReasons', 'membershipType', 'exerciseDuration', 'startMonth'],
+      fields: ['trainingGoals', 'eatingReasons', 'membershipType', 'exerciseDuration', 'exerciseMonths', 'startMonth'],
     },
     {
       name: 'Review',
@@ -176,10 +182,10 @@ export default function RegisterForm() {
 
   // Auth state listener
   useEffect(() => {
-    if (!auth || !db) {
-      console.error('Firebase services not initialized');
-      setFormErrors({ global: 'Firebase services are not initialized.' });
-      toast.error('Firebase services are not initialized.');
+    if (!auth) {
+      console.error('Firebase auth not initialized');
+      setFormErrors({ global: 'Authentication service is not initialized.' });
+      toast.error('Authentication service is not initialized.');
       setIsLoading(false);
       return;
     }
@@ -190,6 +196,8 @@ export default function RegisterForm() {
       setCurrentUser(user);
       if (user) {
         setValue('email', user.email || '');
+        setValue('firstName', user.displayName?.split(' ')[0] || '');
+        setValue('lastName', user.displayName?.split(' ')[1] || '');
       }
       setIsLoading(false);
     });
@@ -316,14 +324,13 @@ export default function RegisterForm() {
           dataTransfer.items.add(file);
           const newFileList = dataTransfer.files;
 
-          // Update the file input's files
-          fileInputRef.current.files = newFileList;
+          if (fileInputRef.current) {
+            fileInputRef.current.files = newFileList;
+          }
           
-          // Update form state
           setValue('photos', newFileList, { shouldValidate: true });
           trigger('photos');
 
-          // Update preview
           const reader = new FileReader();
           reader.onloadend = () => {
             if (reader.result && typeof reader.result === 'string') {
@@ -337,7 +344,7 @@ export default function RegisterForm() {
         } else {
           toast.error('Failed to capture photo.');
         }
-      }, 'image/jpeg', 0.95); // Set quality to 95%
+      }, 'image/jpeg', 0.95);
     }
   };
 
@@ -408,7 +415,8 @@ export default function RegisterForm() {
             setUploadStatus({
               type: 'error',
               message: `Failed to upload ${file.name}: ${result.error?.message || 'Upload failed'}`,
-              fileName: file.name,
+              fileName: file.name
+
             });
             toast.error(`Failed to upload ${file.name}: ${result.error?.message || 'Upload failed'}`);
             continue;
@@ -469,29 +477,73 @@ export default function RegisterForm() {
     }
   };
 
-  const completeRegistration = useCallback(async (userId?: string) => {
-    console.log('Starting completeRegistration with userId:', userId);
+  const completeRegistration = useCallback(async (user: User, formData: FormData) => {
+    console.log('Starting completeRegistration with user:', user.uid);
     try {
-      const formData = watch();
-      console.log('Form data:', formData);
+      // Update user profile with display name
+      await updateProfile(user, {
+        displayName: `${formData.firstName} ${formData.lastName}`,
+      });
+
       const photoURLs = await uploadToCloudinary(formData);
 
       if (!db) {
         throw new Error('Firestore database not initialized.');
       }
 
-      const docRef = await addDoc(collection(db, 'GYM'), {
-        uid: userId || currentUser?.uid || 'anonymous',
-        ...formData,
+      // Create user document in Firestore with user ID as document ID
+      const userDocRef = doc(db, 'GYM', user.uid);
+      await setDoc(userDocRef, {
+        uid: user.uid,
+        email: formData.email,
+        firstName: formData.firstName,
+        lastName: formData.lastName,
+        birthDate: formData.birthDate,
+        streetAddress: formData.streetAddress,
+        streetAddress2: formData.streetAddress2,
+        city: formData.city,
+        state: formData.state,
+        zipCode: formData.zipCode,
+        phoneNumber: formData.phoneNumber,
+        emergencyName: formData.emergencyName,
+        emergencyPhone: formData.emergencyPhone,
+        height: formData.height,
+        weight: formData.weight,
+        bmi: formData.bmi,
+        bloodType: formData.bloodType,
+        goalWeight: formData.goalWeight,
+        healthIssues: formData.healthIssues,
+        medications: formData.medications,
+        smoke: formData.smoke,
+        surgery: formData.surgery,
+        alcohol: formData.alcohol,
+        supplements: formData.supplements,
+        foodTracking: formData.foodTracking,
+        proSport: formData.proSport,
+        exercisePain: formData.exercisePain,
+        nightEating: formData.nightEating,
+        breakfastFrequency: formData.breakfastFrequency,
+        nutritionRating: formData.nutritionRating,
+        exerciseDays: formData.exerciseDays,
+        exerciseTime: formData.exerciseTime,
+        trainingGoals: formData.trainingGoals,
+        eatingReasons: formData.eatingReasons,
+        membershipType: formData.membershipType,
+        exerciseDuration: formData.exerciseDuration,
+        exerciseMonths: formData.exerciseMonths,
+        startMonth: formData.startMonth,
         photoURLs,
-        photos: null,
-        payment: 'not payed',
+        signature: formData.signature,
+        role: formData.role,
+        category: formData.category,
+        payment: formData.payment,
         registrationDate: new Date().toISOString(),
+        age: formData.age,
+        jobType: formData.jobType,
       });
 
-      console.log(`Firestore document created with ID: ${docRef.id}`);
-      sessionStorage.setItem('pendingDocId', docRef.id);
-      sessionStorage.setItem('pendingUserId', userId || currentUser?.uid || 'anonymous');
+      console.log(`Firestore document created with ID: ${user.uid}`);
+      sessionStorage.setItem('pendingUserId', user.uid);
 
       toast.success('Registration successful! Redirecting to payment...');
       setIsSubmitted(true);
@@ -501,18 +553,24 @@ export default function RegisterForm() {
         setPhotoPreviews([]);
         setUploadStatus(null);
         router.push('/payment');
-      }, 3000);
+      }, 2000);
     } catch (error: any) {
       console.error('Registration error:', error);
       setFormErrors({ global: `Registration failed: ${error.message || 'Unknown error'}` });
       toast.error(`Registration failed: ${error.message || 'Unknown error'}`);
       throw error;
     }
-  }, [watch, currentUser, router, reset]);
+  }, [router, reset]);
 
   const onSubmit = useCallback(async (data: FormData) => {
     console.log('onSubmit triggered with data:', data);
     setFormErrors({});
+
+    if (!data.agreeTerms) {
+      setFormErrors({ global: 'You must agree to the terms and conditions.' });
+      toast.error('You must agree to the terms and conditions.');
+      return;
+    }
 
     if (!data.photos || data.photos.length === 0) {
       console.error('No photos selected');
@@ -521,36 +579,50 @@ export default function RegisterForm() {
       return;
     }
 
+    if (!data.email || !data.password) {
+      setFormErrors({ global: 'Email and password are required.' });
+      toast.error('Email and password are required.');
+      return;
+    }
+
     try {
-      let userId = currentUser?.uid;
-      if (!isAuthenticated) {
-        if (!auth) {
-          throw new Error('Auth not initialized.');
-        }
-        if (data.email && data.password) {
-          const credential = await createUserWithEmailAndPassword(auth, data.email, data.password);
-          userId = credential.user.uid;
-          console.log(`User created with ID: ${userId}`);
-        } else {
-          console.log('No email/password provided, proceeding as anonymous');
-        }
+      if (!auth) {
+        throw new Error('Auth not initialized.');
       }
 
-      await completeRegistration(userId);
+      // Create user with email and password
+      const credential = await createUserWithEmailAndPassword(auth, data.email, data.password);
+      const user = credential.user;
+      console.log(`User created with ID: ${user.uid}`);
+
+      // Complete registration
+      await completeRegistration(user, data);
     } catch (error: any) {
       console.error('Registration error:', error);
       let message = 'Registration failed.';
-      if (error.code === 'auth/email-already-in-use') message = 'Email already in use.';
-      else if (error.code === 'auth/weak-password') message = 'Weak password.';
-      else if (error.code === 'auth/invalid-email') message = 'Invalid email.';
+      if (error.code === 'auth/email-already-in-use') {
+        message = 'This email is already registered. Please use a different email or log in.';
+      } else if (error.code === 'auth/weak-password') {
+        message = 'Password is too weak. Please use a stronger password (minimum 6 characters).';
+      } else if (error.code === 'auth/invalid-email') {
+        message = 'Invalid email format.';
+      } else if (error.code === 'auth/operation-not-allowed') {
+        message = 'Email/password accounts are not enabled. Please contact support.';
+      }
       setFormErrors({ global: message });
       toast.error(message);
     }
-  }, [isAuthenticated, currentUser, completeRegistration]);
+  }, [completeRegistration]);
 
-  const nextStep = () => {
-    console.log('Moving to next step:', currentStep + 1);
-    setCurrentStep(prev => prev + 1);
+  const nextStep = async () => {
+    const fieldsToValidate = steps[currentStep].fields;
+    const isValid = await trigger(fieldsToValidate as any);
+    if (isValid) {
+      console.log('Moving to next step:', currentStep + 1);
+      setCurrentStep(prev => prev + 1);
+    } else {
+      toast.error('Please fill out all required fields correctly.');
+    }
   };
 
   const prevStep = () => {
@@ -558,10 +630,19 @@ export default function RegisterForm() {
     setCurrentStep(prev => Math.max(prev - 1, 0));
   };
 
+  const handleReset = () => {
+    reset();
+    setUploadedPhotos([]);
+    setPhotoPreviews([]);
+    setUploadStatus(null);
+    setCurrentStep(0);
+    toast.info('Form has been reset.');
+  };
+
   if (isLoading) {
     return (
       <div className={`${theme === 'light' ? 'bg-zinc-100' : 'bg-zinc-900'} min-h-screen flex items-center justify-center`}>
-        Loading...
+        <Loader2 className="animate-spin h-8 w-8" /> Loading...
       </div>
     );
   }
@@ -569,7 +650,11 @@ export default function RegisterForm() {
   if (isSubmitted) {
     return (
       <div className={`${theme === 'light' ? 'bg-zinc-100' : 'bg-zinc-900'} min-h-screen flex items-center justify-center`}>
-        Redirecting...
+        <div className="text-center">
+          <CheckCircle className="h-12 w-12 mx-auto mb-4 text-green-500" />
+          <p className={`${theme === 'light' ? 'text-zinc-800' : 'text-zinc-100'} text-lg`}>Registration successful!</p>
+          <p className={`${theme === 'light' ? 'text-zinc-600' : 'text-zinc-400'}`}>Redirecting to payment...</p>
+        </div>
       </div>
     );
   }
@@ -605,18 +690,22 @@ export default function RegisterForm() {
           <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
             {currentStep === 0 && (
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                {['firstName', 'lastName', 'email', 'password', 'phoneNumber', 'streetAddress', 'streetAddress2', 'city', 'state', 'zipCode', 'emergencyName', 'emergencyPhone'].map(field => (
+                {['firstName', 'lastName', 'email', 'password', 'phoneNumber', 'streetAddress', 'streetAddress2', 'city', 'state', 'zipCode', 'emergencyName', 'emergencyPhone', 'age', 'jobType'].map(field => (
                   <div key={field}>
                     <label className={`${theme === "light" ? "text-zinc-700" : "text-zinc-300"} block text-sm font-medium`}>
                       {field.replace(/([A-Z])/g, ' $1').replace(/^./, str => str.toUpperCase())}
+                      {(field === 'firstName' || field === 'lastName' || field === 'email' || field === 'password') && <span className="text-red-500">*</span>}
                     </label>
                     <div className="relative">
                       {field === 'password' ? (
                         <>
                           <input
-                            {...register('password')}
+                            {...register('password', {
+                              required: 'Password is required',
+                              minLength: { value: 6, message: 'Password must be at least 6 characters' }
+                            })}
                             type={showPassword ? 'text' : 'password'}
-                            className={`mt-1 block w-full px-3 py-2 pl-10 pr-10 border rounded-lg focus:outline-none focus:ring-2 ${theme === "light" ? "border-zinc-300 bg-white focus:ring-blue-500" : "border-zinc-700 bg-gray-800 focus:ring-yellow-400"}`}
+                            className={`mt-1 block w-full px-3 py-2 pl-10 pr-10 border rounded-lg focus:outline-none focus:ring-2 ${theme === "light" ? "border-zinc-300 bg-white focus:ring-blue-500" : "border-zinc-700 bg-gray-800 focus:ring-yellow-400"} ${errors.password ? 'border-red-500' : ''}`}
                           />
                           <Lock className={`absolute left-3 top-1/2 transform -translate-y-1/2 ${theme === "light" ? "text-zinc-500" : "text-zinc-400"} w-5 h-5`} />
                           <button
@@ -629,9 +718,15 @@ export default function RegisterForm() {
                         </>
                       ) : (
                         <input
-                          {...register(field as keyof FormData)}
-                          type={field === 'email' ? 'email' : field === 'phoneNumber' || field === 'emergencyPhone' ? 'tel' : 'text'}
-                          className={`mt-1 block w-full px-3 py-2 ${field === 'firstName' || field === 'lastName' || field === 'email' ? 'pl-10' : ''} border rounded-lg focus:outline-none focus:ring-2 ${theme === "light" ? "border-zinc-300 bg-white focus:ring-blue-500" : "border-zinc-700 bg-gray-800 focus:ring-yellow-400"}`}
+                          {...register(field as keyof FormData, {
+                            required: field === 'firstName' || field === 'lastName' || field === 'email' ? `${field.replace(/([A-Z])/g, ' $1').replace(/^./, str => str.toUpperCase())} is required` : false,
+                            pattern: field === 'email' ? {
+                              value: /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/,
+                              message: 'Invalid email format'
+                            } : undefined
+                          })}
+                          type={field === 'email' ? 'email' : field === 'phoneNumber' || field === 'emergencyPhone' ? 'tel' : field === 'age' ? 'number' : 'text'}
+                          className={`mt-1 block w-full px-3 py-2 ${field === 'firstName' || field === 'lastName' || field === 'email' ? 'pl-10' : ''} border rounded-lg focus:outline-none focus:ring-2 ${theme === "light" ? "border-zinc-300 bg-white focus:ring-blue-500" : "border-zinc-700 bg-gray-800 focus:ring-yellow-400"} ${errors[field as keyof FormData] ? 'border-red-500' : ''}`}
                           placeholder={field.replace(/([A-Z])/g, ' $1').replace(/^./, str => str.toUpperCase())}
                         />
                       )}
@@ -642,6 +737,9 @@ export default function RegisterForm() {
                         <Mail className={`absolute left-3 top-1/2 transform -translate-y-1/2 ${theme === "light" ? "text-zinc-500" : "text-zinc-400"} w-5 h-5`} />
                       )}
                     </div>
+                    {errors[field as keyof FormData] && (
+                      <p className="text-red-500 text-xs mt-1">{errors[field as keyof FormData]?.message}</p>
+                    )}
                   </div>
                 ))}
               </div>
@@ -650,28 +748,31 @@ export default function RegisterForm() {
             {currentStep === 1 && (
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <div>
-                  <label className={`${theme === "light" ? "text-zinc-700" : "text-zinc-300"} block text-sm font-medium`}>Birth Date</label>
+                  <label className={`${theme === "light" ? "text-zinc-700" : "text-zinc-300"} block text-sm font-medium`}>Birth Date <span className="text-red-500">*</span></label>
                   <input
-                    {...register('birthDate')}
+                    {...register('birthDate', { required: 'Birth date is required' })}
                     type="date"
-                    className={`mt-1 block w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 ${theme === "light" ? "border-zinc-300 bg-white focus:ring-blue-500" : "border-zinc-700 bg-gray-800 focus:ring-yellow-400"}`}
+                    className={`mt-1 block w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 ${theme === "light" ? "border-zinc-300 bg-white focus:ring-blue-500" : "border-zinc-700 bg-gray-800 focus:ring-yellow-400"} ${errors.birthDate ? 'border-red-500' : ''}`}
                   />
+                  {errors.birthDate && <p className="text-red-500 text-xs mt-1">{errors.birthDate.message}</p>}
                 </div>
                 <div>
-                  <label className={`${theme === "light" ? "text-zinc-700" : "text-zinc-300"} block text-sm font-medium`}>Height (cm)</label>
+                  <label className={`${theme === "light" ? "text-zinc-700" : "text-zinc-300"} block text-sm font-medium`}>Height (cm) <span className="text-red-500">*</span></label>
                   <input
-                    {...register('height')}
+                    {...register('height', { required: 'Height is required' })}
                     type="number"
-                    className={`mt-1 block w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 ${theme === "light" ? "border-zinc-300 bg-white focus:ring-blue-500" : "border-zinc-700 bg-gray-800 focus:ring-yellow-400"}`}
+                    className={`mt-1 block w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 ${theme === "light" ? "border-zinc-300 bg-white focus:ring-blue-500" : "border-zinc-700 bg-gray-800 focus:ring-yellow-400"} ${errors.height ? 'border-red-500' : ''}`}
                   />
+                  {errors.height && <p className="text-red-500 text-xs mt-1">{errors.height.message}</p>}
                 </div>
                 <div>
-                  <label className={`${theme === "light" ? "text-zinc-700" : "text-zinc-300"} block text-sm font-medium`}>Weight (kg)</label>
+                  <label className={`${theme === "light" ? "text-zinc-700" : "text-zinc-300"} block text-sm font-medium`}>Weight (kg) <span className="text-red-500">*</span></label>
                   <input
-                    {...register('weight')}
+                    {...register('weight', { required: 'Weight is required' })}
                     type="number"
-                    className={`mt-1 block w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 ${theme === "light" ? "border-zinc-300 bg-white focus:ring-blue-500" : "border-zinc-700 bg-gray-800 focus:ring-yellow-400"}`}
+                    className={`mt-1 block w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 ${theme === "light" ? "border-zinc-300 bg-white focus:ring-blue-500" : "border-zinc-700 bg-gray-800 focus:ring-yellow-400"} ${errors.weight ? 'border-red-500' : ''}`}
                   />
+                  {errors.weight && <p className="text-red-500 text-xs mt-1">{errors.weight.message}</p>}
                 </div>
                 <div>
                   <label className={`${theme === "light" ? "text-zinc-700" : "text-zinc-300"} block text-sm font-medium`}>BMI</label>
@@ -753,11 +854,15 @@ export default function RegisterForm() {
                 ))}
                 <div>
                   <label className={`${theme === "light" ? "text-zinc-700" : "text-zinc-300"} block text-sm font-medium`}>Night Eating</label>
-                  <input
+                  <select
                     {...register('nightEating')}
-                    type="text"
                     className={`mt-1 block w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 ${theme === "light" ? "border-zinc-300 bg-white focus:ring-blue-500" : "border-zinc-700 bg-gray-800 focus:ring-yellow-400"}`}
-                  />
+                  >
+                    <option value="">Select</option>
+                    {[0, 1, 2, 3, 4, 5].map(num => (
+                      <option key={num} value={num.toString()}>{num}</option>
+                    ))}
+                  </select>
                 </div>
                 <div>
                   <label className={`${theme === "light" ? "text-zinc-700" : "text-zinc-300"} block text-sm font-medium`}>Breakfast Frequency</label>
@@ -766,11 +871,9 @@ export default function RegisterForm() {
                     className={`mt-1 block w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 ${theme === "light" ? "border-zinc-300 bg-white focus:ring-blue-500" : "border-zinc-700 bg-gray-800 focus:ring-yellow-400"}`}
                   >
                     <option value="">Select</option>
-                    <option value="Never">Never</option>
-                    <option value="Rarely">Rarely</option>
-                    <option value="Sometimes">Sometimes</option>
-                    <option value="Often">Often</option>
-                    <option value="Always">Always</option>
+                    {[0, 1, 2, 3, 4, 5].map(num => (
+                      <option key={num} value={num.toString()}>{num}</option>
+                    ))}
                   </select>
                 </div>
                 <div>
@@ -780,28 +883,40 @@ export default function RegisterForm() {
                     className={`mt-1 block w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 ${theme === "light" ? "border-zinc-300 bg-white focus:ring-blue-500" : "border-zinc-700 bg-gray-800 focus:ring-yellow-400"}`}
                   >
                     <option value="">Select</option>
-                    <option value="Poor">Poor</option>
-                    <option value="Fair">Fair</option>
-                    <option value="Good">Good</option>
-                    <option value="Very Good">Very Good</option>
-                    <option value="Excellent">Excellent</option>
+                    {[0, 1, 2, 3, 4, 5].map(num => (
+                      <option key={num} value={num.toString()}>{num}</option>
+                    ))}
                   </select>
                 </div>
-                <div>
-                  <label className={`${theme === "light" ? "text-zinc-700" : "text-zinc-300"} block text-sm font-medium`}>Exercise Days (comma-separated)</label>
-                  <input
-                    {...register('exerciseDays')}
-                    type="text"
-                    className={`mt-1 block w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 ${theme === "light" ? "border-zinc-300 bg-white focus:ring-blue-500" : "border-zinc-700 bg-gray-800 focus:ring-yellow-400"}`}
-                  />
+                <div className="md:col-span-2">
+                  <label className={`${theme === "light" ? "text-zinc-700" : "text-zinc-300"} block text-sm font-medium`}>Exercise Days</label>
+                  <div className="grid grid-cols-2 gap-2">
+                    {['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'].map(day => (
+                      <div key={day} className="flex items-center">
+                        <input
+                          {...register('exerciseDays')}
+                          type="checkbox"
+                          value={day}
+                          className={`h-4 w-4 ${theme === "light" ? "text-blue-600 focus:ring-blue-500" : "text-yellow-400 focus:ring-yellow-400"} border-gray-300 rounded`}
+                        />
+                        <label className={`${theme === "light" ? "text-gray-700" : "text-gray-300"} ml-2 text-sm`}>{day}</label>
+                      </div>
+                    ))}
+                  </div>
                 </div>
                 <div>
-                  <label className={`${theme === "light" ? "text-zinc-700" : "text-zinc-300"} block text-sm font-medium`}>Exercise Time</label>
-                  <input
+                  <label className={`${theme === "light" ? "text-zinc-700" : "text-zinc-300"} block text-sm font-medium`}>Best Time to Exercise</label>
+                  <select
                     {...register('exerciseTime')}
-                    type="text"
                     className={`mt-1 block w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 ${theme === "light" ? "border-zinc-300 bg-white focus:ring-blue-500" : "border-zinc-700 bg-gray-800 focus:ring-yellow-400"}`}
-                  />
+                  >
+                    <option value="">Select</option>
+                    <option value="Early Mornings">Early Mornings</option>
+                    <option value="Mornings">Mornings</option>
+                    <option value="Early Afternoons">Early Afternoons</option>
+                    <option value="Afternoons">Afternoons</option>
+                    <option value="Evenings">Evenings</option>
+                  </select>
                 </div>
               </div>
             )}
@@ -809,32 +924,50 @@ export default function RegisterForm() {
             {currentStep === 3 && (
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <div className="md:col-span-2">
-                  <label className={`${theme === "light" ? "text-zinc-700" : "text-zinc-300"} block text-sm font-medium`}>Training Goals (comma-separated)</label>
-                  <input
-                    {...register('trainingGoals')}
-                    type="text"
-                    className={`mt-1 block w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 ${theme === "light" ? "border-zinc-300 bg-white focus:ring-blue-500" : "border-zinc-700 bg-gray-800 focus:ring-yellow-400"}`}
-                  />
+                  <label className={`${theme === "light" ? "text-zinc-700" : "text-zinc-300"} block text-sm font-medium`}>Training Goals (select all that apply) <span className="text-red-500">*</span></label>
+                  <div className="grid grid-cols-2 gap-2">
+                    {['Development of muscles', 'Reducing the stress', 'Losing body fat', 'Increasing the motivation', 'Training for an event/specific sport', 'Other'].map(goal => (
+                      <div key={goal} className="flex items-center">
+                        <input
+                          {...register('trainingGoals', { required: 'At least one training goal is required' })}
+                          type="checkbox"
+                          value={goal}
+                          className={`h-4 w-4 ${theme === "light" ? "text-blue-600 focus:ring-blue-500" : "text-yellow-400 focus:ring-yellow-400"} border-gray-300 rounded ${errors.trainingGoals ? 'border-red-500' : ''}`}
+                        />
+                        <label className={`${theme === "light" ? "text-gray-700" : "text-gray-300"} ml-2 text-sm`}>{goal}</label>
+                      </div>
+                    ))}
+                  </div>
+                  {errors.trainingGoals && <p className="text-red-500 text-xs mt-1">{errors.trainingGoals.message}</p>}
                 </div>
                 <div className="md:col-span-2">
-                  <label className={`${theme === "light" ? "text-zinc-700" : "text-zinc-300"} block text-sm font-medium`}>Eating Reasons (comma-separated)</label>
-                  <input
-                    {...register('eatingReasons')}
-                    type="text"
-                    className={`mt-1 block w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 ${theme === "light" ? "border-zinc-300 bg-white focus:ring-blue-500" : "border-zinc-700 bg-gray-800 focus:ring-yellow-400"}`}
-                  />
+                  <label className={`${theme === "light" ? "text-zinc-700" : "text-zinc-300"} block text-sm font-medium`}>Reasons for Eating (select all that apply)</label>
+                  <div className="grid grid-cols-2 gap-2">
+                    {['Stress', 'Depression', 'Boredom', 'Happiness', 'Habit', 'Annoyance'].map(reason => (
+                      <div key={reason} className="flex items-center">
+                        <input
+                          {...register('eatingReasons')}
+                          type="checkbox"
+                          value={reason}
+                          className={`h-4 w-4 ${theme === "light" ? "text-blue-600 focus:ring-blue-500" : "text-yellow-400 focus:ring-yellow-400"} border-gray-300 rounded`}
+                        />
+                        <label className={`${theme === "light" ? "text-gray-700" : "text-gray-300"} ml-2 text-sm`}>{reason}</label>
+                      </div>
+                    ))}
+                  </div>
                 </div>
                 <div>
-                  <label className={`${theme === "light" ? "text-zinc-700" : "text-zinc-300"} block text-sm font-medium`}>Membership Type</label>
+                  <label className={`${theme === "light" ? "text-zinc-700" : "text-zinc-300"} block text-sm font-medium`}>Membership Type <span className="text-red-500">*</span></label>
                   <select
-                    {...register('membershipType')}
-                    className={`mt-1 block w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 ${theme === "light" ? "border-zinc-300 bg-white focus:ring-blue-500" : "border-zinc-700 bg-gray-800 focus:ring-yellow-400"}`}
+                    {...register('membershipType', { required: 'Membership type is required' })}
+                    className={`mt-1 block w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 ${theme === "light" ? "border-zinc-300 bg-white focus:ring-blue-500" : "border-zinc-700 bg-gray-800 focus:ring-yellow-400"} ${errors.membershipType ? 'border-red-500' : ''}`}
                   >
                     <option value="">Select</option>
                     <option value="Basic">Basic</option>
                     <option value="Premium">Premium</option>
                     <option value="VIP">VIP</option>
                   </select>
+                  {errors.membershipType && <p className="text-red-500 text-xs mt-1">{errors.membershipType.message}</p>}
                 </div>
                 <div>
                   <label className={`${theme === "light" ? "text-zinc-700" : "text-zinc-300"} block text-sm font-medium`}>Exercise Duration</label>
@@ -845,12 +978,25 @@ export default function RegisterForm() {
                   />
                 </div>
                 <div>
-                  <label className={`${theme === "light" ? "text-zinc-700" : "text-zinc-300"} block text-sm font-medium`}>Start Month</label>
-                  <input
-                    {...register('startMonth')}
-                    type="month"
+                  <label className={`${theme === "light" ? "text-zinc-700" : "text-zinc-300"} block text-sm font-medium`}>Exercise Months</label>
+                  <select
+                    {...register('exerciseMonths')}
                     className={`mt-1 block w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 ${theme === "light" ? "border-zinc-300 bg-white focus:ring-blue-500" : "border-zinc-700 bg-gray-800 focus:ring-yellow-400"}`}
+                  >
+                    <option value="">Select</option>
+                    {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map(num => (
+                      <option key={num} value={num.toString()}>{num}</option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label className={`${theme === "light" ? "text-zinc-700" : "text-zinc-300"} block text-sm font-medium`}>Start Month <span className="text-red-500">*</span></label>
+                  <input
+                    {...register('startMonth', { required: 'Start month is required' })}
+                    type="month"
+                    className={`mt-1 block w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 ${theme === "light" ? "border-zinc-300 bg-white focus:ring-blue-500" : "border-zinc-700 bg-gray-800 focus:ring-yellow-400"} ${errors.startMonth ? 'border-red-500' : ''}`}
                   />
+                  {errors.startMonth && <p className="text-red-500 text-xs mt-1">{errors.startMonth.message}</p>}
                 </div>
               </div>
             )}
@@ -858,7 +1004,7 @@ export default function RegisterForm() {
             {currentStep === 4 && (
               <div className="space-y-6">
                 <div>
-                  <label className={`${theme === "light" ? "text-zinc-700" : "text-zinc-300"} block text-sm font-medium`}>Photos (Required)</label>
+                  <label className={`${theme === "light" ? "text-zinc-700" : "text-zinc-300"} block text-sm font-medium`}>Photos (Required) <span className="text-red-500">*</span></label>
                   <div className="flex gap-4">
                     <input
                       {...register('photos', {
@@ -901,6 +1047,7 @@ export default function RegisterForm() {
                       ))}
                     </div>
                   )}
+                  {errors.photos && <p className="text-red-500 text-xs mt-1">{errors.photos.message}</p>}
                 </div>
                 {uploadStatus && (
                   <div className="space-y-2">
@@ -939,23 +1086,25 @@ export default function RegisterForm() {
                   </div>
                 )}
                 <div>
-                  <label className={`${theme === "light" ? "text-zinc-700" : "text-zinc-300"} block text-sm font-medium`}>Signature</label>
+                  <label className={`${theme === "light" ? "text-zinc-700" : "text-zinc-300"} block text-sm font-medium`}>Signature <span className="text-red-500">*</span></label>
                   <input
-                    {...register('signature')}
+                    {...register('signature', { required: 'Signature is required' })}
                     type="text"
-                    className={`mt-1 block w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 ${theme === "light" ? "border-zinc-300 bg-white focus:ring-blue-500" : "border-zinc-700 bg-gray-800 focus:ring-yellow-400"}`}
+                    className={`mt-1 block w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 ${theme === "light" ? "border-zinc-300 bg-white focus:ring-blue-500" : "border-zinc-700 bg-gray-800 focus:ring-yellow-400"} ${errors.signature ? 'border-red-500' : ''}`}
                     placeholder="Type your full name as signature"
                   />
+                  {errors.signature && <p className="text-red-500 text-xs mt-1">{errors.signature.message}</p>}
                 </div>
                 <div className="flex items-center">
                   <input
-                    {...register('agreeTerms')}
+                    {...register('agreeTerms', { required: 'You must agree to the terms and conditions' })}
                     type="checkbox"
-                    className={`h-4 w-4 ${theme === "light" ? "text-blue-600 focus:ring-blue-500" : "text-yellow-400 focus:ring-yellow-400"} border-gray-300 rounded`}
+                    className={`h-4 w-4 ${theme === "light" ? "text-blue-600 focus:ring-blue-500" : "text-yellow-400 focus:ring-yellow-400"} border-gray-300 rounded ${errors.agreeTerms ? 'border-red-500' : ''}`}
                   />
                   <label className={`${theme === "light" ? "text-gray-700" : "text-gray-300"} ml-2 text-sm`}>
-                    I agree to the terms and conditions
+                    I agree to the terms and conditions <span className="text-red-500">*</span>
                   </label>
+                  {errors.agreeTerms && <p className="text-red-500 text-xs mt-1">{errors.agreeTerms.message}</p>}
                 </div>
               </div>
             )}
@@ -968,6 +1117,13 @@ export default function RegisterForm() {
                 className={`px-4 py-2 rounded font-medium transition-colors duration-200 ${theme === "light" ? "bg-gray-300 text-gray-700 hover:bg-gray-400 focus:ring-2 focus:ring-gray-500" : "bg-gray-700 text-white hover:bg-gray-600 focus:ring-2 focus:ring-yellow-400"} disabled:opacity-50`}
               >
                 <ChevronLeft className="inline w-4 h-4 mr-1" /> Previous
+              </button>
+              <button
+                type="button"
+                onClick={handleReset}
+                className={`px-4 py-2 rounded font-medium transition-colors duration-200 ${theme === "light" ? "bg-gray-300 text-gray-700 hover:bg-gray-400 focus:ring-2 focus:ring-gray-500" : "bg-gray-700 text-white hover:bg-gray-600 focus:ring-2 focus:ring-yellow-400"}`}
+              >
+                Reset
               </button>
               {currentStep < steps.length - 1 ? (
                 <button

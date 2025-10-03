@@ -4,8 +4,8 @@ import React, { useState, useEffect, useContext, useCallback, useRef } from 'rea
 import { useForm } from 'react-hook-form';
 import { ToastContainer, toast } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
-import { collection, addDoc, doc, updateDoc } from 'firebase/firestore';
-import { createUserWithEmailAndPassword, onAuthStateChanged } from 'firebase/auth';
+import { collection, doc, setDoc } from 'firebase/firestore';
+import { createUserWithEmailAndPassword, onAuthStateChanged, updateProfile } from 'firebase/auth';
 import { auth, db } from '../../fconfig';
 import { LanguageContext } from '../../../context/LanguageContext';
 import { ThemeContext } from '../../../context/ThemeContext';
@@ -20,14 +20,14 @@ const CLOUDINARY_FOLDER = process.env.NEXT_PUBLIC_CLOUDINARY_FOLDER || 'photoss'
 const GYMForm = () => {
   const { t } = useContext(LanguageContext);
   const { theme } = useContext(ThemeContext) || { theme: 'light' };
-  const { register, handleSubmit, formState: { errors }, setValue, watch } = useForm({
+  const { register, handleSubmit, formState: { errors }, setValue, watch, reset } = useForm({
     defaultValues: {
       firstName: '',
       lastName: '',
       phoneNumber: '',
       email: '',
       password: '',
-      photo: null,
+      photos: null,
       address: '',
       city: '',
       country: '',
@@ -71,8 +71,9 @@ const GYMForm = () => {
   const [formErrors, setFormErrors] = useState({});
   const [currentStep, setCurrentStep] = useState(0);
   const [isSubmitted, setIsSubmitted] = useState(false);
-  const [isUploading, setIsUploading] = useState(false);
-  const [photoPreview, setPhotoPreview] = useState(null);
+  const [uploadStatus, setUploadStatus] = useState(null);
+  const [uploadedPhotos, setUploadedPhotos] = useState([]);
+  const [photoPreviews, setPhotoPreviews] = useState([]);
   const [showPassword, setShowPassword] = useState(false);
   const [showCamera, setShowCamera] = useState(false);
   const videoRef = useRef(null);
@@ -99,7 +100,7 @@ const GYMForm = () => {
     },
     {
       name: t.review || 'Review',
-      fields: ['photo', 'preferredStartDate', 'signature', 'agreeTerms'],
+      fields: ['photos', 'preferredStartDate', 'signature', 'agreeTerms'],
     },
   ];
 
@@ -181,45 +182,58 @@ const GYMForm = () => {
 
   const handlePhotoChange = (e) => {
     console.log('Photo input changed:', e.target.files);
-    const file = e.target.files?.[0] || null;
-    if (!file) {
-      console.warn('No file selected');
-      setPhotoPreview(null);
-      setValue('photo', null, { shouldValidate: true });
-      toast.error('No photo selected.');
+    const files = e.target.files;
+    if (!files || files.length === 0) {
+      console.warn('No files selected');
+      setPhotoPreviews([]);
+      setValue('photos', null, { shouldValidate: true });
+      toast.error('No photos selected.');
       return;
     }
 
-    const isImage = file.type.startsWith('image/');
-    const isUnderSizeLimit = file.size <= 5 * 1024 * 1024; // 5MB limit
-    if (!isImage) {
-      console.warn(`Invalid file type for ${file.name}`);
-      toast.error(`${file.name} is not a valid image file.`);
-      setPhotoPreview(null);
-      setValue('photo', null, { shouldValidate: true });
+    const fileArray = Array.from(files);
+    const validFiles = fileArray.filter(file => {
+      const isImage = file.type.startsWith('image/');
+      const isUnderSizeLimit = file.size <= 5 * 1024 * 1024; // 5MB limit per file
+      if (!isImage) {
+        console.warn(`Invalid file type for ${file.name}`);
+        toast.error(`${file.name} is not a valid image file.`);
+        return false;
+      }
+      if (!isUnderSizeLimit) {
+        console.warn(`File size too large for ${file.name}`);
+        toast.error(`${file.name} exceeds the 5MB size limit.`);
+        return false;
+      }
+      return true;
+    });
+
+    if (validFiles.length === 0) {
+      setPhotoPreviews([]);
+      setValue('photos', null, { shouldValidate: true });
+      toast.error('No valid photos selected.');
       return;
     }
-    if (!isUnderSizeLimit) {
-      console.warn(`File size too large for ${file.name}`);
-      toast.error(`${file.name} exceeds the 5MB size limit.`);
-      setPhotoPreview(null);
-      setValue('photo', null, { shouldValidate: true });
-      return;
-    }
+
+    const previews = [];
+    validFiles.forEach((file) => {
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        if (reader.result && typeof reader.result === 'string') {
+          previews.push(reader.result);
+          if (previews.length === validFiles.length) {
+            setPhotoPreviews(previews);
+          }
+        }
+      };
+      reader.readAsDataURL(file);
+    });
 
     const dataTransfer = new DataTransfer();
-    dataTransfer.items.add(file);
+    validFiles.forEach(file => dataTransfer.items.add(file));
     const newFileList = dataTransfer.files;
 
-    setValue('photo', newFileList, { shouldValidate: true });
-
-    const reader = new FileReader();
-    reader.onloadend = () => {
-      if (reader.result && typeof reader.result === 'string') {
-        setPhotoPreview(reader.result);
-      }
-    };
-    reader.readAsDataURL(file);
+    setValue('photos', newFileList, { shouldValidate: true });
   };
 
   const capturePhoto = () => {
@@ -235,21 +249,22 @@ const GYMForm = () => {
       canvas.toBlob((blob) => {
         if (blob) {
           const file = new File([blob], `capture-${Date.now()}.jpg`, { type: 'image/jpeg' });
-          const dataTransfer = new DataTransfer();
-          dataTransfer.items.add(file);
-          const newFileList = dataTransfer.files;
+          const currentPhotos = watch('photos');
+          const dt = new DataTransfer();
+          if (currentPhotos) {
+            for (let i = 0; i < currentPhotos.length; i++) {
+              dt.items.add(currentPhotos[i]);
+            }
+          }
+          dt.items.add(file);
+          const newFileList = dt.files;
 
-          // Update the file input's files
-          fileInputRef.current.files = newFileList;
+          setValue('photos', newFileList, { shouldValidate: true });
 
-          // Update form state
-          setValue('photo', newFileList, { shouldValidate: true });
-
-          // Update preview
           const reader = new FileReader();
           reader.onloadend = () => {
             if (reader.result && typeof reader.result === 'string') {
-              setPhotoPreview(reader.result);
+              setPhotoPreviews(prev => [...prev, reader.result]);
             }
           };
           reader.readAsDataURL(file);
@@ -259,149 +274,135 @@ const GYMForm = () => {
         } else {
           toast.error('Failed to capture photo.');
         }
-      }, 'image/jpeg', 0.95); // Set quality to 95%
+      }, 'image/jpeg', 0.95);
     }
   };
 
-  const uploadToCloudinary = async (file) => {
-    if (!file) {
-      console.error('No file provided for upload.');
-      toast.error('No photo selected for upload.');
-      return null;
+  const uploadToCloudinary = async (data) => {
+    const files = Array.from(data.photos || []);
+    if (files.length === 0) {
+      console.error('No photos selected for upload.');
+      toast.error('No photos selected for upload.');
+      return [];
     }
-    const maxSize = 5 * 1024 * 1024; // 5MB
-    if (file.size > maxSize) {
-      toast.error('File size exceeds 5MB limit.');
-      return null;
-    }
-    if (!file.type.startsWith('image/')) {
-      toast.error('Please upload a valid image file.');
-      return null;
-    }
-    setIsUploading(true);
+    setUploadStatus({ type: 'uploading', message: 'Starting photo upload...', progress: 0 });
+    const photoURLs = [];
+
     try {
-      const formData = new FormData();
-      formData.append('file', file);
-      formData.append('upload_preset', CLOUDINARY_UPLOAD_PRESET);
-      formData.append('folder', CLOUDINARY_FOLDER);
-      formData.append('resource_type', 'image');
+      for (let i = 0; i < files.length; i++) {
+        const file = files[i];
+        setUploadStatus({
+          type: 'uploading',
+          message: `Uploading ${file.name} (${i + 1} of ${files.length})`,
+          progress: (i / files.length) * 100,
+          fileName: file.name,
+        });
 
-      const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 30000);
+        const formData = new FormData();
+        formData.append('file', file);
+        formData.append('upload_preset', CLOUDINARY_UPLOAD_PRESET);
+        formData.append('folder', CLOUDINARY_FOLDER);
+        formData.append('resource_type', 'image');
 
-      const response = await fetch(
-        `https://api.cloudinary.com/v1_1/${CLOUDINARY_CLOUD_NAME}/image/upload`,
-        { method: 'POST', body: formData, signal: controller.signal }
-      );
-      clearTimeout(timeoutId);
-      const data = await response.json();
-      setIsUploading(false);
-      if (data.secure_url) {
-        toast.success('Photo uploaded successfully.');
-        return data.secure_url;
-      } else {
-        toast.error(`Failed to upload image: ${data.error?.message || 'Unknown error'}`);
-        return null;
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 30000);
+
+        const response = await fetch(
+          `https://api.cloudinary.com/v1_1/${CLOUDINARY_CLOUD_NAME}/image/upload`,
+          { method: 'POST', body: formData, signal: controller.signal }
+        );
+        clearTimeout(timeoutId);
+        const result = await response.json();
+        if (result.secure_url) {
+          photoURLs.push(result.secure_url);
+          setUploadedPhotos(prev => [...prev, { url: result.secure_url, fileName: file.name }]);
+        } else {
+          toast.error(`Failed to upload ${file.name}`);
+        }
       }
+      setUploadStatus({ type: 'success', message: 'Photos uploaded successfully.' });
+      return photoURLs;
     } catch (error) {
-      setIsUploading(false);
-      if (error.name === 'AbortError') {
-        toast.error('Upload timeout.');
-      } else {
-        toast.error(`Failed to upload image: ${error.message}`);
-      }
-      return null;
+      setUploadStatus({ type: 'error', message: 'Failed to upload photos.' });
+      return [];
     }
   };
 
-  const submitRegistration = useCallback(
-    async (data) => {
-      setFormErrors({});
-      if (!data.photo || data.photo.length === 0) {
-        setFormErrors({ global: 'Please select or capture a photo.' });
-        toast.error('Please select or capture a photo.');
-        return;
+  const completeRegistration = async (user, data) => {
+    try {
+      await updateProfile(user, {
+        displayName: `${data.firstName} ${data.lastName}`,
+      });
+
+      const photoURLs = await uploadToCloudinary(data);
+
+      const { password, photos, ...userData } = data;
+      userData.photoURLs = photoURLs;
+      userData.userId = user.uid;
+      userData.timestamp = new Date().toISOString();
+      userData.registrationDate = new Date().toISOString();
+
+      const userDocRef = doc(db, 'GYM', user.uid);
+      await setDoc(userDocRef, userData);
+
+      sessionStorage.setItem('pendingDocId', user.uid);
+      sessionStorage.setItem('pendingUserId', user.uid);
+
+      toast.success(t.registrationComplete || 'Registration successful! Redirecting to payment...', {
+        position: 'top-center',
+        autoClose: 3000,
+      });
+
+      setIsSubmitted(true);
+      setTimeout(() => {
+        reset();
+        router.push('/payment');
+      }, 3000);
+    } catch (error) {
+      console.error('Complete registration error:', error);
+      toast.error('Failed to complete registration.');
+    }
+  };
+
+  const submitRegistration = async (data) => {
+    setFormErrors({});
+    if (!db) {
+      setFormErrors({ global: t.serviceError || 'Firestore database is not initialized.' });
+      toast.error(t.serviceError || 'Firestore database is not initialized.', {
+        position: 'top-center',
+        autoClose: 5000,
+      });
+      return;
+    }
+
+    try {
+      const userCredential = await createUserWithEmailAndPassword(auth, data.email, data.password);
+      const user = userCredential.user;
+
+      await completeRegistration(user, data);
+    } catch (error) {
+      console.error('Submission error:', error);
+      let errorMessage = error.message || t.saveError || 'An error occurred while registering.';
+      if (error.code === 'auth/email-already-in-use') {
+        errorMessage = t.emailInUse || 'This email is already registered. Please use a different email or log in.';
+      } else if (error.code === 'auth/weak-password') {
+        errorMessage = t.weakPassword || 'Password is too weak. Please use a stronger password (at least 6 characters).';
+      } else if (error.code === 'auth/invalid-email') {
+        errorMessage = t.emailInvalid || 'Invalid email address.';
+      } else if (error.code === 'permission-denied') {
+        errorMessage = t.permissionError || 'Permission denied: Unable to save data.';
+      } else if (error.code === 'unavailable') {
+        errorMessage = t.serviceError || 'Firestore service is unavailable.';
+      } else if (error.code === 'auth/invalid-api-key') {
+        errorMessage = t.serviceError || 'Invalid Firebase API key. Please contact support.';
       }
-
-      if (!db) {
-        setFormErrors({ global: t.serviceError || 'Firestore database is not initialized.' });
-        toast.error(t.serviceError || 'Firestore database is not initialized.', {
-          position: "top-center",
-          autoClose: 5000,
-        });
-        return;
-      }
-
-      try {
-        let userId = currentUser?.uid;
-        let photoURL = '';
-
-        if (data.photo && data.photo[0]) {
-          photoURL = await uploadToCloudinary(data.photo[0]);
-          if (!photoURL) {
-            throw new Error(t.storageError || 'Image upload failed.');
-          }
-        }
-
-        if (!isAuthenticated) {
-          if (!auth) {
-            throw new Error(t.serviceError || 'Firebase authentication is not initialized.');
-          }
-          const userCredential = await createUserWithEmailAndPassword(auth, data.email, data.password);
-          userId = userCredential.user.uid;
-        }
-
-        const docRef = await addDoc(collection(db, 'GYM'), {
-          ...data,
-          photo: null,
-          photoURL,
-          userId: userId || 'unknown',
-          timestamp: new Date().toISOString(),
-          payment: "not payed",
-          registrationDate: new Date().toISOString(),
-        });
-
-        sessionStorage.setItem("pendingDocId", docRef.id);
-        sessionStorage.setItem("pendingUserId", userId || 'unknown');
-
-        toast.success(t.registrationComplete || 'Registration successful! Redirecting to payment...', {
-          position: "top-center",
-          autoClose: 3000,
-          hideProgressBar: false,
-          closeOnClick: true,
-          pauseOnHover: true,
-          draggable: true,
-        });
-
-        setIsSubmitted(true);
-        setTimeout(() => {
-          router.push("/payment");
-        }, 3000);
-      } catch (error) {
-        console.error('Submission error:', error);
-        let errorMessage = error.message || t.saveError || 'An error occurred while registering.';
-        if (error.code === 'auth/email-already-in-use') {
-          errorMessage = t.emailInUse || 'This email is already registered. Please use a different email or log in.';
-        } else if (error.code === 'auth/weak-password') {
-          errorMessage = t.weakPassword || 'Password is too weak. Please use a stronger password (at least 6 characters).';
-        } else if (error.code === 'auth/invalid-email') {
-          errorMessage = t.emailInvalid || 'Invalid email address.';
-        } else if (error.code === 'permission-denied') {
-          errorMessage = t.permissionError || 'Permission denied: Unable to save data.';
-        } else if (error.code === 'unavailable') {
-          errorMessage = t.serviceError || 'Firestore service is unavailable.';
-        } else if (error.code === 'auth/invalid-api-key') {
-          errorMessage = t.serviceError || 'Invalid Firebase API key. Please contact support.';
-        }
-        toast.error(errorMessage, {
-          position: "top-center",
-          autoClose: 5000,
-        });
-        setFormErrors({ global: errorMessage });
-      }
-    },
-    [isAuthenticated, currentUser, t, router]
-  );
+      toast.error(errorMessage, {
+        position: 'top-center',
+        autoClose: 5000,
+      });
+      setFormErrors({ global: errorMessage });
+    }
+  };
 
   const updatePaymentStatus = useCallback(
     async (docId, paymentStatus) => {
@@ -1014,19 +1015,20 @@ const GYMForm = () => {
 
             {currentStep === 4 && (
               <div className="space-y-6 animate-fade-in">
-                <h3 className={`text-xl font-semibold ${theme === 'dark' ? 'text-white' : 'text-gray-800'}`}>{t.review || 'Review Your Information'}</h3>
+                <h3 className={`text-xl font-semibold ${theme === 'dark' ? 'text-white' : 'text-gray-800'}`}>{t.review || 'Review'}</h3>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
                   <div className="sm:col-span-2">
                     <label className={`block text-sm font-medium ${theme === 'dark' ? 'text-gray-300' : 'text-gray-700'}`}>{t.photo || 'Photo (Required)'}</label>
                     <div className="flex gap-4">
                       <input
-                        {...register('photo', {
+                        {...register('photos', {
                           required: 'A photo is required.',
                           validate: (files) => files && files.length > 0 ? true : 'A photo is required.'
                         })}
                         ref={fileInputRef}
                         type="file"
                         accept="image/*"
+                        multiple
                         onChange={handlePhotoChange}
                         className={`mt-1 block w-full px-4 py-2 rounded-lg border ${theme === "light" ? "bg-white border-gray-300 text-gray-900 file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100 focus:ring-2 focus:ring-blue-500 focus:border-blue-500" : "bg-gray-800 border-gray-700 text-gray-300 file:bg-gray-600 file:text-yellow-400 hover:file:bg-gray-500 focus:ring-2 focus:ring-yellow-400 focus:border-yellow-400"} transition-all duration-200`}
                         aria-label="Photo"
@@ -1052,13 +1054,31 @@ const GYMForm = () => {
                         </button>
                       </div>
                     )}
-                    {photoPreview && <img src={photoPreview} alt="Preview" className="mt-2 w-32 h-32 object-cover rounded" />}
-                    {isUploading && (
-                      <p className={`text-sm flex items-center gap-2 ${theme === "light" ? "text-blue-500" : "text-yellow-400"}`}>
-                        Uploading...
-                      </p>
+                    {photoPreviews.length > 0 && (
+                      <div className="mt-2 flex flex-wrap gap-2">
+                        {photoPreviews.map((preview, index) => (
+                          <img key={index} src={preview} alt={`Preview ${index}`} className="w-32 h-32 object-cover rounded" />
+                        ))}
+                      </div>
                     )}
-                    {errors.photo && <p id="photo-error" className={`text-xs mt-1 ${theme === "light" ? "text-red-500" : "text-red-400"}`}>{errors.photo.message}</p>}
+                    {uploadStatus && (
+                      <div className="mt-2">
+                        <p className={`text-sm ${uploadStatus.type === 'uploading' ? 'text-blue-500' : uploadStatus.type === 'success' ? 'text-green-500' : 'text-red-500'}`}>
+                          {uploadStatus.message}
+                        </p>
+                      </div>
+                    )}
+                    {uploadedPhotos.length > 0 && (
+                      <div className="mt-2">
+                        <p>Uploaded Photos:</p>
+                        <ul>
+                          {uploadedPhotos.map((photo, index) => (
+                            <li key={index}><a href={photo.url} target="_blank">{photo.fileName}</a></li>
+                          ))}
+                        </ul>
+                      </div>
+                    )}
+                    {errors.photos && <p id="photos-error" className={`text-xs mt-1 ${theme === 'dark' ? 'text-red-400' : 'text-red-500'}`}>{errors.photos.message}</p>}
                   </div>
                   <div>
                     <label className={`block text-sm font-medium ${theme === 'dark' ? 'text-gray-300' : 'text-gray-700'}`}>{t.preferredStartDate || 'Preferred Start Date'}</label>
@@ -1173,8 +1193,8 @@ const GYMForm = () => {
               ) : (
                 <button
                   type="submit"
-                  disabled={isUploading || showCamera}
-                  className={`px-6 py-3 rounded-lg text-sm font-medium transition-all duration-300 ${!isUploading && !showCamera ? (theme === 'dark' ? 'bg-gray-700 text-white hover:bg-gray-600 focus:ring-2 focus:ring-yellow-400' : 'bg-blue-600 text-white hover:bg-blue-700 focus:ring-2 focus:ring-blue-500') : (theme === 'dark' ? 'bg-gray-600 text-gray-400 cursor-not-allowed' : 'bg-gray-400 text-gray-500 cursor-not-allowed')}`}
+                  disabled={uploadStatus?.type === 'uploading' || showCamera}
+                  className={`px-6 py-3 rounded-lg text-sm font-medium transition-all duration-300 ${!(uploadStatus?.type === 'uploading' || showCamera) ? (theme === 'dark' ? 'bg-gray-700 text-white hover:bg-gray-600 focus:ring-2 focus:ring-yellow-400' : 'bg-blue-600 text-white hover:bg-blue-700 focus:ring-2 focus:ring-blue-500') : (theme === 'dark' ? 'bg-gray-600 text-gray-400 cursor-not-allowed' : 'bg-gray-400 text-gray-500 cursor-not-allowed')}`}
                 >
                   {t.submit || 'Submit'}
                 </button>

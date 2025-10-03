@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useContext } from 'react';
+import { useState, useEffect, useContext, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { doc, getDoc, setDoc, updateDoc, arrayUnion, collection, getDocs } from 'firebase/firestore';
 import { db } from '../fconfig';
@@ -33,7 +33,46 @@ interface Conversation {
   docId: string; // Store document ID for fetching messages
 }
 
-export default function Messages() {
+// Define interface for translations
+interface Translations {
+  pleaseLogin?: string;
+  userDataNotFound?: string;
+  fetchConversationUsersError?: string;
+  fetchError?: string;
+  emptyMessage?: string;
+  selectUser?: string;
+  messageSent?: string;
+  sendError?: string;
+  loading?: string;
+  messages?: string;
+  welcome?: string;
+  backToChats?: string;
+  noContent?: string;
+  noTimestamp?: string;
+  noMessages?: string;
+  messagePlaceholder?: string;
+  sendMessage?: string;
+  searchPlaceholder?: string;
+  conversationUsers?: string;
+  noConversationUsers?: string;
+  allUsers?: string;
+  noUsers?: string;
+  newConversation?: string;
+}
+
+// Define interface for LanguageContext
+interface LanguageContextType {
+  language: string;
+  toggleLanguage: () => void;
+  t: Translations;
+}
+
+// Client Component to handle useSearchParams
+function MessagesClient() {
+  const router = useRouter();
+  const searchParams = useSearchParams();
+  const themeContext = useContext(ThemeContext);
+  const languageContext = useContext(LanguageContext);
   const [messages, setMessages] = useState<Message[]>([]);
   const [users, setUsers] = useState<User[]>([]);
   const [conversations, setConversations] = useState<Conversation[]>([]);
@@ -44,10 +83,6 @@ export default function Messages() {
   const [selectedUser, setSelectedUser] = useState<User | null>(null);
   const [showUsers, setShowUsers] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
-  const router = useRouter();
-  const searchParams = useSearchParams();
-  const themeContext = useContext(ThemeContext);
-  const languageContext = useContext(LanguageContext);
 
   if (!themeContext) {
     throw new Error('Messages must be used within a ThemeProvider');
@@ -58,7 +93,7 @@ export default function Messages() {
   }
 
   const { theme } = themeContext;
-  const { t = {} } = languageContext;
+  const { t } = languageContext as LanguageContextType;
 
   // Generate consistent conversation ID
   const getConversationId = (email1: string, email2: string) => {
@@ -70,10 +105,15 @@ export default function Messages() {
   useEffect(() => {
     const validateSessionAndFetchUser = async () => {
       try {
+        // Check if running during build (Node.js environment, no window object)
+        const isBuild = process.env.NODE_ENV === 'production' && typeof window === 'undefined';
         const email = searchParams.get('email') || '';
+
         if (!email) {
-          toast.error(t.pleaseLogin || 'Please log in to access this page');
-          router.push('/');
+          if (!isBuild) {
+            toast.error(t.pleaseLogin || 'Please log in to access this page');
+            router.push('/');
+          }
           return;
         }
 
@@ -92,7 +132,17 @@ export default function Messages() {
         } else {
           console.warn('User data not found in GYM collection for:', decodedEmail);
           setUserName('User');
-          toast.warn(t.userDataNotFound || 'User data not found. Please contact support.');
+          if (!isBuild) {
+            toast.warn(t.userDataNotFound || 'User data not found. Please contact support.');
+          }
+        }
+
+        // Skip session validation during build
+        if (isBuild) {
+          // Mock user data for prerendering
+          setUsers([{ email: 'admin', firstName: 'Admin' }]);
+          setLoading(false);
+          return;
         }
 
         // Validate session
@@ -102,16 +152,21 @@ export default function Messages() {
         });
 
         if (!response.ok) {
-          toast.error(t.pleaseLogin || 'Please log in to access this page');
-          router.push('/');
+          if (!isBuild) {
+            toast.error(t.pleaseLogin || 'Please log in to access this page');
+            router.push('/');
+          }
           return;
         }
 
         const data = await response.json();
         if (data.email !== decodedEmail) {
           console.warn('Session email does not match query email:', data.email, decodedEmail);
-          toast.error(t.pleaseLogin || 'Session mismatch. Please log in again.');
-          router.push('/');
+          if (!isBuild) {
+            toast.error(t.pleaseLogin || 'Session mismatch. Please log in again.');
+            router.push('/');
+          }
+          return;
         }
 
         // Fetch all users for conversation display, including admin
@@ -123,14 +178,15 @@ export default function Messages() {
             firstName: doc.data().firstName || 'User',
           }))
           .filter((user) => user.email !== decodedEmail); // Exclude current user
-        // Add admin to the users list
         fetchedUsers.push({ email: 'admin', firstName: 'Admin' });
         setUsers(fetchedUsers);
         console.log('Users fetched:', fetchedUsers.length, fetchedUsers.map(u => u.email));
       } catch (error) {
         console.error('Session validation or user data fetch error:', error);
-        toast.error(t.pleaseLogin || 'Please log in to access this page');
-        router.push('/');
+        if (typeof window !== 'undefined') {
+          toast.error(t.pleaseLogin || 'Please log in to access this page');
+          router.push('/');
+        }
       }
     };
 
@@ -214,7 +270,6 @@ export default function Messages() {
 
       setLoading(true);
       try {
-        // Find the conversation document ID
         const conversation = conversations.find(conv => conv.user.email === selectedUser.email);
         if (!conversation?.docId) {
           setMessages([]);
@@ -253,7 +308,6 @@ export default function Messages() {
         setMessages(fetchedMessages);
         console.log(`Messages fetched for conversation with ${selectedUser.email}:`, fetchedMessages.length);
 
-        // Mark messages as read
         const unreadMessages = fetchedMessages.filter(msg => msg.receiver === userEmail && !msg.read);
         if (unreadMessages.length > 0) {
           await updateDoc(messageDocRef, {
@@ -262,7 +316,6 @@ export default function Messages() {
               read: msg.receiver === userEmail ? true : msg.read,
             })),
           });
-          // Update unread count in conversations
           setConversations(prev =>
             prev.map(conv =>
               conv.user.email === selectedUser.email ? { ...conv, unreadCount: 0 } : conv
@@ -322,7 +375,6 @@ export default function Messages() {
       setNewMessage('');
       toast.success(t.messageSent || 'Message sent successfully');
 
-      // Update conversations list
       const existingConversation = conversations.find(conv => conv.user.email === selectedUser.email);
       if (!existingConversation) {
         setConversations(prev => [
@@ -674,5 +726,22 @@ export default function Messages() {
         )}
       </main>
     </div>
+  );
+}
+
+// Main page component with Suspense
+export default function MessagesPage() {
+  return (
+    <Suspense fallback={
+      <div className="flex h-screen items-center justify-center bg-blue-50 bg-opacity-30">
+        <svg className="h-8 w-8 animate-spin mr-2 text-teal-600" fill="none" viewBox="0 0 24 24">
+          <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+          <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+        </svg>
+        <span className="text-blue-900">Loading...</span>
+      </div>
+    }>
+      <MessagesClient />
+    </Suspense>
   );
 }
