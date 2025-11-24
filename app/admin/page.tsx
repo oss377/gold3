@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useContext, useRef, Dispatch, SetStateAction } from 'react';
+import { useState, useEffect, useContext, useRef, Dispatch, SetStateAction, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import {
   Dumbbell,
@@ -21,10 +21,13 @@ import {
   ChevronLeft,
   ChevronRight,
   Lock,
+  RefreshCw,
+  Video,
 } from 'lucide-react';
-import Link from 'next/link';
+import Link from 'next/link'; 
 import { toast } from 'react-toastify';
-import { doc, getDoc } from 'firebase/firestore';
+import { doc, getDoc, collection, getDocs, deleteDoc, updateDoc } from 'firebase/firestore';
+import { motion } from 'framer-motion';
 import { db } from '../fconfig';
 import VideoUploadModal from '../../components/VideoUploadModal';
 import RegisterMember from '../../components/RegisterMember';
@@ -35,78 +38,7 @@ import Notifications from '../../components/Notifications';
 import SearchComponent from '../../components/SearchComponent';
 import { ThemeContext } from '../../context/ThemeContext';
 import { LanguageContext } from '../../context/LanguageContext';
-
-// Interface for Translation (aligned with LanguageContext)
-interface Translation {
-  [key: string]: string;
-  dashboard: string;
-  members: string;
-  classes: string;
-  settings: string;
-  logout: string;
-  profile: string;
-  adminDashboard: string;
-  darkMode: string;
-  uploadVideo: string;
-  registerMember: string;
-  uploadSchedule: string;
-  activeMembers: string;
-  classesToday: string;
-  newSignups: string;
-  revenue: string;
-  changeMembers: string;
-  changeClasses: string;
-  changeSignups: string;
-  changeRevenue: string;
-  permissionDenied: string;
-  fetchSchedulesError: string;
-  fetchStatsError: string;
-  todaysSchedule: string;
-  loading: string;
-  noSchedules: string;
-  instructor: string;
-  statsOverview: string;
-  welcome: string;
-  chooseMessageType: string;
-  publicMessage: string;
-  personalMessage: string;
-  messages: string;
-  navigationError: string;
-  namePlaceholder: string;
-  emailPlaceholder: string;
-  passwordPlaceholder: string;
-  subadmin: string;
-  phonePlaceholder: string;
-  addressPlaceholder: string;
-  registerButton: string;
-  registrationSuccess: string;
-  registrationError: string;
-  userDataNotFound: string;
-  logoutSuccess: string;
-  logoutError: string;
-  welcomeMessage: string;
-  getStarted: string;
-  quickActions: string;
-  newRegistrations: string;
-  aerobics: string;
-  gym: string;
-  karate: string;
-  registrationDetails: string;
-  name: string;
-  email: string;
-  collection: string;
-  registrationDate: string;
-  details: string;
-  enlargedProfile: string;
-  instructorPlaceholder: string;
-  timePlaceholder: string;
-  addTime: string;
-  descriptionPlaceholder: string;
-  titlePlaceholder: string;
-  datePlaceholder: string;
-  errorMessage: string;
-  fixErrors: string;
-}
+import { Translation } from '../../context/LanguageContext';
 
 // Interface for Schedule
 interface Schedule {
@@ -139,18 +71,43 @@ interface NotificationsProps {
   t: Translation;
 }
 
+// Interface for Video
+interface Video {
+  id: string;
+  title: string;
+  category: string;
+  description: string;
+  thumbnail: string;
+  videoUrl: string;
+}
+
+// Interface for Stats
+interface Stats {
+  activeMembers: number;
+  classesToday: number;
+  newSignups: number;
+  revenue: number;
+}
+
 export default function GymDashboard() {
   const [isSidebarOpen, setIsSidebarOpen] = useState<boolean>(false);
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState<boolean>(false);
   const [notifications, setNotifications] = useState<number>(0);
-  const [searchQuery, setSearchQuery] = useState<string>('');
   const [isUploadModalOpen, setIsUploadModalOpen] = useState<boolean>(false);
   const [isRegisterModalOpen, setIsRegisterModalOpen] = useState<boolean>(false);
   const [isScheduleModalOpen, setIsScheduleModalOpen] = useState<boolean>(false);
   const [isMessageOptionsOpen, setIsMessageOptionsOpen] = useState<boolean>(false);
   const [refreshTrigger, setRefreshTrigger] = useState<number>(0);
+  const [activeView, setActiveView] = useState<'dashboard' | 'users' | 'videos'>('dashboard');
   const [isAuthorized, setIsAuthorized] = useState<boolean>(false);
   const [schedules, setSchedules] = useState<Schedule[]>([]);
+  const [searchQuery, setSearchQuery] = useState<string>('');
+  const [stats, setStats] = useState<Stats>({
+    activeMembers: 0,
+    classesToday: 3, // Default value
+    newSignups: 0,
+    revenue: 0, // Placeholder
+  });
   const [hasStats, setHasStats] = useState<boolean>(true);
   const [userName, setUserName] = useState<string>('Admin');
   const [userEmail, setUserEmail] = useState<string>('');
@@ -203,6 +160,37 @@ export default function GymDashboard() {
 
     validateSessionAndFetchUser();
   }, [router, t]);
+
+  useEffect(() => {
+    const fetchStats = async () => {
+      try {
+        const gymCollectionRef = collection(db, 'GYM');
+        const querySnapshot = await getDocs(gymCollectionRef);
+
+        const totalMembers = querySnapshot.size;
+
+        const fiveDaysAgo = new Date();
+        fiveDaysAgo.setDate(fiveDaysAgo.getDate() - 5);
+
+        let newSignupsCount = 0;
+        querySnapshot.forEach(doc => {
+          const data = doc.data();
+          if (data.registrationDate) {
+            const registrationDate = new Date(data.registrationDate);
+            if (registrationDate >= fiveDaysAgo) {
+              newSignupsCount++;
+            }
+          }
+        });
+
+        setStats(prevStats => ({ ...prevStats, activeMembers: totalMembers, newSignups: newSignupsCount }));
+      } catch (error) {
+        console.error("Error fetching stats:", error);
+        toast.error("Failed to load dashboard stats.");
+      }
+    };
+    fetchStats();
+  }, []);
 
   const navItems: NavItem[] = [
     { name: t['dashboard'] || 'Dashboard', href: '/admin', icon: BarChart },
@@ -639,31 +627,25 @@ export default function GymDashboard() {
           {/* Search Component */}
           <SearchComponent searchQuery={searchQuery} setSearchQuery={setSearchQuery} theme={theme} t={t} />
 
+
           {/* Stats Cards or Placeholder */}
-          {hasStats ? (
-            <DataFetcher
-              refreshTrigger={refreshTrigger}
-              searchQuery={searchQuery}
-              theme={theme}
-              t={t}
-              onStatsFetched={(stats: any) => {
-                console.log('Fetched stats:', stats);
-              }}
-              onStatsStatus={setHasStats}
-            />
-          ) : (
+          {activeView === 'dashboard' && (
             <div
               className={`grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-8 mb-12 transition-all duration-500 relative`}
             >
               {[
-                { title: t['activeMembers'] || 'Active Members', value: '1,567', change: t['changeMembers'] || '+12% this month', rotation: '-2deg' },
-                { title: t['classesToday'] || 'Classes Today', value: '24', change: t['changeClasses'] || '+3 from yesterday', rotation: '2deg' },
-                { title: t['newSignups'] || 'New Signups', value: '45', change: t['changeSignups'] || '+15% this week', rotation: '-1deg' },
-                { title: t['revenue'] || 'Revenue', value: '$8,920', change: t['changeRevenue'] || '+7% this month', rotation: '1deg' },
+                { title: t['activeMembers'] || 'Active Members', value: stats.activeMembers.toLocaleString(), change: t['changeMembers'] || '+12% this month', rotation: '-2deg' },
+                { title: t['classesToday'] || 'Classes Today', value: stats.classesToday.toString(), change: t['changeClasses'] || '+3 from yesterday', rotation: '2deg' },
+                { title: t['newSignups'] || 'New Signups', value: stats.newSignups.toString(), change: t['changeSignups'] || '+15% this week', rotation: '-1deg' },
+                { title: t['revenue'] || 'Revenue', value: `$${stats.revenue.toLocaleString()}`, change: t['changeRevenue'] || '+7% this month', rotation: '1deg' },
               ].map((stat, index) => (
-                <div
+                <motion.div
                   key={index}
-                  className={`rounded-3xl shadow-2xl p-8 hover:shadow-3xl transform hover:-translate-y-2 transition-all duration-500 border relative overflow-hidden ${
+                  initial={{ opacity: 0, y: 50, rotate: stat.rotation }}
+                  animate={{ opacity: 1, y: 0, rotate: stat.rotation }}
+                  transition={{ duration: 0.5, delay: index * 0.1 }}
+                  whileHover={{ y: -8, scale: 1.05 }}
+                  className={`rounded-3xl shadow-2xl p-8 border relative overflow-hidden ${
                     theme === 'light'
                       ? 'bg-white bg-opacity-90 text-blue-900 border-blue-100'
                       : 'bg-blue-800 bg-opacity-90 text-white border-teal-800'
@@ -689,62 +671,183 @@ export default function GymDashboard() {
                   <p className={`text-sm mt-3 ${theme === 'light' ? 'text-blue-500' : 'text-teal-400'}`}>
                     {stat.change}
                   </p>
-                </div>
+                </motion.div>
               ))}
             </div>
           )}
-
-          {/* Workout Schedule */}
-          <ScheduleFetcher
-            refreshTrigger={refreshTrigger}
-            theme={theme}
-            t={t}
-            onSchedulesFetched={setSchedules}
-          />
 
           {/* Quick Actions Section */}
           <div className="mt-12">
             <h3 className={`text-2xl font-bold mb-6 ${theme === 'light' ? 'text-blue-900' : 'text-white'}`}>
               {t.quickActions || 'Quick Actions'}
             </h3>
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               <button
-                onClick={openUploadModal}
+                onClick={() => setActiveView('videos')}
                 className={`p-6 rounded-2xl shadow-lg flex flex-col items-center justify-center transition-all duration-300 hover:scale-105 ${
                   theme === 'light'
                     ? 'bg-white text-blue-900 hover:bg-teal-50'
                     : 'bg-blue-800 text-white hover:bg-blue-700'
                 }`}
               >
-                <Upload size={40} className="mb-4" />
-                <span className="font-semibold">{t['uploadVideo'] || 'Upload Video'}</span>
+                <Video size={40} className="mb-4" />
+                <span className="font-semibold">{t['manageVideos'] || 'Manage Videos'}</span>
               </button>
               <button
-                onClick={openRegisterModal}
+                onClick={() => setActiveView('users')}
                 className={`p-6 rounded-2xl shadow-lg flex flex-col items-center justify-center transition-all duration-300 hover:scale-105 ${
                   theme === 'light'
                     ? 'bg-white text-blue-900 hover:bg-teal-50'
                     : 'bg-blue-800 text-white hover:bg-blue-700'
                 }`}
               >
-                <UserPlus size={40} className="mb-4" />
-                <span className="font-semibold">{t['registerMember'] || 'Register Member'}</span>
-              </button>
-              <button
-                onClick={openScheduleModal}
-                className={`p-6 rounded-2xl shadow-lg flex flex-col items-center justify-center transition-all duration-300 hover:scale-105 ${
-                  theme === 'light'
-                    ? 'bg-white text-blue-900 hover:bg-teal-50'
-                    : 'bg-blue-800 text-white hover:bg-blue-700'
-                }`}
-              >
-                <Calendar size={40} className="mb-4" />
-                <span className="font-semibold">{t['uploadSchedule'] || 'Upload Schedule'}</span>
+                <Users size={40} className="mb-4" />
+                <span className="font-semibold">{t['manageUsers'] || 'Manage Users'}</span>
               </button>
             </div>
+          </div>
+
+          {/* Conditional content based on activeView */}
+          <div className="mt-8">
+            {activeView === 'users' && (
+              <DataFetcher
+                refreshTrigger={refreshTrigger}
+                searchQuery={searchQuery}
+                theme={theme}
+                t={t}
+                onStatsFetched={() => {}}
+                onStatsStatus={() => {}}
+              />
+            )}
+
+            {activeView === 'videos' && <ManageVideos theme={theme} t={t} />}
           </div>
         </main>
       </div>
     </div>
+  );
+}
+
+function ManageVideos({ theme, t }: { theme: 'light' | 'dark'; t: Translation }) {
+  const [videos, setVideos] = useState<Video[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [isUpdateModalOpen, setIsUpdateModalOpen] = useState(false);
+  const [editingVideo, setEditingVideo] = useState<Video | null>(null);
+
+  const fetchVideos = useCallback(async () => {
+    setIsLoading(true);
+    setError(null);
+    try {
+      const querySnapshot = await getDocs(collection(db, 'videos'));
+      const fetchedVideos = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Video));
+      setVideos(fetchedVideos);
+    } catch (err) {
+      console.error("Error fetching videos:", err);
+      setError(t.fetchError || 'Failed to fetch videos.');
+      toast.error(t.fetchError || 'Failed to fetch videos.');
+    } finally {
+      setIsLoading(false);
+    }
+  }, [t]);
+
+  useEffect(() => {
+    fetchVideos();
+  }, [fetchVideos]);
+
+  const handleDelete = async (videoId: string) => {
+    if (!window.confirm(t.confirmDeleteVideo || 'Are you sure you want to delete this video?')) {
+      return;
+    }
+    try {
+      await deleteDoc(doc(db, 'videos', videoId));
+      setVideos(prev => prev.filter(video => video.id !== videoId));
+      toast.success(t.deleteSuccessVideo || 'Video deleted successfully.');
+    } catch (err) {
+      console.error("Error deleting video:", err);
+      toast.error(t.deleteErrorVideo || 'Failed to delete video.');
+    }
+  };
+
+  const handleUpdate = (video: Video) => {
+    setEditingVideo(video);
+    setIsUpdateModalOpen(true);
+  };
+
+  const closeUpdateModal = () => {
+    setIsUpdateModalOpen(false);
+    setEditingVideo(null);
+  }
+
+  if (isLoading) {
+    return <div className="text-center p-8">{t.loading || 'Loading...'}</div>;
+  }
+
+  if (error) {
+    return <div className="text-center p-8 text-red-500">{error}</div>;
+  }
+
+  return (
+    <>
+      <div className={`rounded-xl shadow-lg p-6 mb-10 border ${theme === 'light' ? 'bg-white text-gray-900 border-gray-200' : 'bg-gray-800 text-white border-gray-700'}`}>
+        <div className="flex justify-between items-center mb-6">
+          <h3 className="text-xl font-semibold">{t.manageVideos || 'Manage Videos'}</h3>
+          <button
+            onClick={fetchVideos}
+            className={`flex items-center px-3 py-1 rounded-lg text-sm ${theme === 'light' ? 'bg-blue-600 hover:bg-blue-700 text-white' : 'bg-gray-700 hover:bg-gray-600 text-white'}`}
+          >
+            <RefreshCw size={16} className="mr-1" />
+            {t.refresh || 'Refresh'}
+          </button>
+        </div>
+        <div className="overflow-x-auto">
+          <table className="w-full text-left">
+            <thead>
+              <tr className={`border-b ${theme === 'light' ? 'border-gray-200 text-gray-600' : 'border-gray-600 text-gray-300'}`}>
+                <th className="py-4 px-2">{t.thumbnail || 'Thumbnail'}</th>
+                <th className="py-4 px-2">{t.title || 'Title'}</th>
+                <th className="py-4 px-2">{t.category || 'Category'}</th>
+                <th className="py-4 px-2">{t.actions || 'Actions'}</th>
+              </tr>
+            </thead>
+            <tbody>
+              {videos.map(video => (
+                <tr key={video.id} className={`border-b ${theme === 'light' ? 'border-gray-200 hover:bg-blue-50' : 'border-gray-600 hover:bg-gray-700'} transition-colors duration-200`}>
+                  <td className="py-4 px-2">
+                    <img src={video.thumbnail || '/placeholder.png'} alt={video.title} className="w-24 h-14 object-cover rounded-md" />
+                  </td>
+                  <td className="py-4 px-2 font-medium">{video.title}</td>
+                  <td className="py-4 px-2">{video.category}</td>
+                  <td className="py-4 px-2 flex space-x-2">
+                    <button
+                      onClick={() => handleUpdate(video)}
+                      className={`px-3 py-1 rounded-lg text-sm ${theme === 'light' ? 'bg-blue-600 text-white hover:bg-blue-700' : 'bg-gray-700 text-white hover:bg-gray-600'}`}
+                    >
+                      {t.update || 'Update'}
+                    </button>
+                    <button
+                      onClick={() => handleDelete(video.id)}
+                      className={`px-3 py-1 rounded-lg text-sm ${theme === 'light' ? 'bg-red-500 text-white hover:bg-red-600' : 'bg-red-700 text-white hover:bg-red-600'}`}
+                    >
+                      {t.delete || 'Delete'}
+                    </button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </div>
+      {isUpdateModalOpen && (
+        <VideoUploadModal
+          isOpen={isUpdateModalOpen}
+          onClose={closeUpdateModal}
+          theme={theme}
+          t={t}
+          videoToEdit={editingVideo}
+          onVideoUpdated={fetchVideos}
+        />
+      )}
+    </>
   );
 }

@@ -1,14 +1,16 @@
 'use client';
 
-import { useState, useEffect, useContext, useRef, Dispatch, SetStateAction } from 'react';
+import { useState, useEffect, useContext, useRef, Dispatch, SetStateAction, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
-import { User, LogIn, Home as HomeIcon, Video, Heart, Users, Menu, X, Sun, Moon, Globe } from 'lucide-react';
+import { User, LogIn, Home as HomeIcon, Video, Heart, Users, Menu, X, Sun, Moon, Globe, ChevronLeft, ChevronRight } from 'lucide-react';
+import { FiPlay, FiPause, FiVolume2, FiVolumeX, FiMaximize, FiMinimize, FiArrowRight, FiArrowLeft, FiMonitor, FiSquare, FiDownload, FiX as FiXIcon, FiCamera } from 'react-icons/fi';
 import { db } from '../app/fconfig';
-import { collection, getDocs, deleteDoc, doc, updateDoc } from 'firebase/firestore';
+import { collection, getDocs, deleteDoc, doc, updateDoc, query, limit } from 'firebase/firestore';
 import Login from '../components/login';
-import VideoFetch from '../components/VideoFetch';
+import { motion, AnimatePresence } from 'framer-motion';
 import { ThemeContext } from '../context/ThemeContext';
 import LanguageContext from '../context/LanguageContext';
+import Link from 'next/link';
 import Head from 'next/head';
 import Image from 'next/image';
 
@@ -56,18 +58,17 @@ interface Translation {
   footerText?: string;
 }
 
-// Interface for Workout
-interface Workout {
+// Interface for Video
+interface VideoType {
   id: string;
-  soon?: boolean;
-  [key: string]: any;
-}
-
-// Interface for Category
-interface Category {
-  id: string;
-  name: string;
-  icon: string;
+  category: string;
+  title?: string;
+  description?: string;
+  channel?: string;
+  videoUrl: string;
+  thumbnail?: string;
+  views: string;
+  duration: string;
 }
 
 // Interface for NavItem
@@ -77,18 +78,6 @@ interface NavItem {
   href?: string;
 }
 
-// Interface for Workouts State
-interface Workouts {
-  [category: string]: Workout[];
-}
-
-// Interface for VideoFetch Props
-interface VideoFetchProps {
-  setWorkouts: Dispatch<SetStateAction<Workouts>>;
-  setLoading: Dispatch<SetStateAction<boolean>>;
-  loading: boolean;
-}
-
 // Interface for Login Props
 interface LoginProps {
   onSubmit: (e: React.FormEvent<HTMLFormElement>) => void;
@@ -96,94 +85,157 @@ interface LoginProps {
   theme: string;
 }
 
-function WelcomeCard({ theme, t }: { theme: string; t: Translation }) {
+interface Photo {
+  id: string;
+  photoUrl: string;
+  fileName: string;
+}
+
+function WelcomeCard({ theme, t, photos }: { theme: string; t: Translation; photos: Photo[] }) {
+  const [[page, direction], setPage] = useState([0, 0]);
+  const imageIndex = photos.length > 0 ? page % photos.length : 0;
+
+  const paginate = useCallback((newDirection: number) => {
+    setPage([page + newDirection, newDirection]);
+  }, [page]);
+
+  useEffect(() => {
+    if (photos.length > 1) {
+      const timer = setTimeout(() => paginate(1), 2000); // 2-second interval
+      return () => clearTimeout(timer);
+    }
+  }, [page, paginate, photos.length]);
+
+  const slideVariants = {
+    enter: (direction: number) => ({
+      x: direction > 0 ? '100%' : '-100%',
+      opacity: 0,
+    }),
+    center: { zIndex: 1, x: 0, opacity: 1 },
+    exit: (direction: number) => ({
+      zIndex: 0,
+      x: direction < 0 ? '100%' : '-100%',
+      opacity: 0,
+    }),
+  };
+
   return (
-    <div
-      className={`relative rounded-3xl p-8 shadow-2xl transform hover:-translate-y-2 transition-all duration-500 ${
-        theme === 'light'
-          ? 'bg-white bg-opacity-90 text-blue-900 border-blue-100'
-          : 'bg-blue-800 bg-opacity-90 text-white border-teal-800'
-      } border relative overflow-hidden`}
-      style={{
-        boxShadow: theme === 'light'
-          ? '0 10px 30px rgba(59, 130, 246, 0.3), 0 4px 10px rgba(59, 130, 246, 0.2)'
-          : '0 10px 30px rgba(45, 212, 191, 0.3), 0 4px 10px rgba(45, 212, 191, 0.2)',
-        backgroundImage: `url("data:image/svg+xml,%3Csvg width='20' height='20' viewBox='0 0 20 20' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' fill-rule='evenodd'%3E%3Cpath d='M10 20C4.477 20 0 15.523 0 10S4.477 0 10 0s10 4.477 10 10-4.477 10-10 10z' fill='%23${theme === 'light' ? 'dbeafe' : '1e3a8a'}' fill-opacity='0.05'/%3E%3C/g%3E%3C/svg%3E")`,
-      }}
+    <motion.div
+      initial={{ opacity: 0, y: 20 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.5, delay: 0.2 }}
+      className="relative rounded-3xl shadow-2xl hover:-translate-y-2 transition-all duration-500 border-transparent overflow-hidden min-h-[300px] flex flex-col justify-center items-center p-8"
     >
-      <div className="relative z-10 text-center">
-        <h1 className={`text-3xl font-bold ${theme === 'light' ? 'text-blue-900' : 'text-white'}`}>
+      {photos.length > 0 && (
+        <>
+          <AnimatePresence initial={false} custom={direction}>
+            <motion.img
+              key={page}
+              src={photos[imageIndex].photoUrl}
+              alt={photos[imageIndex].fileName || 'Welcome background'}
+              custom={direction}
+              variants={slideVariants}
+              initial="enter"
+              animate="center"
+              exit="exit"
+              transition={{ x: { type: 'spring', stiffness: 300, damping: 30 }, opacity: { duration: 0.2 } }}
+              className="absolute inset-0 w-full h-full object-cover"
+            />
+          </AnimatePresence>
+          <div className="absolute inset-0 bg-black/50"></div>
+        </>
+      )}
+      <div className="relative z-10 text-center text-white">
+        <h1 className="text-3xl font-bold drop-shadow-lg">
           {t.welcome || 'Unleash Your Inner Strength'}
         </h1>
-        <p
-          className={`text-4xl font-extrabold mt-3 ${
-            theme === 'light' ? 'text-teal-600' : 'text-teal-300'
-          }`}
-        >
+        <p className="text-4xl font-extrabold mt-3 text-teal-300 drop-shadow-md">
           {t.getStarted || 'Start Your Transformation'}
         </p>
-        <p className={`text-sm mt-3 ${theme === 'light' ? 'text-blue-500' : 'text-teal-400'}`}>
+        <p className="text-sm mt-3 text-teal-100 drop-shadow-sm">
           {t.discoverWorkouts || 'Join our gym community and crush your fitness goals'}
         </p>
         <div className="flex justify-center space-x-4 mt-6">
           <button
             onClick={() => window.location.href = '/consultancy'}
-            className={`px-6 py-3 rounded-2xl font-semibold transition-all duration-300 hover:scale-105 hover:shadow-lg ${
-              theme === 'light' ? 'bg-teal-600 hover:bg-teal-700 text-white' : 'bg-teal-800 hover:bg-teal-700 text-white'
-            }`}
+            className="px-6 py-3 rounded-2xl font-semibold transition-all duration-300 hover:scale-105 hover:shadow-lg bg-teal-600 hover:bg-teal-700 text-white"
           >
             {t.startConsultancy || 'Book a Free Consultation'}
           </button>
           <button
-            className={`px-6 py-3 rounded-2xl font-semibold transition-all duration-300 hover:scale-105 hover:shadow-lg ${
-              theme === 'light' 
-                ? 'border border-teal-600 text-teal-600 hover:bg-teal-100/50' 
-                : 'border border-teal-400 text-teal-300 hover:bg-teal-800/50'
-            }`}
+            className="px-6 py-3 rounded-2xl font-semibold transition-all duration-300 hover:scale-105 hover:shadow-lg border border-teal-400 text-teal-300 hover:bg-teal-800/50"
           >
             {t.browseWorkouts || 'Explore Workout Plans'}
           </button>
         </div>
       </div>
-    </div>
+    </motion.div>
   );
 }
 
-function JoinGroupChatCard({ theme, t }: { theme: string; t: Translation }) {
+function JoinGroupChatCard({ theme, t, photos }: { theme: string; t: Translation; photos: Photo[] }) {
+  const [[page, direction], setPage] = useState([0, 0]);
+  const imageIndex = photos.length > 0 ? page % photos.length : 0;
+
+  const paginate = useCallback((newDirection: number) => {
+    setPage([page + newDirection, newDirection]);
+  }, [page]);
+
+  useEffect(() => {
+    if (photos.length > 1) {
+      const timer = setTimeout(() => paginate(1), 2000); // 2-second interval
+      return () => clearTimeout(timer);
+    }
+  }, [page, paginate, photos.length]);
+
+  const slideVariants = {
+    enter: (direction: number) => ({ x: direction > 0 ? '100%' : '-100%', opacity: 0 }),
+    center: { zIndex: 1, x: 0, opacity: 1 },
+    exit: (direction: number) => ({ zIndex: 0, x: direction < 0 ? '100%' : '-100%', opacity: 0 }),
+  };
+
   return (
-    <div
-      className={`rounded-3xl shadow-2xl p-8 hover:shadow-3xl transform hover:-translate-y-2 transition-all duration-500 border relative overflow-hidden ${
-        theme === 'light'
-          ? 'bg-white bg-opacity-90 text-blue-900 border-blue-100'
-          : 'bg-blue-800 bg-opacity-90 text-white border-teal-800'
-      }`}
-      style={{
-        boxShadow: theme === 'light'
-          ? '0 10px 30px rgba(59, 130, 246, 0.3), 0 4px 10px rgba(59, 130, 246, 0.2)'
-          : '0 10px 30px rgba(45, 212, 191, 0.3), 0 4px 10px rgba(45, 212, 191, 0.2)',
-        backgroundImage: `url("data:image/svg+xml,%3Csvg width='20' height='20' viewBox='0 0 20 20' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' fill-rule='evenodd'%3E%3Cpath d='M10 20C4.477 20 0 15.523 0 10S4.477 0 10 0s10 4.477 10 10-4.477 10-10 10z' fill='%23${theme === 'light' ? 'dbeafe' : '1e3a8a'}' fill-opacity='0.05'/%3E%3C/g%3E%3C/svg%3E")`,
-      }}
+    <motion.div
+      initial={{ opacity: 0, y: 20 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.5, delay: 0.4 }}
+      className="relative rounded-3xl shadow-2xl hover:-translate-y-2 transition-all duration-500 border-transparent overflow-hidden min-h-[300px] flex flex-col justify-center items-center p-8"
     >
-      <div className="flex justify-center items-center mb-4">
-        <Users className={`text-3xl mr-3 ${theme === 'light' ? 'text-teal-600' : 'text-teal-300'}`} />
-        <h2 className={`text-xl font-bold ${theme === 'light' ? 'text-blue-900' : 'text-white'}`}>
+      {photos.length > 0 && (
+        <>
+          <AnimatePresence initial={false} custom={direction}>
+            <motion.img
+              key={page}
+              src={photos[imageIndex].photoUrl}
+              alt={photos[imageIndex].fileName || 'Group chat background'}
+              custom={direction}
+              variants={slideVariants}
+              initial="enter"
+              animate="center"
+              exit="exit"
+              transition={{ x: { type: 'spring', stiffness: 300, damping: 30 }, opacity: { duration: 0.2 } }}
+              className="absolute inset-0 w-full h-full object-cover"
+            />
+          </AnimatePresence>
+          <div className="absolute inset-0 bg-black/50"></div>
+        </>
+      )}
+      <div className="relative z-10 text-center text-white">
+        <h2 className="text-xl font-bold drop-shadow-lg flex justify-center items-center mb-4">
+          <Users className="text-3xl mr-3 text-teal-300" />
           {t.joinCommunity || 'Join Our Fitness Tribe'}
         </h2>
-      </div>
-      <p className={`mb-6 text-center ${theme === 'light' ? 'text-blue-500' : 'text-teal-400'}`}>
+        <p className="mb-6 text-center text-teal-100 drop-shadow-sm">
         {t.connectCommunity || 'Connect with like-minded fitness enthusiasts and stay motivated'}
-      </p>
-      <div className="text-center">
+        </p>
         <button
           onClick={() => window.location.href = '/publicMessage'}
-          className={`px-6 py-3 rounded-2xl font-semibold transition-all duration-300 hover:scale-105 hover:shadow-lg ${
-            theme === 'light' ? 'bg-teal-600 hover:bg-teal-700 text-white' : 'bg-teal-800 hover:bg-teal-700 text-white'
-          }`}
+          className="px-6 py-3 rounded-2xl font-semibold transition-all duration-300 hover:scale-105 hover:shadow-lg bg-teal-600 hover:bg-teal-700 text-white"
         >
           {t.joinChat || 'Join the Community Chat'}
         </button>
       </div>
-    </div>
+    </motion.div>
   );
 }
 
@@ -191,16 +243,18 @@ export default function Home() {
   const [isSidebarOpen, setIsSidebarOpen] = useState<boolean>(false);
   const [authModalOpen, setAuthModalOpen] = useState<boolean>(false);
   const [authType, setAuthType] = useState<string>('login');
-  const [workouts, setWorkouts] = useState<Workouts>({
-    karate: [],
-    aerobics: [],
-    gym: [],
-  });
+  const [featuredVideos, setFeaturedVideos] = useState<Record<string, VideoType[]>>({});
   const [loading, setLoading] = useState<boolean>(true);
+  const [photos, setPhotos] = useState<Photo[]>([]);
   const router = useRouter();
   const { theme, toggleTheme } = useContext(ThemeContext);
   const languageContext = useContext(LanguageContext);
-  const { language = 'en', toggleLanguage = () => {}, t = {} as Translation } = languageContext || {};
+
+  if (!languageContext) {
+    // This can happen during server-side rendering or if the provider is missing.
+    return null; // or a loading spinner
+  }
+  const { language, toggleLanguage, t } = languageContext;
 
   // Add a ref for the fallback icon
   const fallbackIconRef = useRef<SVGSVGElement | null>(null);
@@ -212,12 +266,6 @@ export default function Home() {
     }
   };
 
-  const categories: Category[] = [
-    { id: 'karate', name: 'Karate', icon: '🏃‍♂️' },
-    { id: 'aerobics', name: 'Aerobics', icon: '💃' },
-    { id: 'gym', name: 'Gym', icon: '🏋️‍♂️' },
-  ];
-
   const navItems: NavItem[] = [
     { name: t.home || 'Home', icon: HomeIcon, href: '/' },
     { name: t.workouts || 'Workouts', icon: Video, href: '/workouts' },
@@ -226,61 +274,66 @@ export default function Home() {
     { name: t.register || 'Register', icon: User },
   ];
 
-  // Fetch workouts from Firebase
+  const getRandomViews = (): string => {
+    const views = Math.floor(Math.random() * 1000000) + 1000;
+    return views > 1000000 ? `${(views / 1000000).toFixed(1)}M` :
+           views > 1000 ? `${(views / 1000).toFixed(1)}K` : views.toString();
+  };
+
+  const formatDuration = (seconds: number): string => {
+    if (!seconds) return '0:00';
+    const mins = Math.floor(seconds / 60);
+    const secs = Math.floor(seconds % 60);
+    return `${mins}:${secs < 10 ? '0' : ''}${secs}`;
+  };
+
+  // Fetch featured videos from Firebase
   useEffect(() => {
-    const fetchWorkouts = async () => {
+    const fetchFeaturedVideos = async () => {
       try {
         setLoading(true);
-        const fetchedWorkouts: Workouts = {
-          karate: [],
-          aerobics: [],
-          gym: [],
-        };
-        for (const category of categories) {
-          const querySnapshot = await getDocs(collection(db, category.id));
-          fetchedWorkouts[category.id as keyof Workouts] = querySnapshot.docs.map(doc => ({
-            id: doc.id,
-            ...doc.data(),
-          })) as Workout[];
-        }
-        setWorkouts(fetchedWorkouts);
+        const querySnapshot = await getDocs(collection(db, 'videos'));
+        const fetchedVideos: VideoType[] = querySnapshot.docs.map((doc) => ({
+          id: doc.id,
+          ...doc.data(),
+          category: doc.data().category || 'uncategorized',
+          views: getRandomViews(),
+          duration: formatDuration(Math.floor(Math.random() * 300) + 60),
+        } as VideoType));
+
+        // Group videos by category
+        const groupedVideos = fetchedVideos.reduce((acc: Record<string, VideoType[]>, video: VideoType) => {
+          const category = video.category;
+          if (!acc[category]) {
+            acc[category] = [];
+          }
+          acc[category].push(video);
+          return acc;
+        }, {});
+
+        setFeaturedVideos(groupedVideos);
       } catch (error) {
-        console.error('Error fetching workouts:', error);
+        console.error("Error fetching featured videos:", error);
       } finally {
         setLoading(false);
       }
     };
-    fetchWorkouts();
+    fetchFeaturedVideos();
+
+    const fetchPhotos = async () => {
+      try {
+        const photosSnapshot = await getDocs(collection(db, 'photos'));
+        const fetchedPhotos = photosSnapshot.docs.map(doc => ({
+          id: doc.id,
+          ...doc.data()
+        } as Photo));
+        setPhotos(fetchedPhotos);
+      } catch (error) {
+        console.error("Error fetching photos:", error);
+      }
+    };
+    fetchPhotos();
   }, []);
-
-  // Delete a workout
-  const handleDelete = async (categoryId: string, workoutId: string) => {
-    try {
-      await deleteDoc(doc(db, categoryId, workoutId));
-      setWorkouts(prev => ({
-        ...prev,
-        [categoryId as keyof Workouts]: prev[categoryId as keyof Workouts].filter(workout => workout.id !== workoutId),
-      }));
-    } catch (error) {
-      console.error('Error deleting workout:', error);
-    }
-  };
-
-  // Toggle pending status
-  const handleTogglePending = async (categoryId: string, workoutId: string, currentStatus: boolean) => {
-    try {
-      const workoutRef = doc(db, categoryId, workoutId);
-      await updateDoc(workoutRef, { soon: !currentStatus });
-      setWorkouts(prev => ({
-        ...prev,
-        [categoryId as keyof Workouts]: prev[categoryId as keyof Workouts].map(workout => 
-          workout.id === workoutId ? { ...workout, soon: !currentStatus } : workout
-        ),
-      }));
-    } catch (error) {
-      console.error('Error toggling pending status:', error);
-    }
-  };
 
   // Add keyboard accessibility for auth modal
   useEffect(() => {
@@ -319,12 +372,7 @@ export default function Home() {
 
   return (
     <div
-      className={`flex min-h-screen font-sans transition-colors duration-500 relative ${
-        theme === 'light' ? 'bg-blue-50 bg-opacity-30' : 'bg-blue-950 bg-opacity-50'
-      }`}
-      style={{
-        backgroundImage: `url("data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' fill-rule='evenodd'%3E%3Cpath d='M29 58C13.536 58 1 45.464 1 30 1 14.536 13.536 2 29 2c8.467 0 16.194 3.832 21.213 10.106C55.232 18.38 58 25.534 58 33c0 7.466-2.768 14.62-7.787 20.894C45.194 54.168 37.467 58 29 58z' fill='%23${theme === 'light' ? 'a3bffa' : '2a4365'}' fill-opacity='0.1'/%3E%3C/g%3E%3C/svg%3E")`,
-      }}
+      className={`flex min-h-screen font-sans transition-colors duration-500 relative`}
     >
       <Head>
         <title>{t.appTitle || 'Workout App'} - {t.welcome || 'Unleash Your Inner Strength'}</title>
@@ -332,6 +380,7 @@ export default function Home() {
       </Head>
 
       {/* Sidebar */}
+
       <aside
         className={`fixed inset-y-0 left-0 z-50 w-72 shadow-2xl transform transition-transform duration-500 ease-in-out ${
           theme === 'light'
@@ -391,9 +440,9 @@ export default function Home() {
                 <span>{item.name}</span>
               </button>
             ) : (
-              <a
+              <Link
                 key={item.name}
-                href={item.href}
+                href={item.href || '#'}
                 className={`flex items-center px-4 py-3 rounded-2xl text-base font-semibold transition-all duration-300 hover:scale-105 hover:shadow-lg ${
                   theme === 'light' ? 'hover:bg-teal-100 hover:text-teal-600' : 'hover:bg-teal-800 hover:text-white'
                 }`}
@@ -403,7 +452,7 @@ export default function Home() {
                   className={`mr-4 ${theme === 'light' ? 'text-teal-600' : 'text-teal-300'}`}
                 />
                 <span>{item.name}</span>
-              </a>
+              </Link>
             )
           )}
           <button
@@ -435,14 +484,12 @@ export default function Home() {
 
       {/* Main Content */}
       <div
-        className={`flex-1 flex flex-col transition-all duration-500 ${isSidebarOpen ? 'ml-72' : 'ml-0'}`}
+        className={`relative z-10 flex-1 flex flex-col transition-all duration-500 ${isSidebarOpen ? 'ml-72' : 'ml-0'}`}
       >
         {/* Header */}
         <header
-          className={`shadow-2xl p-6 flex items-center justify-between sticky top-0 z-40 transition-colors duration-500 ${
-            theme === 'light'
-              ? 'bg-gradient-to-r from-blue-100 to-teal-100 text-blue-900'
-              : 'bg-gradient-to-r from-blue-900 to-teal-900 text-white'
+          className={`shadow-2xl p-6 flex items-center justify-between sticky top-0 z-40 transition-colors duration-500 backdrop-blur-sm ${
+            theme === 'light' ? 'bg-gray-50/80 text-blue-900' : 'bg-gray-900/80 text-white'
           }`}
         >
           <div className="flex items-center space-x-4">
@@ -518,34 +565,41 @@ export default function Home() {
 
         {/* Main Content Area */}
         <main
-          className={`flex-1 p-8 overflow-y-auto ${
-            theme === 'light' ? 'bg-gradient-to-br from-blue-50 to-teal-50 text-blue-900' : 'bg-gradient-to-br from-blue-950 to-teal-950 text-white'
+          className={`flex-1 p-8 overflow-y-auto backdrop-blur-sm ${
+            theme === 'light' ? 'bg-gray-50/80 text-blue-900' : 'bg-gray-900/80 text-white'
           }`}
         >
           {/* Full-Screen Background Image Section */}
           <section
-            className="relative h-screen w-full bg-cover bg-center bg-no-repeat mb-12"
+            className="relative h-screen w-full bg-cover bg-center bg-no-repeat mb-12 flex items-center justify-center"
             style={{
-              backgroundImage: theme === 'light' ? `url('/gym-background.jpg')` : `url('/gym.jpg')`,
-              backgroundSize: '100% auto', // Adjusts image to match device width, maintaining aspect ratio
-              backgroundPosition: 'center top', // Ensures image is centered and starts from top
+              backgroundImage: photos.length > 0 ? `url(${photos[0].photoUrl})` : (theme === 'light' ? `url('/gym-background.jpg')` : `url('/gym.jpg')`),
             }}
           >
-            <div className="relative flex flex-col items-center justify-center text-center h-full">
-              <h1
+            <div className="absolute inset-0 bg-black/50"></div>
+            <motion.div
+              initial={{ opacity: 0, scale: 0.9 }}
+              animate={{ opacity: 1, scale: 1 }}
+              transition={{ duration: 0.8 }}
+              className="relative flex flex-col items-center justify-center text-center h-full z-10 p-4"
+            >
+              <motion.h1
+                initial={{ opacity: 0, y: -20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.5, delay: 0.3 }}
                 className={`text-5xl md:text-6xl font-extrabold tracking-tight mb-4 ${
-                  theme === 'light' ? 'text-black drop-shadow-md' : 'text-white drop-shadow-md'
+                  'text-white drop-shadow-lg'
                 }`}
               >
                 {t.heroTitle || 'Transform Your Body, Transform Your Life'}
-              </h1>
-              <p
+              </motion.h1>
+              <motion.p
                 className={`text-lg md:text-xl max-w-2xl mx-auto ${
-                  theme === 'light' ? 'text-black drop-shadow-sm' : 'text-white drop-shadow-sm'
+                  'text-gray-200 drop-shadow-md'
                 }`}
               >
                 {t.heroSubtitle || 'Join our gym, access world-class workouts, and become the strongest version of yourself.'}
-              </p>
+              </motion.p>
               <button
                 onClick={() => toggleAuthModal('register')}
                 className={`mt-6 px-8 py-3 rounded-2xl font-semibold transition-all duration-300 hover:scale-105 hover:shadow-lg ${
@@ -554,24 +608,20 @@ export default function Home() {
               >
                 {t.getStartedButton || 'Join Now'}
               </button>
-            </div>
+            </motion.div>
           </section>
 
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 mb-12">
-            <WelcomeCard theme={theme} t={t} />
-            <JoinGroupChatCard theme={theme} t={t} />
+            <WelcomeCard theme={theme} t={t} photos={photos} />
+            <JoinGroupChatCard theme={theme} t={t} photos={photos} />
           </div>
 
           <section className="mb-12">
-            <VideoFetch
-              setWorkouts={setWorkouts}
-              setLoading={setLoading}
-              loading={loading}
-            />
+            <FeaturedVideos videos={featuredVideos} loading={loading} theme={theme} />
           </section>
 
           <section
-            className={`rounded-3xl shadow-2xl p-8 hover:shadow-3xl transform hover:-translate-y-2 transition-all duration-500 border relative overflow-hidden ${
+            className={`rounded-3xl shadow-2xl p-8 hover:shadow-3xl hover:-translate-y-2 transition-all duration-500 border relative overflow-hidden ${
               theme === 'light'
                 ? 'bg-white bg-opacity-90 text-blue-900 border-blue-100'
                 : 'bg-blue-800 bg-opacity-90 text-white border-teal-800'
@@ -604,10 +654,8 @@ export default function Home() {
 
         {/* Footer */}
         <footer
-          className={`py-8 transition-colors duration-500 ${
-            theme === 'light'
-              ? 'bg-gradient-to-r from-blue-100 to-teal-100 text-blue-900'
-              : 'bg-gradient-to-r from-blue-900 to-teal-900 text-white'
+          className={`py-8 transition-colors duration-500 backdrop-blur-sm ${
+            theme === 'light' ? 'bg-gray-50/80 text-blue-900' : 'bg-gray-900/80 text-white'
           }`}
         >
           <div className="container mx-auto px-8">
@@ -810,7 +858,89 @@ export default function Home() {
             </div>
           </div>
         )}
+      </div> {/* End of Main Content wrapper */}
+    </div>
+    
+  );
+}
+
+function FeaturedVideos({ videos, loading, theme }: { videos: Record<string, VideoType[]>, loading: boolean, theme: string }) {
+  const [expandedCategories, setExpandedCategories] = useState<Record<string, boolean>>({});
+
+  const toggleCategoryExpansion = (category: string) => {
+    setExpandedCategories(prev => ({ ...prev, [category]: !prev[category] }));
+  };
+
+  const categories = Object.keys(videos);
+  const groupedVideos = videos;
+
+  if (loading) {
+    return (
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+        {[...Array(4)].map((_, i) => (
+          <div key={i} className="animate-pulse">
+            <div className={`w-full aspect-video rounded-lg ${theme === 'light' ? 'bg-gray-200' : 'bg-gray-700'}`}></div>
+            <div className="mt-3 space-y-2">
+              <div className={`h-5 w-3/4 rounded ${theme === 'light' ? 'bg-gray-200' : 'bg-gray-700'}`}></div>
+              <div className={`h-4 w-full rounded ${theme === 'light' ? 'bg-gray-200' : 'bg-gray-700'}`}></div>
+            </div>
+          </div>
+        ))}
       </div>
+    );
+  }
+
+  return (
+    <div className="space-y-12">
+      {categories.map(category => {
+        const videosForCategory = groupedVideos[category] || [];
+        const isExpanded = expandedCategories[category];
+        const videosToShow = isExpanded ? videosForCategory : videosForCategory.slice(0, 4);
+
+        return (
+          <div key={category} className="mb-8">
+            <h2 className={`text-2xl font-bold mb-4 ${theme === 'light' ? 'text-gray-800' : 'text-white'}`}>{category.charAt(0).toUpperCase() + category.slice(1)}</h2>
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+              {videosToShow.map((video, index) => (
+                <motion.div 
+                  key={video.id} 
+                  className={`rounded-xl overflow-hidden shadow-lg ${theme === 'light' ? 'bg-white' : 'bg-gray-800'}`}
+                  initial={{ opacity: 0, y: 20 }}
+                  whileInView={{ opacity: 1, y: 0 }}
+                  viewport={{ once: true }}
+                  transition={{ duration: 0.5, delay: index * 0.1 }}
+                >
+                  <div className="relative w-full aspect-video bg-black">
+                    <video
+                      src={video.videoUrl}
+                      className="w-full h-full object-contain"
+                      poster={video.thumbnail || ''}
+                      controls
+                      preload="auto"
+                    />
+                  </div>
+                  <div className="p-4">
+                    <h3 className={`text-lg font-semibold ${theme === 'light' ? 'text-gray-900' : 'text-white'}`}>{video.title || 'Untitled Video'}</h3>
+                    <p className={`text-sm ${theme === 'light' ? 'text-gray-600' : 'text-gray-400'}`}>
+                      {video.channel || 'Channel Name'} • {video.views} views • 2 days ago
+                    </p>
+                    {video.description && (
+                      <p className={`text-sm mt-2 ${theme === 'light' ? 'text-gray-700' : 'text-gray-300'}`}>{video.description}</p>
+                    )}
+                  </div>
+                </motion.div>
+              ))}
+            </div>
+            {videosForCategory.length > 4 && (
+              <div className="text-center mt-4">
+                <button onClick={() => toggleCategoryExpansion(category)} className={`px-4 py-2 rounded-lg font-semibold ${theme === 'light' ? 'bg-gray-200 text-gray-800 hover:bg-gray-300' : 'bg-gray-700 text-white hover:bg-gray-600'}`}>
+                  {isExpanded ? 'Show Less' : 'Show More'}
+                </button>
+              </div>
+            )}
+          </div>
+        );
+      })}
     </div>
   );
 }

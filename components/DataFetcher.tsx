@@ -1,9 +1,10 @@
 'use client';
 
-import { useState, useEffect, useCallback, Dispatch, SetStateAction } from 'react';
+import { useState, useEffect, useCallback, Dispatch, SetStateAction, useMemo } from 'react';
 import { db } from '../app/fconfig';
 import { collection, getDocs, deleteDoc, doc, updateDoc, getDoc } from 'firebase/firestore';
 import { Member } from '../app/types/member';
+import { toast } from 'react-toastify';
 import { RefreshCw, XCircle } from 'lucide-react';
 
 // TypeScript interface for translation
@@ -13,8 +14,10 @@ interface Translation {
   noMembers?: string;
   memberDetails?: string;
   close?: string;
+  category?: string;
   refresh?: string;
   name?: string;
+  photo?: string;
   email?: string;
   membership?: string;
   payment?: string;
@@ -23,6 +26,7 @@ interface Translation {
   payed?: string;
   notPayed?: string;
   detail?: string;
+  update?: string;
   delete?: string;
   [key: string]: string | undefined;
 }
@@ -47,28 +51,36 @@ export default function DataFetcher({ refreshTrigger, searchQuery, theme, t, onS
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [fetchError, setFetchError] = useState<string | null>(null);
   const [members, setMembers] = useState<{ [key: string]: Member[] }>({});
+  const [filteredMembers, setFilteredMembers] = useState<{ [key: string]: Member[] }>({});
   const [detailsModal, setDetailsModal] = useState<MemberDetailsModal>({ isOpen: false, member: null });
+  const [imageModal, setImageModal] = useState<{ isOpen: boolean; src: string | null }>({ isOpen: false, src: null });
 
   const fetchMembers = useCallback(async () => {
     try {
       setIsLoading(true);
       setFetchError(null);
-      onStatsStatus(true);
 
       const querySnapshot = await getDocs(collection(db, 'GYM'));
-      const allMembers: { [key: string]: Member[] } = {};
-
-      const memberData = querySnapshot.docs.map((doc) => {
+      const memberData: Member[] = querySnapshot.docs.map((doc) => {
         const data = doc.data();
         return {
           id: doc.id,
+          collectionType: 'GYM',
+          name: `${data.firstName || ''} ${data.lastName || ''}`.trim() || data.name || 'Unknown',
+          email: data.email || 'Unknown',
+          membership: data.membershipType || 'N/A',
+          payment: data.payment || 'Not Payed',
+          paymentStartDate: data.paymentStartDate,
+          category: data.category || 'GYM', // Fallback to 'GYM' if no category
+          registrationDate: data.registrationDate,
+          photoURL: data.photoURL,
+          ...data,
           birthDate: data.birthDate || '',
           bloodType: data.bloodType || '',
           breakfastFrequency: data.breakfastFrequency || '',
           city: data.city || '',
           createdAt: data.createdAt || { seconds: 0, nanoseconds: 0 },
           eatingReasons: data.eatingReasons || [],
-          email: data.email || '',
           emergencyName: data.emergencyName || '',
           emergencyPhone: data.emergencyPhone || '',
           exerciseDays: data.exerciseDays || [],
@@ -101,19 +113,7 @@ export default function DataFetcher({ refreshTrigger, searchQuery, theme, t, onS
           userId: data.userId || '',
           weight: data.weight || '',
           zipCode: data.zipCode || '',
-          collectionType: 'GYM',
-          name: data.name || undefined,
-          membership: data.membership || 'Unknown',
-          status: data.status || 'Unknown',
-          statusColor: data.statusColor || 'text-gray-500',
-          payment: data.payment || 'Not Payed',
-          paymentStartDate: data.paymentStartDate || undefined,
-          actionDelete: data.actionDelete || 'delete',
-          actionDetail: data.actionDetail || 'detail',
-          actionPayed: data.actionPayed || 'payment',
-          category: data.category || 'Uncategorized',
-          ...data,
-        };
+        } as Member;
       });
 
       // Check and update payment status for expired memberships
@@ -127,8 +127,8 @@ export default function DataFetcher({ refreshTrigger, searchQuery, theme, t, onS
 
             if (diffDays > 30) {
               const memberRef = doc(db, 'GYM', member.id);
-              await updateDoc(memberRef, { payment: 'Not Payed', paymentStartDate: null });
-              return { ...member, payment: 'Not Payed', paymentStartDate: null };
+              await updateDoc(memberRef, { payment: 'Not Payed' }); // Keep paymentStartDate
+              return { ...member, payment: 'Not Payed' };
             }
           }
           return member;
@@ -136,6 +136,7 @@ export default function DataFetcher({ refreshTrigger, searchQuery, theme, t, onS
       );
 
       // Group members by category
+      const allMembers: { [key: string]: Member[] } = {};
       updatedMembers.forEach((member) => {
         const category = member.category || 'Uncategorized';
         if (!allMembers[category]) {
@@ -157,6 +158,7 @@ export default function DataFetcher({ refreshTrigger, searchQuery, theme, t, onS
       };
       onStatsFetched(stats);
     } catch (error) {
+      onStatsStatus(false);
       console.error('Error fetching GYM members:', error);
       setFetchError(t.error || 'Failed to fetch members. Please try again.');
     } finally {
@@ -165,9 +167,29 @@ export default function DataFetcher({ refreshTrigger, searchQuery, theme, t, onS
     }
   }, [onStatsFetched, onStatsStatus, t]);
 
+  useEffect(() => {
+    if (searchQuery) {
+      const lowercasedQuery = searchQuery.toLowerCase();
+      const filtered = Object.keys(members).reduce((acc, category) => {
+        const categoryMembers = members[category].filter(
+          (member) =>
+            (member.name?.toLowerCase().includes(lowercasedQuery)) ||
+            (member.email?.toLowerCase().includes(lowercasedQuery))
+        );
+        if (categoryMembers.length > 0) {
+          acc[category] = categoryMembers;
+        }
+        return acc;
+      }, {} as { [key: string]: Member[] });
+      setFilteredMembers(filtered);
+    } else {
+      setFilteredMembers(members);
+    }
+  }, [searchQuery, members]);
+
   const openDetailsModal = useCallback(async (member: Member) => {
     try {
-      const memberRef = doc(db, 'GYM', member.id);
+      const memberRef = doc(db, member.collectionType, member.id);
       const memberSnap = await getDoc(memberRef);
 
       if (memberSnap.exists()) {
@@ -179,7 +201,7 @@ export default function DataFetcher({ refreshTrigger, searchQuery, theme, t, onS
           membership: data.membership || 'Unknown',
           status: data.status || 'Unknown',
           statusColor: data.statusColor || 'text-gray-500',
-          collectionType: 'GYM',
+          collectionType: member.collectionType,
           payment: data.payment || 'Not Payed',
           paymentStartDate: data.paymentStartDate || undefined,
           actionDelete: data.actionDelete || 'delete',
@@ -231,22 +253,30 @@ export default function DataFetcher({ refreshTrigger, searchQuery, theme, t, onS
         };
         setDetailsModal({ isOpen: true, member: freshMember });
       } else {
-        console.warn(`Member ${member.id} not found in GYM`);
+        console.warn(`Member ${member.id} not found in ${member.collectionType}`);
         setDetailsModal({ isOpen: true, member: { ...member, name: member.name || 'Unknown', email: member.email || 'Unknown', payment: member.payment || 'Not Payed', paymentStartDate: member.paymentStartDate || undefined, actionPayed: member.actionPayed || 'payment' } });
       }
     } catch (error) {
       console.error('Error fetching member details:', error);
       setDetailsModal({ isOpen: true, member: { ...member, name: member.name || 'Unknown', email: member.email || 'Unknown', payment: member.payment || 'Not Payed', paymentStartDate: member.paymentStartDate || undefined, actionPayed: member.actionPayed || 'payment' } });
     }
-  }, []);
+  }, []); 
 
   const closeDetailsModal = useCallback(() => {
     setDetailsModal({ isOpen: false, member: null });
   }, []);
 
+  const handleImageClick = useCallback((imageUrl: string) => {
+    setImageModal({ isOpen: true, src: imageUrl });
+  }, []);
+
+  const closeImageModal = useCallback(() => {
+    setImageModal({ isOpen: false, src: null });
+  }, []);
+
   const handleDelete = useCallback(async (id: string) => {
     try {
-      await deleteDoc(doc(db, 'GYM', id));
+      await deleteDoc(doc(db, members[Object.keys(members)[0]].find(m => m.id === id)?.collectionType || 'GYM', id));
       setMembers((prev) => {
         const updatedMembers = { ...prev };
         Object.keys(updatedMembers).forEach((category) => {
@@ -272,57 +302,68 @@ export default function DataFetcher({ refreshTrigger, searchQuery, theme, t, onS
     }
   }, [members, onStatsFetched, t]);
 
-  const handleSetPayment = useCallback(async (id: string, category: string, newPaymentStatus: string) => {
+  const handleSetPayment = useCallback(async (member: Member, newPayment: string) => {
     try {
-      const memberRef = doc(db, 'GYM', id);
+      const memberRef = doc(db, 'GYM', member.id);
       const updateData: { payment: string; paymentStartDate?: string | null } = {
-        payment: newPaymentStatus,
+        payment: newPayment,
       };
 
-      if (newPaymentStatus === 'Payed') {
+      if (newPayment === 'Payed') {
         updateData.paymentStartDate = new Date().toISOString();
-      } else {
-        updateData.paymentStartDate = null;
       }
 
       await updateDoc(memberRef, updateData);
 
       setMembers((prev) => ({
         ...prev,
-        [category]: prev[category].map((member) =>
-          member.id === id
-            ? {
-                ...member,
-                payment: newPaymentStatus,
-                paymentStartDate: newPaymentStatus === 'Payed' ? new Date().toISOString() : null,
-              }
-            : member
-        ),
+        [member.category!]: prev[member.category!].map((m) =>
+          m.id === member.id
+            ? ({
+              ...m,
+              payment: newPayment,
+              ...(newPayment === 'Payed' && { paymentStartDate: updateData.paymentStartDate }),
+            } as Member)
+            : m
+        )
       }));
+      toast.success(`${member.name} payment updated to ${newPayment}`);
     } catch (error) {
       console.error('Error updating payment status:', error);
       setFetchError(t.error || 'Failed to update payment status. Please try again.');
+      toast.error(t.error || 'Failed to update payment status.');
     }
   }, [t]);
 
-  const calculateDaysDisplay = useCallback((paymentStatus: string, paymentStartDate?: string): string => {
-    if (!paymentStartDate) return 'N/A';
-    const startDate = new Date(paymentStartDate);
-    const currentDate = new Date();
-    const diffTime = Math.abs(currentDate.getTime() - startDate.getTime());
-    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-
-    if (paymentStatus === 'Payed') {
+  const calculateDaysDisplay = useCallback((payment: string, paymentStartDate?: string | null, registrationDate?: string | null): string => {
+    if (payment === 'Payed' && paymentStartDate) {
+      const startDate = new Date(paymentStartDate);
+      const currentDate = new Date();
+      const diffTime = currentDate.getTime() - startDate.getTime();
+      const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
       const daysLeft = 30 - diffDays;
-      return daysLeft > 0 ? t.daysStatus?.replace('{days}', `${daysLeft}`) || `${daysLeft} days left` : t.daysStatus?.replace('{days}', 'Expired') || 'Expired';
+      return daysLeft >= 0 ? `${daysLeft} days left` : 'Expired';
+    } else if (payment === 'Not Payed' && paymentStartDate) {
+      const startDate = new Date(paymentStartDate);
+      const currentDate = new Date();
+      const diffTime = currentDate.getTime() - startDate.getTime();
+      const daysPassed = Math.ceil(diffTime / (1000 * 60 * 60 * 24)) - 30;
+      return daysPassed > 0 ? `${daysPassed} days passed` : 'Expired';
+    } else if (payment === 'Not Payed' && registrationDate) {
+      const regDate = new Date(registrationDate);
+      const currentDate = new Date();
+      const diffTime = currentDate.getTime() - regDate.getTime();
+      const daysPassed = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+      return daysPassed > 0 ? `${daysPassed} days passed` : 'Just registered';
     } else {
-      const daysPassed = Math.min(diffDays, 30); // Cap at 30 days
-      return t.daysStatus?.replace('{days}', `${daysPassed} day${daysPassed === 1 ? '' : 's'} passed`) || `${daysPassed} day${daysPassed === 1 ? '' : 's'} passed`;
+      return 'N/A';
     }
   }, [t]);
 
   const renderTable = useCallback(
-    (category: string, collectionMembers: Member[]) => (
+    (category: string, collectionMembers: Member[]) => {
+      if (collectionMembers.length === 0) return null;
+      return (
       <div
         className={`rounded-xl shadow-lg p-6 mb-10 border ${
           theme === 'light' ? 'bg-white text-gray-900 border-gray-200' : 'bg-gray-800 text-white border-gray-700'
@@ -330,7 +371,7 @@ export default function DataFetcher({ refreshTrigger, searchQuery, theme, t, onS
       >
         <div className="flex justify-between items-center mb-6">
           <h3 className={`text-xl font-semibold capitalize ${theme === 'light' ? 'text-zinc-800' : 'text-white'}`}>
-            {t.category?.replace('{category}', category) || `${category} Members`}
+            {`${category} Members`}
           </h3>
           <button
             onClick={fetchMembers}
@@ -368,6 +409,7 @@ export default function DataFetcher({ refreshTrigger, searchQuery, theme, t, onS
                 <tr
                   className={`border-b ${theme === 'light' ? 'border-gray-200 text-gray-600' : 'border-gray-600 text-gray-300'}`}
                 >
+                  <th className="py-4 px-2">{t.photo || 'Photo'}</th>
                   <th className="py-4 px-2">{t.name || 'Name'}</th>
                   <th className="py-4 px-2">{t.email || 'Email'}</th>
                   <th className="py-4 px-2">{t.membership || 'Membership'}</th>
@@ -377,27 +419,47 @@ export default function DataFetcher({ refreshTrigger, searchQuery, theme, t, onS
                 </tr>
               </thead>
               <tbody>
-                {collectionMembers
-                  .filter(
-                    (member) =>
-                      (member.name ?? '').toLowerCase().includes(searchQuery.toLowerCase()) ||
-                      (member.email ?? '').toLowerCase().includes(searchQuery.toLowerCase())
-                  )
-                  .map((member) => (
+                {collectionMembers.map((member) => (
                     <tr
                       key={`${member.id}-GYM`}
                       className={`border-b ${
                         theme === 'light' ? 'border-gray-200 hover:bg-blue-50' : 'border-gray-600 hover:bg-gray-700'
                       } transition-colors duration-200`}
                     >
+                      <td className="py-4 px-2">
+                        {member.photoURL ? (
+                          <button
+                            onClick={() => handleImageClick(member.photoURL!)}
+                            className="focus:outline-none"
+                            aria-label={`View ${member.name}'s profile photo`}
+                          >
+                            <img
+                              src={member.photoURL}
+                              alt={member.name || 'Member photo'}
+                              className="w-12 h-12 rounded-full object-cover cursor-pointer hover:opacity-80 transition-opacity duration-200"
+                            />
+                          </button>
+                        ) : (
+                          <div
+                            className={`w-12 h-12 rounded-full flex items-center justify-center ${
+                              theme === 'light' ? 'bg-gray-200 text-gray-600' : 'bg-gray-600 text-gray-300'
+                            }`}
+                          >
+                            <span className="text-xs">
+                              {member.firstName ? member.firstName.charAt(0) : ''}
+                              {member.lastName ? member.lastName.charAt(0) : ''}
+                            </span>
+                          </div>
+                        )}
+                      </td>
                       <td className="py-4 px-2">{member.name}</td>
                       <td className="py-4 px-2">{member.email}</td>
                       <td className="py-4 px-2">{member.membership}</td>
                       <td className="py-4 px-2">
                         {member.payment !== undefined ? (
                           <select
-                            value={member.payment}
-                            onChange={(e) => handleSetPayment(member.id, member.category || 'Uncategorized', e.target.value)}
+                            value={member.payment || 'Not Payed'}
+                            onChange={(e) => handleSetPayment(member, e.target.value)}
                             className={`px-3 py-1 rounded-lg text-sm ${
                               theme === 'light'
                                 ? 'bg-green-500 text-white hover:bg-green-600'
@@ -417,7 +479,7 @@ export default function DataFetcher({ refreshTrigger, searchQuery, theme, t, onS
                             theme === 'light' ? 'text-blue-600' : 'text-blue-300'
                           }`}
                         >
-                          {calculateDaysDisplay(member.payment, member.paymentStartDate)}
+                          {calculateDaysDisplay(member.payment, member.paymentStartDate, member.registrationDate)}
                         </span>
                       </td>
                       <td className="py-4 px-2 flex space-x-2">
@@ -431,6 +493,15 @@ export default function DataFetcher({ refreshTrigger, searchQuery, theme, t, onS
                           title={t.detail || member.actionDetail}
                         >
                           {t.detail || member.actionDetail}
+                        </button>
+                        <button
+                          onClick={() => openDetailsModal(member)}
+                          className={`px-3 py-1 rounded-lg text-sm ${
+                            theme === 'light' ? 'bg-yellow-500 text-white hover:bg-yellow-600' : 'bg-yellow-600 text-white hover:bg-yellow-700'
+                          } transition-colors duration-200`}
+                          title={t.update || 'Update'}
+                        >
+                          {t.update || 'Update'}
                         </button>
                         <button
                           onClick={() => handleDelete(member.id)}
@@ -451,9 +522,9 @@ export default function DataFetcher({ refreshTrigger, searchQuery, theme, t, onS
           </div>
         )}
       </div>
-    ),
-    [theme, isLoading, fetchError, searchQuery, t, fetchMembers, openDetailsModal, handleDelete, handleSetPayment, calculateDaysDisplay]
-  );
+    );
+  },[theme, isLoading, fetchError, t, fetchMembers, openDetailsModal, handleDelete, handleSetPayment, calculateDaysDisplay, handleImageClick]);
+  
 
   useEffect(() => {
     fetchMembers();
@@ -471,8 +542,8 @@ export default function DataFetcher({ refreshTrigger, searchQuery, theme, t, onS
           animation: pulse 2s ease-in-out infinite;
         }
       `}</style>
-      {Object.keys(members).map((category) => (
-        <div key={category}>{renderTable(category, members[category])}</div>
+      {Object.keys(filteredMembers).map((category) => (
+        <div key={category}>{renderTable(category, filteredMembers[category])}</div>
       ))}
 
       {/* Member Details Modal */}
@@ -524,6 +595,27 @@ export default function DataFetcher({ refreshTrigger, searchQuery, theme, t, onS
               >
                 {t.close || 'Close'}
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Image Modal */}
+      {imageModal.isOpen && imageModal.src && (
+        <div
+          className="fixed inset-0 bg-black bg-opacity-90 flex items-center justify-center z-50 p-4"
+          onClick={closeImageModal}
+        >
+          <div className="relative max-w-4xl w-full max-h-full">
+            <button
+              onClick={closeImageModal}
+              className="absolute -top-10 right-0 text-white hover:text-gray-300 z-10"
+              aria-label={t.close || 'Close image modal'}
+            >
+              <XCircle size={30} />
+            </button>
+            <div className="flex justify-center items-center h-full">
+              <img src={imageModal.src} alt={t.enlargedProfile || 'Enlarged profile'} className="max-w-full max-h-full object-contain rounded-lg" />
             </div>
           </div>
         </div>

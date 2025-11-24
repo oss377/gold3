@@ -6,7 +6,10 @@ const nextConfig = {
     locales: routing.locales,
     defaultLocale: routing.defaultLocale,
     localeDetection: true
-  }
+  },
+  images: {
+    domains: ['res.cloudinary.com'],
+  },
 };
 
 module.exports = nextConfig;

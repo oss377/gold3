@@ -11,6 +11,7 @@ import { motion } from "framer-motion";
 import Link from "next/link";
 import { ThemeContext } from "../../../context/ThemeContext";
 import { toast, ToastContainer } from "react-toastify";
+import LanguageContext from "../../../context/LanguageContext";
 import 'react-toastify/dist/ReactToastify.css';
 
 // Cloudinary configuration
@@ -70,6 +71,7 @@ interface FormData {
 
 export default function RegisterForm() {
   const { theme } = useContext(ThemeContext) || { theme: 'light' };
+  const { t } = useContext(LanguageContext);
   const router = useRouter();
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [currentUser, setCurrentUser] = useState<User | null>(null);
@@ -135,7 +137,7 @@ export default function RegisterForm() {
       signature: '',
       role: "user",
       category: "aerobics",
-      payment: "not paid",
+      payment: "Not Payed",
       agreeTerms: false,
       age: '',
       jobType: '',
@@ -144,23 +146,23 @@ export default function RegisterForm() {
 
   const steps = [
     {
-      name: 'Personal Info',
+      name: t.personalInfo || 'Personal Info',
       fields: ['firstName', 'lastName', 'email', 'password', 'phoneNumber', 'streetAddress', 'streetAddress2', 'city', 'state', 'zipCode', 'emergencyName', 'emergencyPhone', 'age', 'jobType'],
     },
     {
-      name: 'Health Info',
+      name: t.healthInfo || 'Health Info',
       fields: ['birthDate', 'height', 'weight', 'bmi', 'bloodType', 'goalWeight', 'healthIssues', 'medications', 'smoke', 'surgery', 'alcohol'],
     },
     {
-      name: 'Lifestyle',
+      name: t.lifestyle || 'Lifestyle',
       fields: ['supplements', 'foodTracking', 'proSport', 'exercisePain', 'nightEating', 'breakfastFrequency', 'nutritionRating', 'exerciseDays', 'exerciseTime'],
     },
     {
-      name: 'Training Goals',
+      name: t.trainingGoals || 'Training Goals',
       fields: ['trainingGoals', 'eatingReasons', 'membershipType', 'exerciseDuration', 'exerciseMonths', 'startMonth'],
     },
     {
-      name: 'Review',
+      name: t.review || 'Review',
       fields: ['photos', 'signature', 'agreeTerms'],
     },
   ];
@@ -184,8 +186,8 @@ export default function RegisterForm() {
   useEffect(() => {
     if (!auth) {
       console.error('Firebase auth not initialized');
-      setFormErrors({ global: 'Authentication service is not initialized.' });
-      toast.error('Authentication service is not initialized.');
+      setFormErrors({ global: t.authError || 'Authentication service is not initialized.' });
+      toast.error(t.authError || 'Authentication service is not initialized.');
       setIsLoading(false);
       return;
     }
@@ -214,8 +216,8 @@ export default function RegisterForm() {
     });
     if (!CLOUDINARY_CLOUD_NAME || !CLOUDINARY_UPLOAD_PRESET) {
       console.error('Cloudinary configuration missing');
-      setFormErrors({ global: 'Cloudinary configuration is missing. Please contact support.' });
-      toast.error('Cloudinary configuration is missing.');
+      setFormErrors({ global: t.configError || 'Cloudinary configuration is missing. Please contact support.' });
+      toast.error(t.configError || 'Cloudinary configuration is missing.');
     }
   }, []);
 
@@ -232,7 +234,7 @@ export default function RegisterForm() {
         }
       } catch (error) {
         console.error('Error accessing camera:', error);
-        toast.error('Unable to access camera. Please select an image instead.');
+        toast.error(t.cameraError || 'Unable to access camera. Please select an image instead.');
         setShowCamera(false);
       }
     };
@@ -256,7 +258,7 @@ export default function RegisterForm() {
       setPhotoPreviews([]);
       setValue('photos', null, { shouldValidate: true });
       trigger('photos');
-      toast.error('No photos selected.');
+      toast.error(t.photoRequired || 'No photos selected.');
       return;
     }
 
@@ -266,12 +268,12 @@ export default function RegisterForm() {
       const isUnderSizeLimit = file.size <= 10 * 1024 * 1024; // 10MB limit
       if (!isImage) {
         console.warn(`Invalid file type for ${file.name}`);
-        toast.error(`${file.name} is not a valid image file.`);
+        toast.error(t.fileTypeError || `${file.name} is not a valid image file.`);
         return false;
       }
       if (!isUnderSizeLimit) {
         console.warn(`File size too large for ${file.name}`);
-        toast.error(`${file.name} exceeds the 10MB size limit.`);
+        toast.error(t.fileSizeError || `${file.name} exceeds the 10MB size limit.`);
         return false;
       }
       return true;
@@ -281,7 +283,7 @@ export default function RegisterForm() {
       setPhotoPreviews([]);
       setValue('photos', null, { shouldValidate: true });
       trigger('photos');
-      toast.error('No valid photos selected.');
+      toast.error(t.photoInvalid || 'No valid photos selected.');
       return;
     }
 
@@ -340,9 +342,9 @@ export default function RegisterForm() {
           reader.readAsDataURL(file);
 
           setShowCamera(false);
-          toast.success('Photo captured successfully.');
+          toast.success(t.photoCaptureSuccess || 'Photo captured successfully.');
         } else {
-          toast.error('Failed to capture photo.');
+          toast.error(t.photoCaptureError || 'Failed to capture photo.');
         }
       }, 'image/jpeg', 0.95);
     }
@@ -352,8 +354,8 @@ export default function RegisterForm() {
     console.log('uploadToCloudinary called with data:', data);
     const files = Array.from(data.photos || []);
     if (files.length === 0) {
-      console.error('No photos selected for upload.');
-      throw new Error('At least one photo is required.');
+      console.error(t.photoRequired || 'No photos selected for upload.');
+      throw new Error(t.photoRequired || 'At least one photo is required.');
     }
 
     setUploadStatus({ type: 'uploading', message: 'Starting photo upload...', progress: 0 });
@@ -366,7 +368,7 @@ export default function RegisterForm() {
           setUploadStatus({
             type: 'error',
             message: `${file.name} is not a valid image file.`,
-            fileName: file.name,
+            fileName: file.name
           });
           toast.error(`${file.name} is not a valid image file.`);
           continue;
@@ -415,7 +417,7 @@ export default function RegisterForm() {
             setUploadStatus({
               type: 'error',
               message: `Failed to upload ${file.name}: ${result.error?.message || 'Upload failed'}`,
-              fileName: file.name
+              fileName: file.name,
 
             });
             toast.error(`Failed to upload ${file.name}: ${result.error?.message || 'Upload failed'}`);
@@ -435,24 +437,24 @@ export default function RegisterForm() {
           if (fetchError.name === 'AbortError') {
             setUploadStatus({
               type: 'error',
-              message: `Upload timeout for ${file.name}`,
-              fileName: file.name,
+              message: t.uploadTimeout || `Upload timeout for ${file.name}`,
+              fileName: file.name
             });
-            toast.error(`Upload timeout for ${file.name}`);
+            toast.error(t.uploadTimeout || `Upload timeout for ${file.name}`);
           } else {
             setUploadStatus({
               type: 'error',
-              message: `Network error uploading ${file.name}: ${fetchError.message}`,
-              fileName: file.name,
+              message: t.networkError || `Network error uploading ${file.name}: ${fetchError.message}`,
+              fileName: file.name
             });
-            toast.error(`Network error uploading ${file.name}: ${fetchError.message}`);
+            toast.error(t.networkError || `Network error uploading ${file.name}: ${fetchError.message}`);
           }
           continue;
         }
       }
 
       if (newUploadedPhotos.length === 0) {
-        throw new Error('No photos were uploaded successfully.');
+        throw new Error(t.uploadError || 'No photos were uploaded successfully.');
       }
 
       setUploadStatus({
@@ -463,7 +465,7 @@ export default function RegisterForm() {
       return newUploadedPhotos.map((photo) => photo.url);
     } catch (error: any) {
       console.error('Upload error:', error);
-      const errorMessage = `Upload error: ${error.message || 'Failed to upload photos'}`;
+      const errorMessage = t.uploadError || `Upload error: ${error.message || 'Failed to upload photos'}`;
       setUploadStatus({
         type: 'error',
         message: errorMessage,
@@ -488,7 +490,7 @@ export default function RegisterForm() {
       const photoURLs = await uploadToCloudinary(formData);
 
       if (!db) {
-        throw new Error('Firestore database not initialized.');
+        throw new Error(t.firebaseError || 'Firestore database not initialized.');
       }
 
       // Create user document in Firestore with user ID as document ID
@@ -545,7 +547,7 @@ export default function RegisterForm() {
       console.log(`Firestore document created with ID: ${user.uid}`);
       sessionStorage.setItem('pendingUserId', user.uid);
 
-      toast.success('Registration successful! Redirecting to payment...');
+      toast.success(t.registrationSuccessRedirect || 'Registration successful! Redirecting to payment...');
       setIsSubmitted(true);
       setTimeout(() => {
         reset();
@@ -556,8 +558,8 @@ export default function RegisterForm() {
       }, 2000);
     } catch (error: any) {
       console.error('Registration error:', error);
-      setFormErrors({ global: `Registration failed: ${error.message || 'Unknown error'}` });
-      toast.error(`Registration failed: ${error.message || 'Unknown error'}`);
+      setFormErrors({ global: t.registrationError || `Registration failed: ${error.message || 'Unknown error'}` });
+      toast.error(t.registrationError || `Registration failed: ${error.message || 'Unknown error'}`);
       throw error;
     }
   }, [router, reset]);
@@ -567,27 +569,27 @@ export default function RegisterForm() {
     setFormErrors({});
 
     if (!data.agreeTerms) {
-      setFormErrors({ global: 'You must agree to the terms and conditions.' });
-      toast.error('You must agree to the terms and conditions.');
+      setFormErrors({ global: t.agreeTermsError || 'You must agree to the terms and conditions.' });
+      toast.error(t.agreeTermsError || 'You must agree to the terms and conditions.');
       return;
     }
 
     if (!data.photos || data.photos.length === 0) {
       console.error('No photos selected');
-      setFormErrors({ global: 'At least one photo is required.' });
-      toast.error('Please select at least one photo.');
+      setFormErrors({ global: t.photoRequired || 'At least one photo is required.' });
+      toast.error(t.photoRequired || 'Please select at least one photo.');
       return;
     }
 
     if (!data.email || !data.password) {
-      setFormErrors({ global: 'Email and password are required.' });
-      toast.error('Email and password are required.');
+      setFormErrors({ global: t.emailPasswordRequired || 'Email and password are required.' });
+      toast.error(t.emailPasswordRequired || 'Email and password are required.');
       return;
     }
 
     try {
       if (!auth) {
-        throw new Error('Auth not initialized.');
+        throw new Error(t.authError || 'Auth not initialized.');
       }
 
       // Create user with email and password
@@ -599,15 +601,15 @@ export default function RegisterForm() {
       await completeRegistration(user, data);
     } catch (error: any) {
       console.error('Registration error:', error);
-      let message = 'Registration failed.';
+      let message = t.registrationError || 'Registration failed.';
       if (error.code === 'auth/email-already-in-use') {
-        message = 'This email is already registered. Please use a different email or log in.';
+        message = t.emailInUse || 'This email is already registered. Please use a different email or log in.';
       } else if (error.code === 'auth/weak-password') {
-        message = 'Password is too weak. Please use a stronger password (minimum 6 characters).';
+        message = t.weakPassword || 'Password is too weak. Please use a stronger password (minimum 6 characters).';
       } else if (error.code === 'auth/invalid-email') {
-        message = 'Invalid email format.';
+        message = t.emailInvalid || 'Invalid email format.';
       } else if (error.code === 'auth/operation-not-allowed') {
-        message = 'Email/password accounts are not enabled. Please contact support.';
+        message = t.authNotEnabled || 'Email/password accounts are not enabled. Please contact support.';
       }
       setFormErrors({ global: message });
       toast.error(message);
@@ -621,7 +623,7 @@ export default function RegisterForm() {
       console.log('Moving to next step:', currentStep + 1);
       setCurrentStep(prev => prev + 1);
     } else {
-      toast.error('Please fill out all required fields correctly.');
+      toast.error(t.fillFieldsError || 'Please fill out all required fields correctly.');
     }
   };
 
@@ -636,13 +638,13 @@ export default function RegisterForm() {
     setPhotoPreviews([]);
     setUploadStatus(null);
     setCurrentStep(0);
-    toast.info('Form has been reset.');
+    toast.info(t.formReset || 'Form has been reset.');
   };
 
   if (isLoading) {
     return (
       <div className={`${theme === 'light' ? 'bg-zinc-100' : 'bg-zinc-900'} min-h-screen flex items-center justify-center`}>
-        <Loader2 className="animate-spin h-8 w-8" /> Loading...
+        <Loader2 className="animate-spin h-8 w-8" /> {t.loading || 'Loading...'}
       </div>
     );
   }
@@ -652,8 +654,8 @@ export default function RegisterForm() {
       <div className={`${theme === 'light' ? 'bg-zinc-100' : 'bg-zinc-900'} min-h-screen flex items-center justify-center`}>
         <div className="text-center">
           <CheckCircle className="h-12 w-12 mx-auto mb-4 text-green-500" />
-          <p className={`${theme === 'light' ? 'text-zinc-800' : 'text-zinc-100'} text-lg`}>Registration successful!</p>
-          <p className={`${theme === 'light' ? 'text-zinc-600' : 'text-zinc-400'}`}>Redirecting to payment...</p>
+          <p className={`${theme === 'light' ? 'text-zinc-800' : 'text-zinc-100'} text-lg`}>{t.registrationSuccess || 'Registration successful!'}</p>
+          <p className={`${theme === 'light' ? 'text-zinc-600' : 'text-zinc-400'}`}>{t.redirectingToPayment || 'Redirecting to payment...'}</p>
         </div>
       </div>
     );
@@ -663,7 +665,7 @@ export default function RegisterForm() {
     <main className={`min-h-screen flex items-center justify-center p-6 ${theme === "light" ? "bg-zinc-100" : "bg-zinc-900"}`}>
       <motion.div className={`w-full max-w-4xl rounded-2xl shadow-lg overflow-hidden ${theme === "light" ? "bg-gradient-to-br from-blue-50 to-purple-50" : "bg-gradient-to-br from-gray-800 to-gray-900"}`}>
         <div className="p-8">
-          <h2 className={`text-3xl font-bold text-center ${theme === "light" ? "text-zinc-800" : "text-zinc-100"} mb-8`}>Create Your Aerobics Account</h2>
+          <h2 className={`text-3xl font-bold text-center ${theme === "light" ? "text-zinc-800" : "text-zinc-100"} mb-8`}>{t.aerobicsRegistrationTitle || 'Create Your Aerobics Account'}</h2>
 
           <div className="flex justify-between mb-8">
             {steps.map((step, index) => (
@@ -690,10 +692,10 @@ export default function RegisterForm() {
           <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
             {currentStep === 0 && (
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                {['firstName', 'lastName', 'email', 'password', 'phoneNumber', 'streetAddress', 'streetAddress2', 'city', 'state', 'zipCode', 'emergencyName', 'emergencyPhone', 'age', 'jobType'].map(field => (
+                {steps[0].fields.map(field => (
                   <div key={field}>
                     <label className={`${theme === "light" ? "text-zinc-700" : "text-zinc-300"} block text-sm font-medium`}>
-                      {field.replace(/([A-Z])/g, ' $1').replace(/^./, str => str.toUpperCase())}
+                      {t[field] || field.replace(/([A-Z])/g, ' $1').replace(/^./, str => str.toUpperCase())}
                       {(field === 'firstName' || field === 'lastName' || field === 'email' || field === 'password') && <span className="text-red-500">*</span>}
                     </label>
                     <div className="relative">
@@ -727,7 +729,7 @@ export default function RegisterForm() {
                           })}
                           type={field === 'email' ? 'email' : field === 'phoneNumber' || field === 'emergencyPhone' ? 'tel' : field === 'age' ? 'number' : 'text'}
                           className={`mt-1 block w-full px-3 py-2 ${field === 'firstName' || field === 'lastName' || field === 'email' ? 'pl-10' : ''} border rounded-lg focus:outline-none focus:ring-2 ${theme === "light" ? "border-zinc-300 bg-white focus:ring-blue-500" : "border-zinc-700 bg-gray-800 focus:ring-yellow-400"} ${errors[field as keyof FormData] ? 'border-red-500' : ''}`}
-                          placeholder={field.replace(/([A-Z])/g, ' $1').replace(/^./, str => str.toUpperCase())}
+                          placeholder={t[`${field}Placeholder`] || `Enter ${field.replace(/([A-Z])/g, ' $1').toLowerCase()}`}
                         />
                       )}
                       {(field === 'firstName' || field === 'lastName') && (
@@ -748,7 +750,7 @@ export default function RegisterForm() {
             {currentStep === 1 && (
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <div>
-                  <label className={`${theme === "light" ? "text-zinc-700" : "text-zinc-300"} block text-sm font-medium`}>Birth Date <span className="text-red-500">*</span></label>
+                  <label className={`${theme === "light" ? "text-zinc-700" : "text-zinc-300"} block text-sm font-medium`}>{t.birthDate || 'Birth Date'} <span className="text-red-500">*</span></label>
                   <input
                     {...register('birthDate', { required: 'Birth date is required' })}
                     type="date"
@@ -757,7 +759,7 @@ export default function RegisterForm() {
                   {errors.birthDate && <p className="text-red-500 text-xs mt-1">{errors.birthDate.message}</p>}
                 </div>
                 <div>
-                  <label className={`${theme === "light" ? "text-zinc-700" : "text-zinc-300"} block text-sm font-medium`}>Height (cm) <span className="text-red-500">*</span></label>
+                  <label className={`${theme === "light" ? "text-zinc-700" : "text-zinc-300"} block text-sm font-medium`}>{t.height || 'Height (cm)'} <span className="text-red-500">*</span></label>
                   <input
                     {...register('height', { required: 'Height is required' })}
                     type="number"
@@ -766,7 +768,7 @@ export default function RegisterForm() {
                   {errors.height && <p className="text-red-500 text-xs mt-1">{errors.height.message}</p>}
                 </div>
                 <div>
-                  <label className={`${theme === "light" ? "text-zinc-700" : "text-zinc-300"} block text-sm font-medium`}>Weight (kg) <span className="text-red-500">*</span></label>
+                  <label className={`${theme === "light" ? "text-zinc-700" : "text-zinc-300"} block text-sm font-medium`}>{t.weight || 'Weight (kg)'} <span className="text-red-500">*</span></label>
                   <input
                     {...register('weight', { required: 'Weight is required' })}
                     type="number"
@@ -775,7 +777,7 @@ export default function RegisterForm() {
                   {errors.weight && <p className="text-red-500 text-xs mt-1">{errors.weight.message}</p>}
                 </div>
                 <div>
-                  <label className={`${theme === "light" ? "text-zinc-700" : "text-zinc-300"} block text-sm font-medium`}>BMI</label>
+                  <label className={`${theme === "light" ? "text-zinc-700" : "text-zinc-300"} block text-sm font-medium`}>{t.bmi || 'BMI'}</label>
                   <input
                     {...register('bmi')}
                     readOnly
@@ -783,12 +785,12 @@ export default function RegisterForm() {
                   />
                 </div>
                 <div>
-                  <label className={`${theme === "light" ? "text-zinc-700" : "text-zinc-300"} block text-sm font-medium`}>Blood Type</label>
+                  <label className={`${theme === "light" ? "text-zinc-700" : "text-zinc-300"} block text-sm font-medium`}>{t.bloodType || 'Blood Type'}</label>
                   <select
                     {...register('bloodType')}
                     className={`mt-1 block w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 ${theme === "light" ? "border-zinc-300 bg-white focus:ring-blue-500" : "border-zinc-700 bg-gray-800 focus:ring-yellow-400"}`}
                   >
-                    <option value="">Select Blood Type</option>
+                    <option value="">{t.bloodTypePlaceholder || 'Select Blood Type'}</option>
                     <option value="A+">A+</option>
                     <option value="A-">A-</option>
                     <option value="B+">B+</option>
@@ -800,7 +802,7 @@ export default function RegisterForm() {
                   </select>
                 </div>
                 <div>
-                  <label className={`${theme === "light" ? "text-zinc-700" : "text-zinc-300"} block text-sm font-medium`}>Goal Weight (kg)</label>
+                  <label className={`${theme === "light" ? "text-zinc-700" : "text-zinc-300"} block text-sm font-medium`}>{t.goalWeight || 'Goal Weight (kg)'}</label>
                   <input
                     {...register('goalWeight')}
                     type="number"
@@ -808,7 +810,7 @@ export default function RegisterForm() {
                   />
                 </div>
                 <div className="md:col-span-2">
-                  <label className={`${theme === "light" ? "text-zinc-700" : "text-zinc-300"} block text-sm font-medium`}>Health Issues</label>
+                  <label className={`${theme === "light" ? "text-zinc-700" : "text-zinc-300"} block text-sm font-medium`}>{t.healthIssues || 'Health Issues'}</label>
                   <textarea
                     {...register('healthIssues')}
                     className={`mt-1 block w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 ${theme === "light" ? "border-zinc-300 bg-white focus:ring-blue-500" : "border-zinc-700 bg-gray-800 focus:ring-yellow-400"}`}
@@ -816,7 +818,7 @@ export default function RegisterForm() {
                   />
                 </div>
                 <div className="md:col-span-2">
-                  <label className={`${theme === "light" ? "text-zinc-700" : "text-zinc-300"} block text-sm font-medium`}>Medications</label>
+                  <label className={`${theme === "light" ? "text-zinc-700" : "text-zinc-300"} block text-sm font-medium`}>{t.medications || 'Medications'}</label>
                   <textarea
                     {...register('medications')}
                     className={`mt-1 block w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 ${theme === "light" ? "border-zinc-300 bg-white focus:ring-blue-500" : "border-zinc-700 bg-gray-800 focus:ring-yellow-400"}`}
@@ -831,7 +833,7 @@ export default function RegisterForm() {
                       className={`h-4 w-4 ${theme === "light" ? "text-blue-600 focus:ring-blue-500" : "text-yellow-400 focus:ring-yellow-400"} border-gray-300 rounded`}
                     />
                     <label className={`${theme === "light" ? "text-gray-700" : "text-gray-300"} ml-2 text-sm`}>
-                      {field.charAt(0).toUpperCase() + field.slice(1)}
+                      {t[field] || field.charAt(0).toUpperCase() + field.slice(1)}
                     </label>
                   </div>
                 ))}
@@ -848,48 +850,48 @@ export default function RegisterForm() {
                       className={`h-4 w-4 ${theme === "light" ? "text-blue-600 focus:ring-blue-500" : "text-yellow-400 focus:ring-yellow-400"} border-gray-300 rounded`}
                     />
                     <label className={`${theme === "light" ? "text-gray-700" : "text-gray-300"} ml-2 text-sm`}>
-                      {field.replace(/([A-Z])/g, ' $1').replace(/^./, str => str.toUpperCase())}
+                      {t[field] || field.replace(/([A-Z])/g, ' $1').replace(/^./, str => str.toUpperCase())}
                     </label>
                   </div>
                 ))}
                 <div>
-                  <label className={`${theme === "light" ? "text-zinc-700" : "text-zinc-300"} block text-sm font-medium`}>Night Eating</label>
+                  <label className={`${theme === "light" ? "text-zinc-700" : "text-zinc-300"} block text-sm font-medium`}>{t.nightEating || 'Night Eating'}</label>
                   <select
                     {...register('nightEating')}
                     className={`mt-1 block w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 ${theme === "light" ? "border-zinc-300 bg-white focus:ring-blue-500" : "border-zinc-700 bg-gray-800 focus:ring-yellow-400"}`}
                   >
-                    <option value="">Select</option>
+                    <option value="">{t.select || 'Select'}</option>
                     {[0, 1, 2, 3, 4, 5].map(num => (
                       <option key={num} value={num.toString()}>{num}</option>
                     ))}
                   </select>
                 </div>
                 <div>
-                  <label className={`${theme === "light" ? "text-zinc-700" : "text-zinc-300"} block text-sm font-medium`}>Breakfast Frequency</label>
+                  <label className={`${theme === "light" ? "text-zinc-700" : "text-zinc-300"} block text-sm font-medium`}>{t.breakfastFrequency || 'Breakfast Frequency'}</label>
                   <select
                     {...register('breakfastFrequency')}
                     className={`mt-1 block w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 ${theme === "light" ? "border-zinc-300 bg-white focus:ring-blue-500" : "border-zinc-700 bg-gray-800 focus:ring-yellow-400"}`}
                   >
-                    <option value="">Select</option>
+                    <option value="">{t.select || 'Select'}</option>
                     {[0, 1, 2, 3, 4, 5].map(num => (
                       <option key={num} value={num.toString()}>{num}</option>
                     ))}
                   </select>
                 </div>
                 <div>
-                  <label className={`${theme === "light" ? "text-zinc-700" : "text-zinc-300"} block text-sm font-medium`}>Nutrition Rating</label>
+                  <label className={`${theme === "light" ? "text-zinc-700" : "text-zinc-300"} block text-sm font-medium`}>{t.nutritionRating || 'Nutrition Rating'}</label>
                   <select
                     {...register('nutritionRating')}
                     className={`mt-1 block w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 ${theme === "light" ? "border-zinc-300 bg-white focus:ring-blue-500" : "border-zinc-700 bg-gray-800 focus:ring-yellow-400"}`}
                   >
-                    <option value="">Select</option>
+                    <option value="">{t.select || 'Select'}</option>
                     {[0, 1, 2, 3, 4, 5].map(num => (
                       <option key={num} value={num.toString()}>{num}</option>
                     ))}
                   </select>
                 </div>
                 <div className="md:col-span-2">
-                  <label className={`${theme === "light" ? "text-zinc-700" : "text-zinc-300"} block text-sm font-medium`}>Exercise Days</label>
+                  <label className={`${theme === "light" ? "text-zinc-700" : "text-zinc-300"} block text-sm font-medium`}>{t.exerciseDays || 'Exercise Days'}</label>
                   <div className="grid grid-cols-2 gap-2">
                     {['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'].map(day => (
                       <div key={day} className="flex items-center">
@@ -899,23 +901,23 @@ export default function RegisterForm() {
                           value={day}
                           className={`h-4 w-4 ${theme === "light" ? "text-blue-600 focus:ring-blue-500" : "text-yellow-400 focus:ring-yellow-400"} border-gray-300 rounded`}
                         />
-                        <label className={`${theme === "light" ? "text-gray-700" : "text-gray-300"} ml-2 text-sm`}>{day}</label>
+                        <label className={`${theme === "light" ? "text-gray-700" : "text-gray-300"} ml-2 text-sm`}>{t[day.toLowerCase()] || day}</label>
                       </div>
                     ))}
                   </div>
                 </div>
                 <div>
-                  <label className={`${theme === "light" ? "text-zinc-700" : "text-zinc-300"} block text-sm font-medium`}>Best Time to Exercise</label>
+                  <label className={`${theme === "light" ? "text-zinc-700" : "text-zinc-300"} block text-sm font-medium`}>{t.exerciseTime || 'Best Time to Exercise'}</label>
                   <select
                     {...register('exerciseTime')}
                     className={`mt-1 block w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 ${theme === "light" ? "border-zinc-300 bg-white focus:ring-blue-500" : "border-zinc-700 bg-gray-800 focus:ring-yellow-400"}`}
                   >
-                    <option value="">Select</option>
-                    <option value="Early Mornings">Early Mornings</option>
-                    <option value="Mornings">Mornings</option>
-                    <option value="Early Afternoons">Early Afternoons</option>
-                    <option value="Afternoons">Afternoons</option>
-                    <option value="Evenings">Evenings</option>
+                    <option value="">{t.select || 'Select'}</option>
+                    <option value="Early Mornings">{t.earlyMornings || 'Early Mornings'}</option>
+                    <option value="Mornings">{t.mornings || 'Mornings'}</option>
+                    <option value="Early Afternoons">{t.earlyAfternoons || 'Early Afternoons'}</option>
+                    <option value="Afternoons">{t.afternoons || 'Afternoons'}</option>
+                    <option value="Evenings">{t.evenings || 'Evenings'}</option>
                   </select>
                 </div>
               </div>
@@ -924,7 +926,7 @@ export default function RegisterForm() {
             {currentStep === 3 && (
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <div className="md:col-span-2">
-                  <label className={`${theme === "light" ? "text-zinc-700" : "text-zinc-300"} block text-sm font-medium`}>Training Goals (select all that apply) <span className="text-red-500">*</span></label>
+                  <label className={`${theme === "light" ? "text-zinc-700" : "text-zinc-300"} block text-sm font-medium`}>{t.trainingGoals || 'Training Goals'} ({t.selectAll || 'select all that apply'}) <span className="text-red-500">*</span></label>
                   <div className="grid grid-cols-2 gap-2">
                     {['Development of muscles', 'Reducing the stress', 'Losing body fat', 'Increasing the motivation', 'Training for an event/specific sport', 'Other'].map(goal => (
                       <div key={goal} className="flex items-center">
@@ -934,14 +936,14 @@ export default function RegisterForm() {
                           value={goal}
                           className={`h-4 w-4 ${theme === "light" ? "text-blue-600 focus:ring-blue-500" : "text-yellow-400 focus:ring-yellow-400"} border-gray-300 rounded ${errors.trainingGoals ? 'border-red-500' : ''}`}
                         />
-                        <label className={`${theme === "light" ? "text-gray-700" : "text-gray-300"} ml-2 text-sm`}>{goal}</label>
+                        <label className={`${theme === "light" ? "text-gray-700" : "text-gray-300"} ml-2 text-sm`}>{t[goal.toLowerCase().replace(/ /g, '')] || goal}</label>
                       </div>
                     ))}
                   </div>
                   {errors.trainingGoals && <p className="text-red-500 text-xs mt-1">{errors.trainingGoals.message}</p>}
                 </div>
                 <div className="md:col-span-2">
-                  <label className={`${theme === "light" ? "text-zinc-700" : "text-zinc-300"} block text-sm font-medium`}>Reasons for Eating (select all that apply)</label>
+                  <label className={`${theme === "light" ? "text-zinc-700" : "text-zinc-300"} block text-sm font-medium`}>{t.eatingReasons || 'Reasons for Eating'} ({t.selectAll || 'select all that apply'})</label>
                   <div className="grid grid-cols-2 gap-2">
                     {['Stress', 'Depression', 'Boredom', 'Happiness', 'Habit', 'Annoyance'].map(reason => (
                       <div key={reason} className="flex items-center">
@@ -951,26 +953,26 @@ export default function RegisterForm() {
                           value={reason}
                           className={`h-4 w-4 ${theme === "light" ? "text-blue-600 focus:ring-blue-500" : "text-yellow-400 focus:ring-yellow-400"} border-gray-300 rounded`}
                         />
-                        <label className={`${theme === "light" ? "text-gray-700" : "text-gray-300"} ml-2 text-sm`}>{reason}</label>
+                        <label className={`${theme === "light" ? "text-gray-700" : "text-gray-300"} ml-2 text-sm`}>{t[reason.toLowerCase()] || reason}</label>
                       </div>
                     ))}
                   </div>
                 </div>
                 <div>
-                  <label className={`${theme === "light" ? "text-zinc-700" : "text-zinc-300"} block text-sm font-medium`}>Membership Type <span className="text-red-500">*</span></label>
+                  <label className={`${theme === "light" ? "text-zinc-700" : "text-zinc-300"} block text-sm font-medium`}>{t.membershipType || 'Membership Type'} <span className="text-red-500">*</span></label>
                   <select
                     {...register('membershipType', { required: 'Membership type is required' })}
                     className={`mt-1 block w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 ${theme === "light" ? "border-zinc-300 bg-white focus:ring-blue-500" : "border-zinc-700 bg-gray-800 focus:ring-yellow-400"} ${errors.membershipType ? 'border-red-500' : ''}`}
                   >
-                    <option value="">Select</option>
-                    <option value="Basic">Basic</option>
-                    <option value="Premium">Premium</option>
-                    <option value="VIP">VIP</option>
+                    <option value="">{t.select || 'Select'}</option>
+                    <option value="Basic">{t.basic || 'Basic'}</option>
+                    <option value="Premium">{t.premium || 'Premium'}</option>
+                    <option value="VIP">{t.vip || 'VIP'}</option>
                   </select>
                   {errors.membershipType && <p className="text-red-500 text-xs mt-1">{errors.membershipType.message}</p>}
                 </div>
                 <div>
-                  <label className={`${theme === "light" ? "text-zinc-700" : "text-zinc-300"} block text-sm font-medium`}>Exercise Duration</label>
+                  <label className={`${theme === "light" ? "text-zinc-700" : "text-zinc-300"} block text-sm font-medium`}>{t.exerciseDuration || 'Exercise Duration'}</label>
                   <input
                     {...register('exerciseDuration')}
                     type="text"
@@ -978,19 +980,19 @@ export default function RegisterForm() {
                   />
                 </div>
                 <div>
-                  <label className={`${theme === "light" ? "text-zinc-700" : "text-zinc-300"} block text-sm font-medium`}>Exercise Months</label>
+                  <label className={`${theme === "light" ? "text-zinc-700" : "text-zinc-300"} block text-sm font-medium`}>{t.exerciseMonths || 'Exercise Months'}</label>
                   <select
                     {...register('exerciseMonths')}
                     className={`mt-1 block w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 ${theme === "light" ? "border-zinc-300 bg-white focus:ring-blue-500" : "border-zinc-700 bg-gray-800 focus:ring-yellow-400"}`}
                   >
-                    <option value="">Select</option>
+                    <option value="">{t.select || 'Select'}</option>
                     {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map(num => (
                       <option key={num} value={num.toString()}>{num}</option>
                     ))}
                   </select>
                 </div>
                 <div>
-                  <label className={`${theme === "light" ? "text-zinc-700" : "text-zinc-300"} block text-sm font-medium`}>Start Month <span className="text-red-500">*</span></label>
+                  <label className={`${theme === "light" ? "text-zinc-700" : "text-zinc-300"} block text-sm font-medium`}>{t.startMonth || 'Start Month'} <span className="text-red-500">*</span></label>
                   <input
                     {...register('startMonth', { required: 'Start month is required' })}
                     type="month"
@@ -1004,11 +1006,11 @@ export default function RegisterForm() {
             {currentStep === 4 && (
               <div className="space-y-6">
                 <div>
-                  <label className={`${theme === "light" ? "text-zinc-700" : "text-zinc-300"} block text-sm font-medium`}>Photos (Required) <span className="text-red-500">*</span></label>
+                  <label className={`${theme === "light" ? "text-zinc-700" : "text-zinc-300"} block text-sm font-medium`}>{t.photos || 'Photos'} ({t.required || 'Required'}) <span className="text-red-500">*</span></label>
                   <div className="flex gap-4">
                     <input
                       {...register('photos', {
-                        required: 'At least one photo is required.',
+                        required: t.photoRequired || 'At least one photo is required.',
                         validate: (files) => files && files.length > 0 ? true : 'At least one photo is required.'
                       })}
                       ref={fileInputRef}
@@ -1024,7 +1026,7 @@ export default function RegisterForm() {
                       onClick={() => setShowCamera(!showCamera)}
                       className={`mt-1 px-4 py-2 rounded-lg font-medium transition-colors duration-200 flex items-center gap-2 ${theme === "light" ? "bg-blue-600 text-white hover:bg-blue-700 focus:ring-2 focus:ring-blue-500" : "bg-gray-700 text-white hover:bg-gray-600 focus:ring-2 focus:ring-yellow-400"}`}
                     >
-                      <Camera size={20} /> {showCamera ? 'Close Camera' : 'Take Photo'}
+                      <Camera size={20} /> {showCamera ? t.closeCamera || 'Close Camera' : t.takePhoto || 'Take Photo'}
                     </button>
                   </div>
                   {showCamera && (
@@ -1036,7 +1038,7 @@ export default function RegisterForm() {
                         onClick={capturePhoto}
                         className={`mt-2 px-4 py-2 rounded-lg font-medium transition-colors duration-200 flex items-center gap-2 ${theme === "light" ? "bg-blue-600 text-white hover:bg-blue-700 focus:ring-2 focus:ring-blue-500" : "bg-gray-700 text-white hover:bg-gray-600 focus:ring-2 focus:ring-yellow-400"}`}
                       >
-                        <Camera size={20} /> Capture
+                        <Camera size={20} /> {t.capture || 'Capture'}
                       </button>
                     </div>
                   )}
@@ -1068,7 +1070,7 @@ export default function RegisterForm() {
                 )}
                 {uploadedPhotos.length > 0 && (
                   <div className="space-y-2">
-                    <p className={`${theme === 'light' ? 'text-gray-700' : 'text-gray-300'} text-sm font-medium`}>Uploaded Photos:</p>
+                    <p className={`${theme === 'light' ? 'text-gray-700' : 'text-gray-300'} text-sm font-medium`}>{t.uploadedPhotos || 'Uploaded Photos'}:</p>
                     <ul className={`list-disc pl-5 text-sm ${theme === 'light' ? 'text-gray-600' : 'text-gray-300'}`}>
                       {uploadedPhotos.map((photo, index) => (
                         <li key={index}>
@@ -1086,12 +1088,12 @@ export default function RegisterForm() {
                   </div>
                 )}
                 <div>
-                  <label className={`${theme === "light" ? "text-zinc-700" : "text-zinc-300"} block text-sm font-medium`}>Signature <span className="text-red-500">*</span></label>
+                  <label className={`${theme === "light" ? "text-zinc-700" : "text-zinc-300"} block text-sm font-medium`}>{t.signature || 'Signature'} <span className="text-red-500">*</span></label>
                   <input
                     {...register('signature', { required: 'Signature is required' })}
                     type="text"
                     className={`mt-1 block w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 ${theme === "light" ? "border-zinc-300 bg-white focus:ring-blue-500" : "border-zinc-700 bg-gray-800 focus:ring-yellow-400"} ${errors.signature ? 'border-red-500' : ''}`}
-                    placeholder="Type your full name as signature"
+                    placeholder={t.signaturePlaceholder || 'Type your full name as signature'}
                   />
                   {errors.signature && <p className="text-red-500 text-xs mt-1">{errors.signature.message}</p>}
                 </div>
@@ -1102,7 +1104,7 @@ export default function RegisterForm() {
                     className={`h-4 w-4 ${theme === "light" ? "text-blue-600 focus:ring-blue-500" : "text-yellow-400 focus:ring-yellow-400"} border-gray-300 rounded ${errors.agreeTerms ? 'border-red-500' : ''}`}
                   />
                   <label className={`${theme === "light" ? "text-gray-700" : "text-gray-300"} ml-2 text-sm`}>
-                    I agree to the terms and conditions <span className="text-red-500">*</span>
+                    {t.agreeTerms || 'I agree to the terms and conditions'} <span className="text-red-500">*</span>
                   </label>
                   {errors.agreeTerms && <p className="text-red-500 text-xs mt-1">{errors.agreeTerms.message}</p>}
                 </div>
@@ -1116,14 +1118,14 @@ export default function RegisterForm() {
                 disabled={currentStep === 0}
                 className={`px-4 py-2 rounded font-medium transition-colors duration-200 ${theme === "light" ? "bg-gray-300 text-gray-700 hover:bg-gray-400 focus:ring-2 focus:ring-gray-500" : "bg-gray-700 text-white hover:bg-gray-600 focus:ring-2 focus:ring-yellow-400"} disabled:opacity-50`}
               >
-                <ChevronLeft className="inline w-4 h-4 mr-1" /> Previous
+                <ChevronLeft className="inline w-4 h-4 mr-1" /> {t.previous || 'Previous'}
               </button>
               <button
                 type="button"
                 onClick={handleReset}
                 className={`px-4 py-2 rounded font-medium transition-colors duration-200 ${theme === "light" ? "bg-gray-300 text-gray-700 hover:bg-gray-400 focus:ring-2 focus:ring-gray-500" : "bg-gray-700 text-white hover:bg-gray-600 focus:ring-2 focus:ring-yellow-400"}`}
               >
-                Reset
+                {t.reset || 'Reset'}
               </button>
               {currentStep < steps.length - 1 ? (
                 <button
@@ -1131,7 +1133,7 @@ export default function RegisterForm() {
                   onClick={nextStep}
                   className={`px-4 py-2 rounded font-medium transition-colors duration-200 flex items-center gap-2 ${theme === "light" ? "bg-blue-600 text-white hover:bg-blue-700 focus:ring-2 focus:ring-blue-500" : "bg-gray-700 text-white hover:bg-gray-600 focus:ring-2 focus:ring-yellow-400"}`}
                 >
-                  Next <ChevronRight className="inline w-4 h-4 ml-1" />
+                  {t.next || 'Next'} <ChevronRight className="inline w-4 h-4 ml-1" />
                 </button>
               ) : (
                 <button
@@ -1142,11 +1144,11 @@ export default function RegisterForm() {
                   {uploadStatus?.type === "uploading" ? (
                     <>
                       <Loader2 className="animate-spin h-5 w-5" />
-                      Uploading...
+                      {t.uploading || 'Uploading...'}
                     </>
                   ) : (
                     <>
-                      <Upload size={20} /> Register
+                      <Upload size={20} /> {t.register || 'Register'}
                     </>
                   )}
                 </button>
@@ -1156,9 +1158,9 @@ export default function RegisterForm() {
         </div>
         <div className="mt-6 text-center">
           <p className={`text-sm ${theme === "light" ? "text-zinc-600" : "text-zinc-400"}`}>
-            Already have an account?{" "}
+            {t.alreadyAccount || 'Already have an account?'}{" "}
             <Link href="/login" className={`underline ${theme === "light" ? "text-blue-600" : "text-blue-400"} hover:text-blue-500`}>
-              Log In
+              {t.login || 'Log In'}
             </Link>
           </p>
         </div>

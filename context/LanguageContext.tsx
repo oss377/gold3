@@ -3,30 +3,29 @@
 import { createContext, useState, useEffect, ReactNode } from 'react';
 
 // Define the Translation interface to include required properties
-interface Translation {
-  basic: string;
-  premium: string;
-  vip: string;
-  error: string;
-  fetchUsersError: string;
-  fetchConversationUsersError: string;
-  fetchError: string;
-  emptyMessage: string;
-  selectUser: string;
-  messageSent: string;
-  sendError: string;
-  noContent: string;
-  noTimestamp: string;
-  noMessages: string;
-  backToChats: string;
-  messagePlaceholder: string;
-  searchPlaceholder: string;
-  conversationUsers: string;
-  noConversationUsers: string;
-  allUsers: string;
-  noUsers: string;
-  newConversation: string;
-  [key: string]: string | undefined; // Allow additional properties
+export interface Translation {
+  basic?: string;
+  premium?: string;
+  vip?: string;
+  error?: string;
+  fetchUsersError?: string;
+  fetchConversationUsersError?: string;
+  fetchError?: string;
+  emptyMessage?: string;
+  selectUser?: string;
+  messageSent?: string;
+  sendError?: string;
+  noContent?: string;
+  noTimestamp?: string;
+  noMessages?: string;
+  backToChats?: string;
+  messagePlaceholder?: string;
+  searchPlaceholder?: string;
+  conversationUsers?: string;
+  noConversationUsers?: string;
+  allUsers?: string;
+  noUsers?: string;
+  newConversation?: string;
   dashboard?: string;
   members?: string;
   classes?: string;
@@ -83,86 +82,48 @@ interface Translation {
   datePlaceholder?: string;
   errorMessage?: string;
   fixErrors?: string;
-  title: string;
-  titleRequired: string;
-  instructorRequired: string;
-  date: string;
-  description: string;
+  title?: string;
+  titleRequired?: string;
+  instructorRequired?: string;
+  date?: string;
+  description?: string;
   instructorPlaceholder?: string;
-  category: string;
-  categoryRequired: string;
-  selectCategory: string;
-  weeklySchedule: string;
-  timeInvalid: string;
-  timeRequired: string;
-  upload: string;
-  uploading: string;
-  cancel: string;
-  close: string;
-  success: string;
-  
-
+  category?: string;
+  categoryRequired?: string;
+  selectCategory?: string;
+  weeklySchedule?: string;
+  timeInvalid?: string;
+  timeRequired?: string;
+  upload?: string;
+  uploading?: string;
+  cancel?: string;
+  close?: string;
+  update?: string;
+  confirmDeleteVideo?: string;
+  deleteSuccessVideo?: string;
+  deleteErrorVideo?: string;
+  manageVideos?: string;
+  manageUsers?: string;
+  success?: string;
+  [key: string]: string | undefined; // Allow other keys
 }
 
 // Define the shape of the context using TypeScript
 type LanguageContextType = {
   language: 'en' | 'am';
   toggleLanguage: () => void;
-  t: Translation;
+  t: Partial<Translation>;
 };
 
 // Create the context with a default value
 export const LanguageContext = createContext<LanguageContextType>({
   language: 'en',
   toggleLanguage: () => {},
-  t: {
-    basic: "",
-    premium: "",
-    vip: "",
-    error: "",
-    fetchUsersError: "",
-    fetchConversationUsersError: "",
-    fetchError: "",
-    emptyMessage: "",
-    selectUser: "",
-    messageSent: "",
-    sendError: "",
-    noContent: "",
-    noTimestamp: "",
-    noMessages: "",
-    backToChats: "",
-    messagePlaceholder: "",
-    searchPlaceholder: "",
-    conversationUsers: "",
-    noConversationUsers: "",
-    allUsers: "",
-    noUsers: "",
-    newConversation: "",
-    enlargedProfile: "Enlarged Profile",
-    fixErrors: "Please fix the errors above.",
-    title: '',
-    titleRequired: '',
-    instructorRequired: '',
-    date: '',
-    description: '',
-    category: '',
-    categoryRequired: '',
-    selectCategory: '',
-    weeklySchedule: '',
-    timeInvalid: '',
-    timeRequired: '',
-    upload: '',
-    uploading: '',
-    cancel: '',
-    close: '',
-    success: ''
-  },
+  t: {},
 });
 
 // Combined translation dictionary with all required terms
 const translations: { [key: string]: { en: string; am: string } } = {
-  // Existing translations
-  
   welcome: { en: "Welcome to Your Fitness Journey", am: "ወደ እርስዎ የአካል ብቃት ጉዞ እንኳን ደህና መጡ" },
   getStarted: { en: "Get Started Today", am: "ዛሬ ይጀምሩ" },
   enlargedProfile: { en: "Enlarged Profile", am: "የታሸገ መገለጫ" },
@@ -183,11 +144,9 @@ const translations: { [key: string]: { en: string; am: string } } = {
   timePlaceholder: { en: "Select time range", am: "የጊዜ ክልል ይምረጡ" },
   addTime: { en: "Add Time Slot", am: "የጊዜ ክፍል አክል" },
   descriptionPlaceholder: { en: "Enter class description", am: "የክፍል መግለጫ ያስገቡ" },
-titlePlaceholder: { en: "Class Title", am: "የክፍል ርዕስ" },
-datePlaceholder: { en: "Select a date", am: "ቀን ይምረጡ" },
-errorMessage: { en: "Please fill out all required fields.", am: "እባክዎ ሁሉንም ያስፈልጉ መስኮቶች ይሙሉ." },
-
-
+  titlePlaceholder: { en: "Class Title", am: "የክፍል ርዕስ" },
+  datePlaceholder: { en: "Select a date", am: "ቀን ይምረጡ" },
+  errorMessage: { en: "Please fill out all required fields.", am: "እባክዎ ሁሉንም ያስፈልጉ መስኮቶች ይሙሉ." },
   darkMode: { en: "Dark Mode", am: "ጨለማ ሁነታ" },
   lightMode: { en: "Light Mode", am: "ብርሃን ሁነታ" },
   joinNow: { en: "Join Our Community", am: "አሁን ይቀላቀሉ" },
@@ -208,6 +167,7 @@ errorMessage: { en: "Please fill out all required fields.", am: "እባክዎ �
   registerAerobics: { en: "Register for Aerobics", am: "ለኤሮቢክስ መመዝገብ" },
   registerGym: { en: "Register for Gym", am: "ለጂም መመዝገብ" },
   registerKarate: { en: "Register for Karate", am: "ለካራቴ መመዝገብ" },
+  registerconsultancy: { en: "Register for Personal Training", am: "የግል ስልጠና መዝገብ" },
   alreadyAccount: { en: "Already have an account?", am: "ቀድሞውኑ መለያ አለዎት?" },
   adminDashboard: { en: "Admin Dashboard", am: "አስተዳዳሪ ዳሽቦርድ" },
   uploadVideo: { en: "Upload Video", am: "ቪዲዮ ጫን" },
@@ -217,15 +177,12 @@ errorMessage: { en: "Please fill out all required fields.", am: "እባክዎ �
   classesToday: { en: "Classes Today", am: "ዛሬ ክፍሎች" },
   newSignups: { en: "New Signups", am: "አዲስ ምዝገባዎች" },
   revenue: { en: "Revenue", am: "ገቢ" },
-  todaysWorkoutSchedule: { en: "Today's Workout Schedule", am: "የዛሬ የአካል ብቃት መርሃ ግብር" },
   yogaClass: { en: "Yoga Class", am: "ዮጋ ክፍል" },
   strengthTraining: { en: "Strength Training", am: "ጥንካሬ ስልጠና" },
   spinClass: { en: "Spin Class", am: "ስፒን ክፍል" },
   members: { en: "Members", am: "አባላት" },
   classes: { en: "Classes", am: "ክፍሎች" },
   settings: { en: "Settings", am: "ቅንብሮች" },
-  logout: { en: "Logout", am: "ውጣ" },
-  searchPlaceholder: { en: "Search classes, trainers...", am: "ክፍሎችን፣ አሰልጣኞችን ፈልግ..." },
   userDashboard: { en: "User Dashboard", am: "ተጠቃሚ ዳሽቦርድ" },
   schedules: { en: "Schedules", am: "መርሃ ግብሮች" },
   workoutsCompleted: { en: "Workouts Completed", am: "የተጠናቀቁ የአካል ብቃት እንቅስቃሴዎች" },
@@ -233,7 +190,6 @@ errorMessage: { en: "Please fill out all required fields.", am: "እባክዎ �
   nextSession: { en: "Next Session", am: "ቀጣይ ክፍለ ጊዜ" },
   progress: { en: "Progress", am: "እድገት" },
   yourWorkoutSchedule: { en: "Your Workout Schedule", am: "የእርስዎ የአካል ብቃት መርሃ ግብር" },
-  recentActivities: { en: "Recent Activities", am: "የቅርብ ጊዜ እንቅስቃሴዎች" },
   activity: { en: "Activity", am: "እንቅስቃሴ" },
   date: { en: "Date", am: "ቀን" },
   trainer: { en: "Trainer", am: "አሰልጣኝ" },
@@ -248,7 +204,7 @@ errorMessage: { en: "Please fill out all required fields.", am: "እባክዎ �
   videosMembers: { en: "Videos Members", am: "የቪዲዮዎች አባላት" },
   aerobicsMembers: { en: "Aerobics Members", am: "የኤሮቢክስ አባላት" },
   refresh: { en: "Refresh", am: "አድስ" },
-  loading: { en: "Loading", am: "በመጫን ላይ" },
+  loading: { en: "Loading...", am: "በመጫን ላይ..." },
   noMembersFound: { en: "No members found", am: "ምንም አባላት አልተገኙም" },
   name: { en: "Name", am: "ስም" },
   email: { en: "Email", am: "ኢሜይል" },
@@ -258,7 +214,6 @@ errorMessage: { en: "Please fill out all required fields.", am: "እባክዎ �
   detail: { en: "Detail", am: "ዝርዝር" },
   delete: { en: "Delete", am: "ሰርዝ" },
   memberDetails: { en: "Member Details", am: "የአባል ዝርዝሮች" },
-  close: { en: "Close", am: "ዝጋ" },
   invalidEmailFormat: { en: "Invalid email format", am: "ልክ ያልሆነ ኢሜይል ቅርጸት" },
   passwordRequired: { en: "Password is required", am: "የይለፍ ቃል ያስፈልጋል" },
   invalidEmailOrPassword: { en: "Invalid email or password", am: "ልክ ያልሆነ ኢሜይል ወይም የይለፍ ቃል" },
@@ -267,19 +222,15 @@ errorMessage: { en: "Please fill out all required fields.", am: "እባክዎ �
   forgotPassword: { en: "Forgot Password?", am: "የይለፍ ቃል ረሱ?" },
   signUp: { en: "Sign Up", am: "መመዝገብ" },
   createSchedule: { en: "Create Schedule", am: "መርሃ ግብር ፍጠር" },
-  classTitle: { en: "Class Title", am: "የክፍል ርዕስ" },
   instructor: { en: "Instructor", am: "አሰልጣኝ" },
   category: { en: "Category", am: "ምድብ" },
   weeklySchedule: { en: "Weekly Schedule", am: "ሳምንታዊ መርሃ ግብር" },
-  specificDate: { en: "Specific Date", am: "የተወሰነ ቀን" },
   description: { en: "Description", am: "መግለጫ" },
-  classTitleRequired: { en: "Class title is required", am: "የክፍል ርዕስ ያስፈልጋል" },
   instructorRequired: { en: "Instructor is required", am: "አሰልጣኝ ያስፈልጋል" },
   categoryRequired: { en: "Category is required", am: "ምድብ ያስፈልጋል" },
   pleaseEnterTimeRange: { en: "Please enter a time range", am: "እባክዎ የጊዜ ክልል ያስገቡ" },
   invalidTimeFormat: { en: "Invalid time format", am: "ልክ ያልሆነ የጊዜ ቅርጸት" },
   cancel: { en: "Cancel", am: "ሰርዝ" },
-  scheduleUploadedSuccessfully: { en: "Schedule uploaded successfully", am: "መርሃ ግብር በተሳካ ሁኔታ ተጭኗል" },
   uploadWorkoutVideos: { en: "Upload Workout Videos", am: "የአካል ብቃት ቪዲዮዎችን ጫን" },
   videoTitle: { en: "Video Title", am: "የቪዲዮ ርዕስ" },
   titleRequired: { en: "Title is required", am: "ርዕስ ያስፈልጋል" },
@@ -294,11 +245,8 @@ errorMessage: { en: "Please fill out all required fields.", am: "እባክዎ �
   allVideosUploaded: { en: "All videos uploaded successfully", am: "ሁሉም ቪዲዮዎች በተሳካ ሁኔታ ተጭነዋል" },
   upload: { en: "Upload", am: "ጫን" },
   categoryPlaceholder: { en: "Select a category", am: "ምድብ ይምረጡ" },
-  timePlaceholder24: { en: "Select time (24-hour format)", am: "ጊዜ ይምረጡ (24-ሰዓት ቅርጸት)" },
   addTimeSlot: { en: "Add Time Slot", am: "የጊዜ ክፍል አክል" },
-  // New translations for the multi-step form
-  
-  title: { en: "Personal Training Consultation Form", am: "የግል ስልጠና ምክክር ቅጽ" },
+  title: { en: "Title", am: "ርዕስ" },
   heading: { en: "Personal Training Consultation", am: "የግል ስልጠና ምክክር" },
   registrationComplete: { en: "Registration Complete!", am: "ምዝገባ ተጠናቀቀ!" },
   registrationMessage: { en: "Thank you for registering for personal training. Your information has been successfully saved.", am: "ለግል ስልጠና ምዝገባ ስለተመዘገቡ እናመሰግናለን። መረጃዎ በተሳካ ሁኔታ ተቀምጧል።" },
@@ -425,13 +373,11 @@ errorMessage: { en: "Please fill out all required fields.", am: "እባክዎ �
   phonePlaceholder: { en: "Enter phone number", am: "ስልክ ቁጥር ያስገቡ" },
   registerButton: { en: "Register Member", am: "አባል መዝግብ" },
   registrationSuccess: { en: "Member registered successfully", am: "አባል በተሳካ ሁኔታ ተመዝግቧል" },
-  registrationError: { en: "Failed to register member", am: "አባል መመዝገብ አልተሳካም" },
   userDataNotFound: { en: "User data not found", am: "የተጠቃሚ መረጃ አልተገኘም" },
   logoutSuccess: { en: "Logged out successfully", am: "በተሳካ ሁኔታ ወጥቷል" },
   logoutError: { en: "Logout failed", am: "መውጣት አልተሳካም" },
   success: { en: "Success", am: "ስኬት" },
   time: { en: "Time", am: "ጊዜ" },
-  timeRequired: { en: "Time is required", am: "ጊዜ ያስፈልጋል" },
   dateRequired: { en: "Date is required", am: "ቀን ያስፈልጋል" },
   submitSuccess: { en: "Schedule submitted successfully", am: "መርሃ ግብር በተሳካ ሁኔታ ተልኳል" },
   selectCategory: { en: "Select Category", am: "ምድብ ይምረጡ" },
@@ -443,9 +389,6 @@ errorMessage: { en: "Please fill out all required fields.", am: "እባክዎ �
   deleteError: { en: "Failed to delete schedule", am: "መርሃ ግብር ማስወገድ አልተሳካም" },
   uploading: { en: "Uploading...", am: "በማጫን ላይ..." },
   timeInvalid: { en: "Invalid time format", am: "ልክ ያልሆነ የጊዜ ቅርጸት" },
- 
-
-
   permissionDenied: { en: "Permission denied: Please log in", am: "ፍቃድ ተከልክሏል፡ እባክዎ ይግቡ" },
   fetchSchedulesError: { en: "Failed to fetch schedules", am: "መርሃ ግብሮችን መግኘት አልተሳካም" },
   fetchStatsError: { en: "Failed to fetch stats", am: "ስታቲስቲክስ መግኘት አልተሳካም" },
@@ -453,17 +396,13 @@ errorMessage: { en: "Please fill out all required fields.", am: "እባክዎ �
   noSchedules: { en: "No schedules available", am: "ምንም መርሃ ግብሮች የሉም" },
   statsOverview: { en: "Stats Overview", am: "የስታቲስቲክስ አጠቃላይ እይታ" },
   chooseMessageType: { en: "Choose Message Type", am: "የመልእክት አይነት ይምረጡ" },
-  publicMessage: { en: "Public Message", am: "የህዝብ መልእክት" },
-  personalMessage: { en: "Personal Message", am: "የግል መልእክት" },
   messages: { en: "Messages", am: "መልእክቶች" },
   navigationError: { en: "Failed to navigate", am: "መጓዝ አልተሳካም" },
   welcomeMessage: { en: "Track progress, manage members, and grow your fitness community", am: "እድገትን ይከታተሉ፣ አባላትን ያስተዳድሩ፣ እና የአካል ብቃት ማህበረሰብዎን ያሳድጉ" },
   quickActions: { en: "Quick Actions", am: "ፈጣን ተግባራት" },
-  profile: { en: "Profile", am: "መገለጫ" },
   changeMembers: { en: "+12% this month", am: "+12% በዚህ ወር" },
   changeClasses: { en: "+3 from yesterday", am: "+3 ከትናንት" },
   changeSignups: { en: "+15% this week", am: "+15% በዚህ ሳምንት" },
-  changeRevenue: { en: "+7% this month", am: "+7% በዚህ ወር" },
   basic: { en: "Basic", am: "መሠረታዊ" },
   standard: { en: "Standard", am: "መደበኛ" },
   premium: { en: "Premium", am: "ፕሪሚየም" },
@@ -471,7 +410,6 @@ errorMessage: { en: "Please fill out all required fields.", am: "እባክዎ �
   error: { en: "an error", am: "ስህተት" },
   info: { en: "Info", am: "መረጃ" },
   warning: { en: "Warning", am: "ማስጠንቀቂያ" },
-  // New translations for adminMessage/page.tsx
   fetchUsersError: { en: "Failed to fetch users", am: "ተጠቃሚዎችን መግኘት አልተሳካም" },
   fetchConversationUsersError: { en: "Failed to fetch conversations", am: "ውይይቶችን መግኘት አልተሳካም" },
   fetchError: { en: "Failed to fetch messages", am: "መልእክቶችን መግኘት አልተሳካም" },
@@ -483,16 +421,28 @@ errorMessage: { en: "Please fill out all required fields.", am: "እባክዎ �
   noTimestamp: { en: "No timestamp", am: "ምንም የጊዜ ማህተም የለም" },
   noMessages: { en: "No messages yet. Start the conversation!", am: "ገና ምንም መልእክቶች የሉም። ውይይቱን ይጀምሩ!" },
   backToChats: { en: "Back to Chats", am: "ወደ ውይይቶች ተመለስ" },
-  messagePlaceholder: { en: "Type a message...", am: "መልእክት ይተይቡ..." },
+  messagePlaceholder: { en: "Type a message...", am: "መልእክት ይተይቡ..." },  
   conversationUsers: { en: "Conversations", am: "ውይይቶች" },
   noConversationUsers: { en: "No active conversations.", am: "ምንም ንቁ ውይይቶች የሉም።" },
   allUsers: { en: "All Users", am: "ሁሉም ተጠቃሚዎች" },
   noUsers: { en: "No users found.", am: "ምንም ተጠቃሚዎች አልተገኙም።" },
   newConversation: { en: "Start new conversation", am: "አዲስ ውይይት ጀምር" },
+  logout: { en: "Logout", am: "ውጣ" },
+  profile: { en: "Profile", am: "መገለጫ" },
+  changeRevenue: { en: "+7% this month", am: "+7% በዚህ ወር" },
+  publicMessage: { en: "Public Message", am: "የህዝብ መልእክት" },
+  personalMessage: { en: "Personal Message", am: "የግል መልእክት" },
+  close: { en: "Close", am: "ዝጋ" },
+  update: { en: "Update", am: "አዘምን" },
+  confirmDeleteVideo: { en: "Are you sure you want to delete this video?", am: "ይህን ቪድዮ መሰረዝ እንደሚፈልጉ እርግጠኛ ነዎት?" },
+  deleteSuccessVideo: { en: "Video deleted successfully.", am: "ቪዲዮ በተሳካ ሁኔታ ተሰርዟል።" },
+  deleteErrorVideo: { en: "Failed to delete video.", am: "ቪዲዮውን መሰረዝ አልተሳካም።" },
+  manageVideos: { en: "Manage Videos", am: "ቪዲዮዎችን ያስተዳድሩ" },
+  manageUsers: { en: "Manage Users", am: "ተጠቃሚዎችን ያስተዳድሩ" },
 };
 
 // Default translations to ensure all required keys are present
-const defaultTranslations: Translation = {
+const defaultTranslations: Partial<Translation> = {
   basic: "Basic",
   premium: "Premium",
   vip: "VIP",
@@ -508,7 +458,7 @@ const defaultTranslations: Translation = {
   noTimestamp: "No timestamp",
   noMessages: "No messages yet. Start the conversation!",
   backToChats: "Back to Chats",
-  messagePlaceholder: "Type a message...",
+  messagePlaceholder: "Type a message...",  
   searchPlaceholder: "Search conversations...",
   conversationUsers: "Conversations",
   noConversationUsers: "No active conversations.",
@@ -535,7 +485,7 @@ const defaultTranslations: Translation = {
   changeSignups: "+15% this week",
   changeRevenue: "+7% this month",
   permissionDenied: "Please log in to access this page",
-  fetchSchedulesError: "Failed to fetch schedules",
+  fetchSchedulesError: "Failed to fetch schedules",  
   fetchStatsError: "Failed to fetch stats",
   todaysSchedule: "Today's Schedule",
   loading: "Loading",
@@ -564,22 +514,28 @@ const defaultTranslations: Translation = {
   getStarted: "Get Started",
   quickActions: "Quick Actions",
   fixErrors: "Please fix the errors in the form",
-  title: '',
-  titleRequired: '',
-  instructorRequired: '',
-  date: '',
-  description: '',
-  category: '',
-  categoryRequired: '',
-  selectCategory: '',
-  weeklySchedule: '',
-  timeInvalid: '',
-  timeRequired: '',
-  upload: '',
-  uploading: '',
-  cancel: '',
-  close: '',
-  success: ''
+  title: 'Title',
+  titleRequired: 'Title is required',
+  instructorRequired: 'Instructor is required',
+  date: 'Date',
+  description: 'Description',
+  category: 'Category',
+  categoryRequired: 'Category is required',
+  selectCategory: 'Select Category',
+  weeklySchedule: 'Weekly Schedule',
+  timeInvalid: 'Invalid time format',
+  timeRequired: 'Time is required',
+  upload: 'Upload',
+  uploading: 'Uploading...',
+  cancel: 'Cancel',
+  close: 'Close',
+  success: 'Success',
+  update: 'Update',
+  confirmDeleteVideo: 'Are you sure you want to delete this video?',
+  deleteSuccessVideo: 'Video deleted successfully.',
+  deleteErrorVideo: 'Failed to delete video.',
+  manageVideos: 'Manage Videos',
+  manageUsers: 'Manage Users',
 };
 
 export function LanguageProvider({ children }: { children: ReactNode }) {
@@ -601,20 +557,15 @@ export function LanguageProvider({ children }: { children: ReactNode }) {
   };
 
   // Transform translations to a flat object based on the selected language
-  const t: Translation = {
+  const t: Partial<Translation> = {
     ...defaultTranslations,
     ...Object.keys(translations).reduce((acc, key) => {
-      acc[key] = translations[key][language];
+      acc[key as keyof Translation] = translations[key][language];
       return acc;
-    }, {} as Translation),
+    }, {} as Partial<Translation>),
   };
 
-  return (
-    <LanguageContext.Provider value={{ language, toggleLanguage, t }}>
-      {children}
-    </LanguageContext.Provider>
-  );
+  return <LanguageContext.Provider value={{ language, toggleLanguage, t }}>{children}</LanguageContext.Provider>;
 }
 
 export default LanguageContext;
-export type { Translation };

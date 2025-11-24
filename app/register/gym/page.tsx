@@ -11,6 +11,7 @@ import { motion } from "framer-motion";
 import Link from "next/link";
 import { ThemeContext } from "../../../context/ThemeContext";
 import { toast, ToastContainer } from "react-toastify";
+import LanguageContext from "../../../context/LanguageContext";
 import 'react-toastify/dist/ReactToastify.css';
 
 // Cloudinary configuration
@@ -53,6 +54,7 @@ interface FormData {
 
 export default function GymRegisterForm() {
   const { theme } = useContext(ThemeContext) || { theme: 'light' };
+  const { t } = useContext(LanguageContext);
   const router = useRouter();
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [currentUser, setCurrentUser] = useState<User | null>(null);
@@ -97,26 +99,26 @@ export default function GymRegisterForm() {
       password: "",
       role: "user",
       category: "gym",
-      payment: "not payed",
+      payment: "Not Payed",
       agreeTerms: false,
     },
   });
 
   const steps = [
     {
-      name: 'Personal Info',
+      name: t.personalInfo || 'Personal Info',
       fields: ['firstName', 'lastName', 'email', 'password', 'phoneNumber', 'address', 'city', 'country', 'jobType', 'gender', 'emergencyName', 'emergencyPhone', 'relationship'],
     },
     {
-      name: 'Health Info',
+      name: t.healthInfo || 'Health Info',
       fields: ['age', 'height', 'weight', 'bmi', 'bloodType', 'goalWeight', 'medicalConditions', 'hasMedicalConditions'],
     },
     {
-      name: 'Membership',
+      name: t.membershipDetails || 'Membership',
       fields: ['membershipType', 'startDate'],
     },
     {
-      name: 'Review',
+      name: t.review || 'Review',
       fields: ['photo', 'signature', 'agreeTerms'],
     },
   ];
@@ -140,8 +142,8 @@ export default function GymRegisterForm() {
   useEffect(() => {
     if (!auth) {
       console.error('Firebase auth not initialized');
-      setFormErrors({ global: 'Authentication service is not initialized.' });
-      toast.error('Authentication service is not initialized.');
+      setFormErrors({ global: t.authError || 'Authentication service is not initialized.' });
+      toast.error(t.authError || 'Authentication service is not initialized.');
       setIsLoading(false);
       return;
     }
@@ -170,8 +172,8 @@ export default function GymRegisterForm() {
     });
     if (!CLOUDINARY_CLOUD_NAME || !CLOUDINARY_UPLOAD_PRESET) {
       console.error('Cloudinary configuration missing');
-      setFormErrors({ global: 'Cloudinary configuration is missing. Please contact support.' });
-      toast.error('Cloudinary configuration is missing.');
+      setFormErrors({ global: t.configError || 'Cloudinary configuration is missing. Please contact support.' });
+      toast.error(t.configError || 'Cloudinary configuration is missing.');
     }
   }, []);
 
@@ -188,7 +190,7 @@ export default function GymRegisterForm() {
         }
       } catch (error) {
         console.error('Error accessing camera:', error);
-        toast.error('Unable to access camera. Please select an image instead.');
+        toast.error(t.cameraError || 'Unable to access camera. Please select an image instead.');
         setShowCamera(false);
       }
     };
@@ -212,7 +214,7 @@ export default function GymRegisterForm() {
       setPhotoPreview(null);
       setValue('photo', null, { shouldValidate: true });
       trigger('photo');
-      toast.error('No photo selected.');
+      toast.error(t.photoRequired || 'No photo selected.');
       return;
     }
 
@@ -220,7 +222,7 @@ export default function GymRegisterForm() {
     const isUnderSizeLimit = file.size <= 5 * 1024 * 1024; // 5MB limit
     if (!isImage) {
       console.warn(`Invalid file type for ${file.name}`);
-      toast.error(`${file.name} is not a valid image file.`);
+      toast.error(t.fileTypeError || `${file.name} is not a valid image file.`);
       setPhotoPreview(null);
       setValue('photo', null, { shouldValidate: true });
       trigger('photo');
@@ -228,7 +230,7 @@ export default function GymRegisterForm() {
     }
     if (!isUnderSizeLimit) {
       console.warn(`File size too large for ${file.name}`);
-      toast.error(`${file.name} exceeds the 5MB size limit.`);
+      toast.error(t.fileSizeError || `${file.name} exceeds the 5MB size limit.`);
       setPhotoPreview(null);
       setValue('photo', null, { shouldValidate: true });
       trigger('photo');
@@ -284,9 +286,9 @@ export default function GymRegisterForm() {
           reader.readAsDataURL(file);
 
           setShowCamera(false);
-          toast.success('Photo captured successfully.');
+          toast.success(t.photoCaptureSuccess || 'Photo captured successfully.');
         } else {
-          toast.error('Failed to capture photo.');
+          toast.error(t.photoCaptureError || 'Failed to capture photo.');
         }
       }, 'image/jpeg', 0.95);
     }
@@ -295,16 +297,16 @@ export default function GymRegisterForm() {
   const uploadToCloudinary = async (file: File | null) => {
     if (!file) {
       console.error('No file provided for upload.');
-      toast.error('No photo selected for upload.');
+      toast.error(t.photoRequired || 'No photo selected for upload.');
       return null;
     }
     const maxSize = 5 * 1024 * 1024; // 5MB
     if (file.size > maxSize) {
-      toast.error('File size exceeds 5MB limit.');
+      toast.error(t.fileSizeError || 'File size exceeds 5MB limit.');
       return null;
     }
     if (!file.type.startsWith('image/')) {
-      toast.error('Please upload a valid image file.');
+      toast.error(t.fileTypeError || 'Please upload a valid image file.');
       return null;
     }
     setIsUploading(true);
@@ -326,18 +328,18 @@ export default function GymRegisterForm() {
       const data = await response.json();
       setIsUploading(false);
       if (data.secure_url) {
-        toast.success('Photo uploaded successfully.');
+        toast.success(t.uploadSuccess || 'Photo uploaded successfully.');
         return data.secure_url;
       } else {
-        toast.error(`Failed to upload image: ${data.error?.message || 'Unknown error'}`);
+        toast.error(t.uploadError || `Failed to upload image: ${data.error?.message || 'Unknown error'}`);
         return null;
       }
     } catch (error: any) {
       setIsUploading(false);
       if (error.name === 'AbortError') {
-        toast.error('Upload timeout.');
+        toast.error(t.uploadTimeout || 'Upload timeout.');
       } else {
-        toast.error(`Failed to upload image: ${error.message}`);
+        toast.error(t.uploadError || `Failed to upload image: ${error.message}`);
       }
       return null;
     }
@@ -355,9 +357,9 @@ export default function GymRegisterForm() {
       const photoFile = formData.photo?.[0];
       if (photoFile) {
         photoURL = await uploadToCloudinary(photoFile);
-        if (!photoURL) throw new Error('Image upload failed.');
+        if (!photoURL) throw new Error(t.uploadError || 'Image upload failed.');
       } else {
-        throw new Error('No photo provided.');
+        throw new Error(t.photoRequired || 'No photo provided.');
       }
 
       if (!db) {
@@ -401,7 +403,7 @@ export default function GymRegisterForm() {
       console.log(`Firestore document created with ID: ${user.uid}`);
       sessionStorage.setItem('pendingUserId', user.uid);
 
-      toast.success('Registration successful! Redirecting to payment...');
+      toast.success(t.registrationSuccessRedirect || 'Registration successful! Redirecting to payment...');
       setIsSubmitted(true);
       setTimeout(() => {
         setPhotoPreview(null);
@@ -409,8 +411,8 @@ export default function GymRegisterForm() {
       }, 3000);
     } catch (error: any) {
       console.error('Registration error:', error);
-      setFormErrors({ global: `Registration failed: ${error.message || 'Unknown error'}` });
-      toast.error(`Registration failed: ${error.message || 'Unknown error'}`);
+      setFormErrors({ global: t.registrationError || `Registration failed: ${error.message || 'Unknown error'}` });
+      toast.error(t.registrationError || `Registration failed: ${error.message || 'Unknown error'}`);
       throw error;
     }
   }, [router]);
@@ -420,20 +422,20 @@ export default function GymRegisterForm() {
     setFormErrors({});
 
     if (!data.agreeTerms) {
-      setFormErrors({ global: 'You must agree to the terms and conditions.' });
-      toast.error('You must agree to the terms and conditions.');
+      setFormErrors({ global: t.agreeTermsError || 'You must agree to the terms and conditions.' });
+      toast.error(t.agreeTermsError || 'You must agree to the terms and conditions.');
       return;
     }
 
     if (!data.photo || data.photo.length === 0) {
-      setFormErrors({ global: 'Please select or capture a photo.' });
-      toast.error('Please select or capture a photo.');
+      setFormErrors({ global: t.photoRequired || 'Please select or capture a photo.' });
+      toast.error(t.photoRequired || 'Please select or capture a photo.');
       return;
     }
 
     if (!data.email || !data.password) {
-      setFormErrors({ global: 'Email and password are required.' });
-      toast.error('Email and password are required.');
+      setFormErrors({ global: t.emailPasswordRequired || 'Email and password are required.' });
+      toast.error(t.emailPasswordRequired || 'Email and password are required.');
       return;
     }
 
@@ -451,15 +453,15 @@ export default function GymRegisterForm() {
       await completeRegistration(user, data);
     } catch (error: any) {
       console.error('Registration error:', error);
-      let message = 'Registration failed.';
+      let message = t.registrationError || 'Registration failed.';
       if (error.code === 'auth/email-already-in-use') {
-        message = 'This email is already registered. Please use a different email or log in.';
+        message = t.emailInUse || 'This email is already registered. Please use a different email or log in.';
       } else if (error.code === 'auth/weak-password') {
-        message = 'Password is too weak. Please use a stronger password (minimum 6 characters).';
+        message = t.weakPassword || 'Password is too weak. Please use a stronger password (minimum 6 characters).';
       } else if (error.code === 'auth/invalid-email') {
-        message = 'Invalid email format.';
+        message = t.emailInvalid || 'Invalid email format.';
       } else if (error.code === 'auth/operation-not-allowed') {
-        message = 'Email/password accounts are not enabled. Please contact support.';
+        message = t.authNotEnabled || 'Email/password accounts are not enabled. Please contact support.';
       }
       setFormErrors({ global: message });
       toast.error(message);
@@ -473,7 +475,7 @@ export default function GymRegisterForm() {
       console.log('Moving to next step:', currentStep + 1);
       setCurrentStep(prev => prev + 1);
     } else {
-      toast.error('Please fill out all required fields correctly.');
+      toast.error(t.fillFieldsError || 'Please fill out all required fields correctly.');
     }
   };
 
@@ -485,7 +487,7 @@ export default function GymRegisterForm() {
   if (isLoading) {
     return (
       <div className={`${theme === 'light' ? 'bg-zinc-100' : 'bg-zinc-900'} min-h-screen flex items-center justify-center`}>
-        <Loader2 className="animate-spin h-8 w-8" /> Loading...
+        <Loader2 className="animate-spin h-8 w-8" /> {t.loading || 'Loading...'}
       </div>
     );
   }
@@ -495,8 +497,8 @@ export default function GymRegisterForm() {
       <div className={`${theme === 'light' ? 'bg-zinc-100' : 'bg-zinc-900'} min-h-screen flex items-center justify-center`}>
         <div className="text-center">
           <CheckCircle className="h-12 w-12 mx-auto mb-4 text-green-500" />
-          <p className={`${theme === 'light' ? 'text-zinc-800' : 'text-zinc-100'} text-lg`}>Registration successful!</p>
-          <p className={`${theme === 'light' ? 'text-zinc-600' : 'text-zinc-400'}`}>Redirecting to payment...</p>
+          <p className={`${theme === 'light' ? 'text-zinc-800' : 'text-zinc-100'} text-lg`}>{t.registrationSuccess || 'Registration successful!'}</p>
+          <p className={`${theme === 'light' ? 'text-zinc-600' : 'text-zinc-400'}`}>{t.redirectingToPayment || 'Redirecting to payment...'}</p>
         </div>
       </div>
     );
@@ -506,7 +508,7 @@ export default function GymRegisterForm() {
     <main className={`min-h-screen flex items-center justify-center p-6 ${theme === "light" ? "bg-zinc-100" : "bg-zinc-900"}`}>
       <motion.div className={`w-full max-w-4xl rounded-2xl shadow-lg overflow-hidden ${theme === "light" ? "bg-gradient-to-br from-blue-50 to-purple-50" : "bg-gradient-to-br from-gray-800 to-gray-900"}`}>
         <div className="p-8">
-          <h2 className={`text-3xl font-bold text-center ${theme === "light" ? "text-zinc-800" : "text-zinc-100"} mb-8`}>Create Your Gym Account</h2>
+          <h2 className={`text-3xl font-bold text-center ${theme === "light" ? "text-zinc-800" : "text-zinc-100"} mb-8`}>{t.gymRegistrationTitle || 'Create Your Gym Account'}</h2>
 
           <div className="flex justify-between mb-8">
             {steps.map((step, index) => (
@@ -525,9 +527,9 @@ export default function GymRegisterForm() {
           <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
             {currentStep === 0 && (
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                {['firstName', 'lastName', 'email', 'password', 'phoneNumber', 'address', 'city', 'country', 'jobType', 'gender', 'emergencyName', 'emergencyPhone', 'relationship'].map(field => (
+                {steps[0].fields.map(field => (
                   <div key={field}>
-                    <label className={`block text-sm font-medium ${theme === "light" ? "text-zinc-700" : "text-zinc-300"}`}>{field.replace(/([A-Z])/g, ' $1').replace(/^./, str => str.toUpperCase())}</label>
+                    <label className={`block text-sm font-medium ${theme === "light" ? "text-zinc-700" : "text-zinc-300"}`}>{t[field] || field.replace(/([A-Z])/g, ' $1').replace(/^./, str => str.toUpperCase())}</label>
                     <div className="relative">
                       {field === 'password' ? (
                         <>
@@ -550,17 +552,17 @@ export default function GymRegisterForm() {
                           {...register('gender', { required: 'Gender is required.' })}
                           className={`mt-1 block w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 ${theme === "light" ? "border-zinc-300 bg-white focus:ring-blue-500" : "border-zinc-700 bg-gray-800 focus:ring-yellow-400"}`}
                         >
-                          <option value="">Select Gender</option>
-                          <option value="Male">Male</option>
-                          <option value="Female">Female</option>
-                          <option value="Other">Other</option>
+                          <option value="">{t.selectGender || 'Select Gender'}</option>
+                          <option value="Male">{t.male || 'Male'}</option>
+                          <option value="Female">{t.female || 'Female'}</option>
+                          <option value="Other">{t.other || 'Other'}</option>
                         </select>
                       ) : (
                         <input
                           {...register(field as keyof FormData, { required: true })}
                           type={field === 'email' ? 'email' : field === 'phoneNumber' || field === 'emergencyPhone' ? 'tel' : 'text'}
                           className={`mt-1 block w-full px-3 py-2 ${field === 'firstName' || field === 'lastName' || field === 'email' ? 'pl-10' : ''} border rounded-lg focus:outline-none focus:ring-2 ${theme === "light" ? "border-zinc-300 bg-white focus:ring-blue-500" : "border-zinc-700 bg-gray-800 focus:ring-yellow-400"}`}
-                          placeholder={field.replace(/([A-Z])/g, ' $1').replace(/^./, str => str.toUpperCase())}
+                          placeholder={t[`${field}Placeholder`] || `Enter ${field.replace(/([A-Z])/g, ' $1').toLowerCase()}`}
                         />
                       )}
                       {(field === 'firstName' || field === 'lastName') && <UserIcon className={`absolute left-3 top-1/2 transform -translate-y-1/2 ${theme === "light" ? "text-zinc-500" : "text-zinc-400"} w-5 h-5`} />}
@@ -575,28 +577,28 @@ export default function GymRegisterForm() {
             {currentStep === 1 && (
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <div>
-                  <label className={`block text-sm font-medium ${theme === "light" ? "text-zinc-700" : "text-zinc-300"}`}>Age</label>
+                  <label className={`block text-sm font-medium ${theme === "light" ? "text-zinc-700" : "text-zinc-300"}`}>{t.age || 'Age'}</label>
                   <input {...register('age', { required: 'Age is required.' })} type="number" className={`mt-1 block w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 ${theme === "light" ? "border-zinc-300 bg-white focus:ring-blue-500" : "border-zinc-700 bg-gray-800 focus:ring-yellow-400"}`} />
                   {errors.age && <p className={`text-xs mt-1 ${theme === "light" ? "text-red-500" : "text-red-400"}`}>{errors.age.message}</p>}
                 </div>
                 <div>
-                  <label className={`block text-sm font-medium ${theme === "light" ? "text-zinc-700" : "text-zinc-300"}`}>Height (cm)</label>
+                  <label className={`block text-sm font-medium ${theme === "light" ? "text-zinc-700" : "text-zinc-300"}`}>{t.height || 'Height (cm)'}</label>
                   <input {...register('height', { required: 'Height is required.' })} type="number" className={`mt-1 block w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 ${theme === "light" ? "border-zinc-300 bg-white focus:ring-blue-500" : "border-zinc-700 bg-gray-800 focus:ring-yellow-400"}`} />
                   {errors.height && <p className={`text-xs mt-1 ${theme === "light" ? "text-red-500" : "text-red-400"}`}>{errors.height.message}</p>}
                 </div>
                 <div>
-                  <label className={`block text-sm font-medium ${theme === "light" ? "text-zinc-700" : "text-zinc-300"}`}>Weight (kg)</label>
+                  <label className={`block text-sm font-medium ${theme === "light" ? "text-zinc-700" : "text-zinc-300"}`}>{t.weight || 'Weight (kg)'}</label>
                   <input {...register('weight', { required: 'Weight is required.' })} type="number" className={`mt-1 block w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 ${theme === "light" ? "border-zinc-300 bg-white focus:ring-blue-500" : "border-zinc-700 bg-gray-800 focus:ring-yellow-400"}`} />
                   {errors.weight && <p className={`text-xs mt-1 ${theme === "light" ? "text-red-500" : "text-red-400"}`}>{errors.weight.message}</p>}
                 </div>
                 <div>
-                  <label className={`block text-sm font-medium ${theme === "light" ? "text-zinc-700" : "text-zinc-300"}`}>BMI</label>
+                  <label className={`block text-sm font-medium ${theme === "light" ? "text-zinc-700" : "text-zinc-300"}`}>{t.bmi || 'BMI'}</label>
                   <input {...register('bmi')} readOnly className={`mt-1 block w-full px-3 py-2 border rounded-lg ${theme === "light" ? "border-zinc-300 bg-gray-100" : "border-zinc-700 bg-gray-700"}`} />
                 </div>
                 <div>
-                  <label className={`block text-sm font-medium ${theme === "light" ? "text-zinc-700" : "text-zinc-300"}`}>Blood Type</label>
+                  <label className={`block text-sm font-medium ${theme === "light" ? "text-zinc-700" : "text-zinc-300"}`}>{t.bloodType || 'Blood Type'}</label>
                   <select {...register('bloodType', { required: 'Blood Type is required.' })} className={`mt-1 block w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 ${theme === "light" ? "border-zinc-300 bg-white focus:ring-blue-500" : "border-zinc-700 bg-gray-800 focus:ring-yellow-400"}`}>
-                    <option value="">Select Blood Type</option>
+                    <option value="">{t.bloodTypePlaceholder || 'Select Blood Type'}</option>
                     <option value="A+">A+</option>
                     <option value="A-">A-</option>
                     <option value="B+">B+</option>
@@ -609,17 +611,17 @@ export default function GymRegisterForm() {
                   {errors.bloodType && <p className={`text-xs mt-1 ${theme === "light" ? "text-red-500" : "text-red-400"}`}>{errors.bloodType.message}</p>}
                 </div>
                 <div>
-                  <label className={`block text-sm font-medium ${theme === "light" ? "text-zinc-700" : "text-zinc-300"}`}>Goal Weight (kg)</label>
+                  <label className={`block text-sm font-medium ${theme === "light" ? "text-zinc-700" : "text-zinc-300"}`}>{t.goalWeight || 'Goal Weight (kg)'}</label>
                   <input {...register('goalWeight', { required: 'Goal Weight is required.' })} type="number" className={`mt-1 block w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 ${theme === "light" ? "border-zinc-300 bg-white focus:ring-blue-500" : "border-zinc-700 bg-gray-800 focus:ring-yellow-400"}`} />
                   {errors.goalWeight && <p className={`text-xs mt-1 ${theme === "light" ? "text-red-500" : "text-red-400"}`}>{errors.goalWeight.message}</p>}
                 </div>
                 <div className="md:col-span-2">
-                  <label className={`block text-sm font-medium ${theme === "light" ? "text-zinc-700" : "text-zinc-300"}`}>Medical Conditions or Allergies</label>
+                  <label className={`block text-sm font-medium ${theme === "light" ? "text-zinc-700" : "text-zinc-300"}`}>{t.medicalConditions || 'Medical Conditions or Allergies'}</label>
                   <textarea {...register('medicalConditions')} className={`mt-1 block w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 ${theme === "light" ? "border-zinc-300 bg-white focus:ring-blue-500" : "border-zinc-700 bg-gray-800 focus:ring-yellow-400"}`} rows={3} />
                 </div>
                 <div className="flex items-center">
                   <input {...register('hasMedicalConditions')} type="checkbox" className={`h-4 w-4 ${theme === "light" ? "text-blue-600 focus:ring-blue-500" : "text-yellow-400 focus:ring-yellow-400"} border-gray-300 rounded`} />
-                  <label className={`ml-2 text-sm ${theme === "light" ? "text-gray-700" : "text-gray-300"}`}>Has Medical Conditions or Allergies</label>
+                  <label className={`ml-2 text-sm ${theme === "light" ? "text-gray-700" : "text-gray-300"}`}>{t.hasMedicalConditions || 'Has Medical Conditions or Allergies'}</label>
                 </div>
               </div>
             )}
@@ -627,17 +629,17 @@ export default function GymRegisterForm() {
             {currentStep === 2 && (
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <div>
-                  <label className={`block text-sm font-medium ${theme === "light" ? "text-zinc-700" : "text-zinc-300"}`}>Membership Type</label>
+                  <label className={`block text-sm font-medium ${theme === "light" ? "text-zinc-700" : "text-zinc-300"}`}>{t.membershipType || 'Membership Type'}</label>
                   <select {...register('membershipType', { required: 'Membership Type is required.' })} className={`mt-1 block w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 ${theme === "light" ? "border-zinc-300 bg-white focus:ring-blue-500" : "border-zinc-700 bg-gray-800 focus:ring-yellow-400"}`}>
-                    <option value="">Select Membership Type</option>
-                    <option value="Monthly Membership">Monthly Membership</option>
-                    <option value="Annual Membership">Annual Membership</option>
-                    <option value="Day Pass">Day Pass</option>
+                    <option value="">{t.selectMembership || 'Select Membership Type'}</option>
+                    <option value="Monthly Membership">{t.monthlyMembership || 'Monthly Membership'}</option>
+                    <option value="Annual Membership">{t.annualMembership || 'Annual Membership'}</option>
+                    <option value="Day Pass">{t.dayPass || 'Day Pass'}</option>
                   </select>
                   {errors.membershipType && <p className={`text-xs mt-1 ${theme === "light" ? "text-red-500" : "text-red-400"}`}>{errors.membershipType.message}</p>}
                 </div>
                 <div>
-                  <label className={`block text-sm font-medium ${theme === "light" ? "text-zinc-700" : "text-zinc-300"}`}>Preferred Start Date</label>
+                  <label className={`block text-sm font-medium ${theme === "light" ? "text-zinc-700" : "text-zinc-300"}`}>{t.preferredStartDate || 'Preferred Start Date'}</label>
                   <input {...register('startDate', { required: 'Start Date is required.' })} type="date" className={`mt-1 block w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 ${theme === "light" ? "border-zinc-300 bg-white focus:ring-blue-500" : "border-zinc-700 bg-gray-800 focus:ring-yellow-400"}`} />
                   {errors.startDate && <p className={`text-xs mt-1 ${theme === "light" ? "text-red-500" : "text-red-400"}`}>{errors.startDate.message}</p>}
                 </div>
@@ -647,11 +649,11 @@ export default function GymRegisterForm() {
             {currentStep === 3 && (
               <div className="space-y-6">
                 <div>
-                  <label className={`block text-sm font-medium ${theme === "light" ? "text-zinc-700" : "text-zinc-300"}`}>Photo (Required)</label>
+                  <label className={`block text-sm font-medium ${theme === "light" ? "text-zinc-700" : "text-zinc-300"}`}>{t.photo || 'Photo'} ({t.required || 'Required'})</label>
                   <div className="flex gap-4">
                     <input
                       {...register('photo', {
-                        required: 'AwriterA photo is required.',
+                        required: t.photoRequired || 'A photo is required.',
                         validate: (files) => files && files.length > 0 ? true : 'A photo is required.'
                       })}
                       ref={fileInputRef}
@@ -666,7 +668,7 @@ export default function GymRegisterForm() {
                       onClick={() => setShowCamera(!showCamera)}
                       className={`mt-1 px-4 py-2 rounded-lg font-medium transition-colors duration-200 flex items-center gap-2 ${theme === "light" ? "bg-blue-600 text-white hover:bg-blue-700 focus:ring-2 focus:ring-blue-500" : "bg-gray-700 text-white hover:bg-gray-600 focus:ring-2 focus:ring-yellow-400"}`}
                     >
-                      <Camera size={20} /> {showCamera ? 'Close Camera' : 'Take Photo'}
+                      <Camera size={20} /> {showCamera ? t.closeCamera || 'Close Camera' : t.takePhoto || 'Take Photo'}
                     </button>
                   </div>
                   {showCamera && (
@@ -678,7 +680,7 @@ export default function GymRegisterForm() {
                         onClick={capturePhoto}
                         className={`mt-2 px-4 py-2 rounded-lg font-medium transition-colors duration-200 flex items-center gap-2 ${theme === "light" ? "bg-blue-600 text-white hover:bg-blue-700 focus:ring-2 focus:ring-blue-500" : "bg-gray-700 text-white hover:bg-gray-600 focus:ring-2 focus:ring-yellow-400"}`}
                       >
-                        <Camera size={20} /> Capture
+                        <Camera size={20} /> {t.capture || 'Capture'}
                       </button>
                     </div>
                   )}
@@ -686,17 +688,18 @@ export default function GymRegisterForm() {
                   {isUploading && (
                     <p className={`text-sm flex items-center gap-2 ${theme === "light" ? "text-blue-500" : "text-yellow-400"}`}>
                       <Loader2 className="animate-spin h-5 w-5" /> Uploading...
+                      <Loader2 className="animate-spin h-5 w-5" /> {t.uploading || 'Uploading...'}
                     </p>
                   )}
                   {errors.photo && <p className={`text-xs mt-1 ${theme === "light" ? "text-red-500" : "text-red-400"}`}>{errors.photo.message}</p>}
                 </div>
                 <div>
-                  <label className={`block text-sm font-medium ${theme === "light" ? "text-zinc-700" : "text-zinc-300"}`}>Signature</label>
+                  <label className={`block text-sm font-medium ${theme === "light" ? "text-zinc-700" : "text-zinc-300"}`}>{t.signature || 'Signature'}</label>
                   <input
                     {...register('signature', { required: 'Signature is required.' })}
                     type="text"
                     className={`mt-1 block w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 ${theme === "light" ? "border-zinc-300 bg-white focus:ring-blue-500" : "border-zinc-700 bg-gray-800 focus:ring-yellow-400"}`}
-                    placeholder="Type your full name as signature"
+                    placeholder={t.signaturePlaceholder || 'Type your full name as signature'}
                   />
                   {errors.signature && <p className={`text-xs mt-1 ${theme === "light" ? "text-red-500" : "text-red-400"}`}>{errors.signature.message}</p>}
                 </div>
@@ -706,7 +709,7 @@ export default function GymRegisterForm() {
                     type="checkbox"
                     className={`h-4 w-4 ${theme === "light" ? "text-blue-600 focus:ring-blue-500" : "text-yellow-400 focus:ring-yellow-400"} border-gray-300 rounded`}
                   />
-                  <label className={`ml-2 text-sm ${theme === "light" ? "text-gray-700" : "text-gray-300"}`}>I agree to the terms and conditions</label>
+                  <label className={`ml-2 text-sm ${theme === "light" ? "text-gray-700" : "text-gray-300"}`}>{t.agreeTerms || 'I agree to the terms and conditions'}</label>
                   {errors.agreeTerms && <p className={`text-xs mt-1 ${theme === "light" ? "text-red-500" : "text-red-400"}`}>{errors.agreeTerms.message}</p>}
                 </div>
               </div>
@@ -719,7 +722,7 @@ export default function GymRegisterForm() {
                 disabled={currentStep === 0}
                 className={`px-4 py-2 rounded font-medium transition-colors duration-200 ${theme === "light" ? "bg-gray-300 text-gray-700 hover:bg-gray-400 focus:ring-2 focus:ring-gray-500" : "bg-gray-700 text-white hover:bg-gray-600 focus:ring-2 focus:ring-yellow-400"} disabled:opacity-50`}
               >
-                <ChevronLeft className="inline w-4 h-4 mr-1" /> Previous
+                <ChevronLeft className="inline w-4 h-4 mr-1" /> {t.previous || 'Previous'}
               </button>
               {currentStep < steps.length - 1 ? (
                 <button
@@ -727,7 +730,7 @@ export default function GymRegisterForm() {
                   onClick={nextStep}
                   className={`px-4 py-2 rounded font-medium transition-colors duration-200 flex items-center gap-2 ${theme === "light" ? "bg-blue-600 text-white hover:bg-blue-700 focus:ring-2 focus:ring-blue-500" : "bg-gray-700 text-white hover:bg-gray-600 focus:ring-2 focus:ring-yellow-400"}`}
                 >
-                  Next <ChevronRight className="inline w-4 h-4 ml-1" />
+                  {t.next || 'Next'} <ChevronRight className="inline w-4 h-4 ml-1" />
                 </button>
               ) : (
                 <button
@@ -738,11 +741,11 @@ export default function GymRegisterForm() {
                   {isUploading ? (
                     <>
                       <Loader2 className="animate-spin h-5 w-5" />
-                      Uploading...
+                      {t.uploading || 'Uploading...'}
                     </>
                   ) : (
                     <>
-                      <Upload size={20} /> Register
+                      <Upload size={20} /> {t.register || 'Register'}
                     </>
                   )}
                 </button>
@@ -752,9 +755,9 @@ export default function GymRegisterForm() {
         </div>
         <div className="mt-6 text-center">
           <p className={`text-sm ${theme === "light" ? "text-zinc-600" : "text-zinc-400"}`}>
-            Already have an account?{" "}
+            {t.alreadyAccount || 'Already have an account?'}{" "}
             <Link href="/login" className={`underline ${theme === "light" ? "text-blue-600" : "text-blue-400"} hover:text-blue-500`}>
-              Log In
+              {t.login || 'Log In'}
             </Link>
           </p>
         </div>

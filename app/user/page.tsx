@@ -234,42 +234,19 @@ export default function UserDashboard() {
       console.log('Starting data fetch for user:', userEmail);
       
       try {
-        // Fetch all unique categories from schedules collection (normalized)
-        const schedulesSnap = await getDocs(collection(db, 'schedules'));
-        console.log('Total schedules documents:', schedulesSnap.docs.length);
-        
-        const allCategories = [...new Set(
-          schedulesSnap.docs.map(doc => {
-            const categoryData = doc.data();
-            const category = categoryData.category;
-            console.log('Raw category from document:', category, 'from doc:', doc.id);
-            return category ? category.toLowerCase().trim() : 'general';
-          })
-        )];
-        
-        console.log('All Available Categories in Schedules:', allCategories);
-
-        // Fetch schedules matching user's category (with case-insensitive comparison)
-        const allSchedulesSnap = await getDocs(collection(db, 'schedules'));
-        const fetchedSchedules: Schedule[] = [];
-        
-        allSchedulesSnap.docs.forEach((docSnap) => {
-          const scheduleData = docSnap.data();
-          const scheduleCategory = scheduleData.category ? scheduleData.category.toLowerCase().trim() : 'general';
-          
-          console.log('Checking schedule:', docSnap.id, 'with category:', scheduleCategory, 'against user category:', userCategory);
-          
-          if (scheduleCategory === userCategory) {
-            fetchedSchedules.push({
-              id: docSnap.id,
-              title: scheduleData.title,
-              time: scheduleData.date,
-              instructor: scheduleData.instructor,
-              category: scheduleCategory,
-            });
-          }
-        });
-        
+        // Fetch schedules matching the user's category directly from Firestore
+        const schedulesQuery = query(
+          collection(db, 'schedules'),
+          where('category', '==', userCategory)
+        );
+        const schedulesSnap = await getDocs(schedulesQuery);
+        const fetchedSchedules: Schedule[] = schedulesSnap.docs.map((docSnap) => ({
+          id: docSnap.id,
+          title: docSnap.data().title,
+          time: docSnap.data().date,
+          instructor: docSnap.data().instructor,
+          category: docSnap.data().category,
+        }));
         setSchedules(fetchedSchedules);
         console.log('Matching Schedules Found:', fetchedSchedules.length);
         console.log('Matching Schedules Details:', fetchedSchedules);

@@ -1,9 +1,9 @@
 'use client';
 
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 import { useForm } from 'react-hook-form';
-import { X, Upload, AlertCircle } from 'lucide-react';
-import { getFirestore, collection, addDoc } from 'firebase/firestore';
+import { X, Upload, AlertCircle, RefreshCw } from 'lucide-react';
+import { getFirestore, collection, addDoc, doc, updateDoc, query, orderBy, limit, getDocs } from 'firebase/firestore';
 import { app } from '../app/fconfig';
 import { ToastContainer, toast } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
@@ -12,9 +12,11 @@ import 'react-toastify/dist/ReactToastify.css';
 const db = getFirestore(app);
 
 // Cloudinary configuration
-const CLOUDINARY_UPLOAD_PRESET = process.env.NEXT_PUBLIC_CLOUDINARY_UPLOAD_PRESET || 'goldgold';
+const CLOUDINARY_VIDEO_UPLOAD_PRESET = process.env.NEXT_PUBLIC_CLOUDINARY_VIDEO_UPLOAD_PRESET || 'goldgold';
+const CLOUDINARY_PHOTO_UPLOAD_PRESET = process.env.NEXT_PUBLIC_CLOUDINARY_UPLOAD_PRESET || 'photoupload';
 const CLOUDINARY_CLOUD_NAME = process.env.NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME || 'dnqsoezfo';
-const CLOUDINARY_FOLDER = process.env.NEXT_PUBLIC_CLOUDINARY_FOLDER || 'videos';
+const CLOUDINARY_VIDEO_FOLDER = process.env.NEXT_PUBLIC_CLOUDINARY_FOLDER || 'videos';
+const CLOUDINARY_PHOTO_FOLDER = 'photoss';
 
 // TypeScript interface for translation
 interface Translation {
@@ -24,6 +26,8 @@ interface Translation {
   gym?: string;
   uploadVideo?: string;
   uploadedVideos?: string;
+  uploadPhoto?: string;
+  uploadedPhotos?: string;
   titlePlaceholder?: string;
   descriptionPlaceholder?: string;
   titleRequired?: string;
@@ -34,6 +38,7 @@ interface Translation {
   categoryRequired?: string;
   selectCategory?: string;
   videoFiles?: string;
+  photoFiles?: string;
   filesRequired?: string;
   invalidFormat?: string;
   sizeLimit?: string;
@@ -50,6 +55,16 @@ interface Translation {
   close?: string;
 }
 
+// Interface for Video (matching the one in admin page)
+interface Video {
+  id: string;
+  title: string;
+  category: string;
+  description: string;
+  thumbnail: string;
+  videoUrl: string;
+}
+
 // TypeScript interface for video form data
 interface VideoFormData {
   title: string;
@@ -64,9 +79,12 @@ interface VideoUploadModalProps {
   onClose: () => void;
   theme: string;
   t: Translation;
+  videoToEdit?: Video | null;
+  onVideoUpdated?: () => void;
 }
 
-export default function VideoUploadModal({ isOpen, onClose, theme, t }: VideoUploadModalProps) {
+export default function VideoUploadModal({ isOpen, onClose, theme, t, videoToEdit, onVideoUpdated }: VideoUploadModalProps) {
+  const [uploadType, setUploadType] = useState<'video' | 'photo'>('video');
   const [uploadStatus, setUploadStatus] = useState<{
     type: 'success' | 'error' | 'uploading';
     message: string;
@@ -88,8 +106,49 @@ export default function VideoUploadModal({ isOpen, onClose, theme, t }: VideoUpl
     },
   });
 
+  const isEditMode = !!videoToEdit;
+
+  useEffect(() => {
+    if (isEditMode && videoToEdit) {
+      reset({
+        title: videoToEdit.title,
+        description: videoToEdit.description,
+        category: videoToEdit.category,
+      });
+    }
+  }, [isEditMode, videoToEdit, reset]);
+
+  const handleUploadTypeChange = (type: 'video' | 'photo') => {
+    setUploadType(type);
+    reset(); // Reset form when switching types
+    setUploadStatus(null);
+  };
+
   const onSubmit = useCallback(
     async (data: VideoFormData) => {
+      if (isEditMode) {
+        // Handle update logic
+        if (!videoToEdit) return;
+        try {
+          const videoRef = doc(db, 'videos', videoToEdit.id);
+          await updateDoc(videoRef, {
+            title: data.title,
+            description: data.description,
+            category: data.category,
+          });
+          toast.success('Video updated successfully!');
+          if (onVideoUpdated) {
+            onVideoUpdated();
+          }
+          onClose();
+        } catch (error: any) {
+          toast.error(`Failed to update video: ${error.message}`);
+        }
+        return;
+      }
+
+      // Handle create logic
+      const isPhotoUpload = uploadType === 'photo';
       const files = Array.from(data.files);
       if (files.length > 5) {
         setUploadStatus({
@@ -100,7 +159,7 @@ export default function VideoUploadModal({ isOpen, onClose, theme, t }: VideoUpl
         return;
       }
 
-      setUploadStatus({ type: 'uploading', message: t.uploading || 'Starting video upload...', progress: 0 });
+      setUploadStatus({ type: 'uploading', message: t.uploading || `Starting ${uploadType} upload...`, progress: 0 });
       const newUploadedVideos: { url: string; fileName: string }[] = [];
 
       try {
@@ -108,20 +167,22 @@ export default function VideoUploadModal({ isOpen, onClose, theme, t }: VideoUpl
           const file = files[i];
           setUploadStatus({
             type: 'uploading',
-            message: t.uploadingFile
-              ? t.uploadingFile.replace('{fileName}', file.name).replace('{current}', `${i + 1}`).replace('{total}', `${files.length}`)
-              : `Uploading ${file.name} (${i + 1} of ${files.length})`,
+            message: `Uploading ${file.name} (${i + 1} of ${files.length})`,
             progress: (i / files.length) * 100,
             fileName: file.name,
           });
 
           const formData = new FormData();
           formData.append('file', file);
-          formData.append('upload_preset', CLOUDINARY_UPLOAD_PRESET);
-          formData.append('folder', CLOUDINARY_FOLDER);
-          formData.append('resource_type', 'video');
+          formData.append('upload_preset', isPhotoUpload ? CLOUDINARY_PHOTO_UPLOAD_PRESET : CLOUDINARY_VIDEO_UPLOAD_PRESET);
+          formData.append('folder', isPhotoUpload ? CLOUDINARY_PHOTO_FOLDER : CLOUDINARY_VIDEO_FOLDER);
+          formData.append('resource_type', isPhotoUpload ? 'image' : 'video');
 
-          const response = await fetch(`https://api.cloudinary.com/v1_1/${CLOUDINARY_CLOUD_NAME}/video/upload`, {
+          const uploadUrl = isPhotoUpload
+            ? `https://api.cloudinary.com/v1_1/${CLOUDINARY_CLOUD_NAME}/image/upload`
+            : `https://api.cloudinary.com/v1_1/${CLOUDINARY_CLOUD_NAME}/video/upload`;
+
+          const response = await fetch(uploadUrl, {
             method: 'POST',
             body: formData,
           });
@@ -131,49 +192,69 @@ export default function VideoUploadModal({ isOpen, onClose, theme, t }: VideoUpl
           if (!response.ok) {
             setUploadStatus({
               type: 'error',
-              message: t.uploadFailed
-                ? t.uploadFailed.replace('{fileName}', file.name).replace('{error}', result.error?.message || 'Upload failed')
-                : `Failed to upload ${file.name}: ${result.error?.message || 'Upload failed'}`,
+              message: `Failed to upload ${file.name}: ${result.error?.message || 'Upload failed'}`,
               fileName: file.name,
             });
-            toast.error(
-              t.uploadFailed
-                ? t.uploadFailed.replace('{fileName}', file.name).replace('{error}', result.error?.message || 'Upload failed')
-                : `Failed to upload ${file.name}: ${result.error?.message || 'Upload failed'}`
-            );
+            toast.error(`Failed to upload ${file.name}: ${result.error?.message || 'Upload failed'}`);
             continue;
           }
 
-          await addDoc(collection(db, 'videos'), {
-            title: data.title,
-            description: data.description,
-            category: data.category,
-            videoUrl: result.secure_url,
-            fileName: file.name,
-            uploadedAt: new Date(),
-          });
+          if (isPhotoUpload) {
+            const photosCollectionRef = collection(db, 'photos');
+            const photosSnapshot = await getDocs(photosCollectionRef);
+            const photosCount = photosSnapshot.size;
+
+            const photoDocData = {
+              photoUrl: result.secure_url,
+              thumbnail: result.secure_url,
+              fileName: file.name,
+              uploadedAt: new Date(),
+            };
+
+            if (photosCount >= 5) {
+              // Find and update the oldest photo
+              const oldestPhotoQuery = query(photosCollectionRef, orderBy('uploadedAt', 'asc'), limit(1));
+              const oldestPhotoSnapshot = await getDocs(oldestPhotoQuery);
+              if (!oldestPhotoSnapshot.empty) {
+                const oldestDocRef = oldestPhotoSnapshot.docs[0].ref;
+                await updateDoc(oldestDocRef, photoDocData);
+              }
+            } else {
+              // Add a new photo document
+              await addDoc(photosCollectionRef, photoDocData);
+            }
+          } else { // It's a video upload
+            const docData: any = {
+              videoUrl: result.secure_url,
+              thumbnail: result.secure_url.replace(/\.mp4$/, '.jpg'),
+              fileName: file.name,
+              uploadedAt: new Date(),
+            };
+            docData.title = data.title;
+            docData.description = data.description;
+            docData.category = data.category;
+            await addDoc(collection(db, 'videos'), docData);
+          }
 
           newUploadedVideos.push({ url: result.secure_url, fileName: file.name });
           setUploadedVideos((prev) => [...prev, { url: result.secure_url, fileName: file.name }]);
           setUploadStatus({
             type: 'uploading',
-            message: t.uploadedFile
-              ? t.uploadedFile.replace('{fileName}', file.name).replace('{current}', `${i + 1}`).replace('{total}', `${files.length}`)
-              : `Uploaded ${file.name} (${i + 1} of ${files.length})`,
+            message: `Uploaded ${file.name} (${i + 1} of ${files.length})`,
             progress: ((i + 1) / files.length) * 100,
             fileName: file.name,
           });
         }
 
         if (newUploadedVideos.length === files.length) {
-          setUploadStatus({ type: 'success', message: t.allUploaded || 'All videos uploaded successfully!' });
-          toast.success(t.allUploaded || 'All videos uploaded successfully!');
+          const successMessage = `All ${uploadType}s uploaded successfully!`;
+          setUploadStatus({ type: 'success', message: successMessage });
+          toast.success(successMessage);
         } else {
+          const partialMessage = `${newUploadedVideos.length} of ${files.length} ${uploadType}s uploaded successfully.`;
           setUploadStatus({
             type: 'success',
-            message: t.partialUpload
-              ? t.partialUpload.replace('{success}', `${newUploadedVideos.length}`).replace('{total}', `${files.length}`)
-              : `${newUploadedVideos.length} of ${files.length} videos uploaded successfully.`,
+            message: partialMessage,
           });
           toast.success(
             t.partialUpload
@@ -189,9 +270,7 @@ export default function VideoUploadModal({ isOpen, onClose, theme, t }: VideoUpl
           setUploadedVideos([]);
         }, 2000);
       } catch (error: any) {
-        const errorMessage = t.uploadError
-          ? t.uploadError.replace('{error}', error.message || 'Failed to upload videos')
-          : `Upload error: ${error.message || 'Failed to upload videos'}`;
+        const errorMessage = `Upload error: ${error.message || `Failed to upload ${uploadType}s`}`;
         setUploadStatus({
           type: 'error',
           message: errorMessage,
@@ -199,7 +278,7 @@ export default function VideoUploadModal({ isOpen, onClose, theme, t }: VideoUpl
         toast.error(errorMessage);
       }
     },
-    [onClose, reset, t]
+    [onClose, reset, t, isEditMode, videoToEdit, onVideoUpdated, uploadType]
   );
 
   if (!isOpen) return null;
@@ -233,10 +312,32 @@ export default function VideoUploadModal({ isOpen, onClose, theme, t }: VideoUpl
               theme === 'dark' ? 'text-white' : 'text-gray-900'
             }`}
           >
-            <Upload size={24} /> {t.uploadVideo || 'Upload Workout Videos'}
+            <Upload size={24} /> {isEditMode ? 'Update Video' : t.uploadVideo || 'Upload Workout Videos'}
           </h2>
           <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
-            <div>
+            {!isEditMode && (
+              <div className="flex justify-center gap-2 p-1 rounded-lg bg-gray-200 dark:bg-gray-700">
+                <button
+                  type="button"
+                  onClick={() => handleUploadTypeChange('video')}
+                  className={`w-full py-2 px-4 rounded-md text-sm font-semibold transition-colors ${
+                    uploadType === 'video' ? 'bg-blue-600 text-white shadow' : 'text-gray-600 dark:text-gray-300'
+                  }`}
+                >
+                  {t.uploadVideo || 'Upload Video'}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleUploadTypeChange('photo')}
+                  className={`w-full py-2 px-4 rounded-md text-sm font-semibold transition-colors ${
+                    uploadType === 'photo' ? 'bg-blue-600 text-white shadow' : 'text-gray-600 dark:text-gray-300'
+                  }`}
+                >
+                  {t.uploadPhoto || 'Upload Photo'}
+                </button>
+              </div>
+            )}
+            {uploadType === 'video' && (<div>
               <label
                 className={`block text-sm font-medium ${theme === 'dark' ? 'text-gray-300' : 'text-gray-700'} mb-1`}
               >
@@ -267,8 +368,8 @@ export default function VideoUploadModal({ isOpen, onClose, theme, t }: VideoUpl
                   <AlertCircle size={16} /> {errors.title.message}
                 </p>
               )}
-            </div>
-            <div>
+            </div>)}
+            {!isEditMode && (<><div>
               <label
                 className={`block text-sm font-medium ${theme === 'dark' ? 'text-gray-300' : 'text-gray-700'} mb-1`}
               >
@@ -296,8 +397,8 @@ export default function VideoUploadModal({ isOpen, onClose, theme, t }: VideoUpl
                   <AlertCircle size={16} /> {errors.description.message}
                 </p>
               )}
-            </div>
-            <div>
+            </div></>)}
+            {uploadType === 'video' && (<div>
               <label
                 className={`block text-sm font-medium ${theme === 'dark' ? 'text-gray-300' : 'text-gray-700'} mb-1`}
               >
@@ -328,30 +429,33 @@ export default function VideoUploadModal({ isOpen, onClose, theme, t }: VideoUpl
                   <AlertCircle size={16} /> {errors.category.message}
                 </p>
               )}
-            </div>
+            </div>)}
             <div>
               <label
                 className={`block text-sm font-medium ${theme === 'dark' ? 'text-gray-300' : 'text-gray-700'} mb-1`}
               >
-                {t.videoFiles || 'Video Files (Up to 5)'}
+                {uploadType === 'video' ? t.videoFiles || 'Video Files (Up to 5)' : t.photoFiles || 'Photo Files (Up to 5)'}
               </label>
               <input
                 type="file"
                 multiple
                 {...register('files', {
-                  required: t.filesRequired || 'At least one video file is required',
+                  required: t.filesRequired || `At least one ${uploadType} file is required`,
                   validate: {
                     acceptedFormats: (value) =>
-                      Array.from(value).every((file) => ['video/mp4', 'video/mov', 'video/webm'].includes(file.type)) ||
-                      (t.invalidFormat || 'Only MP4, MOV, or WEBM formats are allowed'),
+                      Array.from(value).every((file) =>
+                        uploadType === 'video'
+                          ? ['video/mp4', 'video/mov', 'video/webm'].includes(file.type)
+                          : file.type.startsWith('image/')
+                      ) || (t.invalidFormat || (uploadType === 'video' ? 'Only MP4, MOV, or WEBM formats are allowed' : 'Only image files are allowed')),
                     sizeLimit: (value) =>
                       Array.from(value).every((file) => file.size <= 1000000000) ||
                       (t.sizeLimit || 'Each file must be under 1GB'),
                     maxFiles: (value) =>
-                      value.length <= 5 || (t.maxFiles || 'You can upload a maximum of 5 videos at a time'),
+                      value.length <= 5 || (t.maxFiles || `You can upload a maximum of 5 ${uploadType}s at a time`),
                   },
                 })}
-                accept="video/mp4,video/mov,video/webm"
+                accept={uploadType === 'video' ? "video/mp4,video/mov,video/webm" : "image/*"}
                 className={`w-full px-4 py-2 rounded-lg border ${
                   theme === 'dark'
                     ? 'bg-gray-700 border-gray-600 text-gray-300 file:bg-gray-600 file:text-yellow-400 hover:file:bg-gray-500 focus:ring-2 focus:ring-yellow-400 focus:border-yellow-400'
@@ -373,32 +477,32 @@ export default function VideoUploadModal({ isOpen, onClose, theme, t }: VideoUpl
             </div>
             {uploadStatus && (
               <div className="space-y-2">
-                <p
-                  className={`text-sm flex items-center gap-2 ${
-                    uploadStatus.type === 'success'
-                      ? theme === 'dark'
-                        ? 'text-green-400'
-                        : 'text-green-500'
-                      : uploadStatus.type === 'error'
-                      ? theme === 'dark'
-                        ? 'text-red-400'
-                        : 'text-red-500'
-                      : theme === 'dark'
-                      ? 'text-yellow-400'
-                      : 'text-blue-500'
-                  }`}
-                >
-                  <AlertCircle size={16} /> {uploadStatus.message}
-                </p>
-                {uploadStatus.type === 'uploading' && (
-                  <div className={`w-full ${theme === 'dark' ? 'bg-gray-700' : 'bg-gray-200'} rounded-full h-2.5`}>
-                    <div
-                      className={`${theme === 'dark' ? 'bg-yellow-400' : 'bg-blue-600'} h-2.5 rounded-full transition-all duration-300`}
-                      style={{ width: `${uploadStatus.progress || 0}%` }}
-                    />
-                  </div>
-                )}
-              </div>
+                  <p
+                    className={`text-sm flex items-center gap-2 ${
+                      uploadStatus.type === 'success'
+                        ? theme === 'dark'
+                          ? 'text-green-400'
+                          : 'text-green-500'
+                        : uploadStatus.type === 'error'
+                        ? theme === 'dark'
+                          ? 'text-red-400'
+                          : 'text-red-500'
+                        : theme === 'dark'
+                        ? 'text-yellow-400'
+                        : 'text-blue-500'
+                    }`}
+                  >
+                    <AlertCircle size={16} /> {uploadStatus.message}
+                  </p>
+                  {uploadStatus.type === 'uploading' && (
+                    <div className={`w-full ${theme === 'dark' ? 'bg-gray-700' : 'bg-gray-200'} rounded-full h-2.5`}>
+                      <div
+                        className={`${theme === 'dark' ? 'bg-yellow-400' : 'bg-blue-600'} h-2.5 rounded-full transition-all duration-300`}
+                        style={{ width: `${uploadStatus.progress || 0}%` }}
+                      />
+                    </div>
+                  )}
+                </div>
             )}
             {uploadedVideos.length > 0 && (
               <div className="space-y-2">
@@ -462,11 +566,11 @@ export default function VideoUploadModal({ isOpen, onClose, theme, t }: VideoUpl
                         d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
                       />
                     </svg>
-                    {t.uploading || 'Uploading...'}
+                    {isEditMode ? 'Updating...' : t.uploading || 'Uploading...'}
                   </>
                 ) : (
                   <>
-                    <Upload size={20} /> {t.upload || 'Upload'}
+                    <Upload size={20} /> {isEditMode ? 'Update' : t.upload || 'Upload'}
                   </>
                 )}
               </button>

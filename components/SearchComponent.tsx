@@ -51,6 +51,7 @@ interface CollectionItem {
   photoURL?: string;
   payment?: string;
   paymentStartDate?: string | null | undefined;
+  registrationDate?: string | null | undefined;
 }
 
 // Interface for SearchComponent props
@@ -103,11 +104,12 @@ export default function SearchComponent({ searchQuery, setSearchQuery, theme, us
           lastName: doc.data().lastName,
           membershipType: doc.data().membershipType,
           category: doc.data().category,
-          email: doc.data().email,
+          email: doc.data().email, 
           phoneNumber: doc.data().phoneNumber,
           photoURL: doc.data().photoURL,
-          payment: doc.data().payment || 'Not Payed', // Fetch payment field
+          payment: doc.data().payment || 'Not Payed',
           paymentStartDate: doc.data().paymentStartDate,
+          registrationDate: doc.data().registrationDate, // Ensure registrationDate is fetched
         })) as CollectionItem[];
 
         setLastDoc(snapshot.docs[snapshot.docs.length - 1]);
@@ -155,19 +157,28 @@ export default function SearchComponent({ searchQuery, setSearchQuery, theme, us
     [searchByMembership, t]
   );
 
-  const calculateDaysDisplay = useCallback((payment: string, paymentStartDate?: string | null): string => {
-    if (!paymentStartDate) return 'N/A';
-    const startDate = new Date(paymentStartDate);
-    const currentDate = new Date();
-    const diffTime = Math.abs(currentDate.getTime() - startDate.getTime());
-    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-
-    if (payment === 'Payed') {
+  const calculateDaysDisplay = useCallback((payment: string, paymentStartDate?: string | null, registrationDate?: string | null): string => {
+    if (payment === 'Payed' && paymentStartDate) {
+      const startDate = new Date(paymentStartDate);
+      const currentDate = new Date();
+      const diffTime = currentDate.getTime() - startDate.getTime();
+      const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
       const daysLeft = 30 - diffDays;
-      return daysLeft > 0 ? t.daysStatus?.replace('{days}', `${daysLeft}`) || `${daysLeft} days left` : t.daysStatus?.replace('{days}', 'Expired') || 'Expired';
+      return daysLeft >= 0 ? `${daysLeft} days left` : 'Expired';
+    } else if (payment === 'Not Payed' && paymentStartDate) {
+      const startDate = new Date(paymentStartDate);
+      const currentDate = new Date();
+      const diffTime = currentDate.getTime() - startDate.getTime();
+      const daysPassed = Math.ceil(diffTime / (1000 * 60 * 60 * 24)) - 30;
+      return daysPassed > 0 ? `${daysPassed} days passed` : 'Expired';
+    } else if (payment === 'Not Payed' && registrationDate) {
+      const regDate = new Date(registrationDate);
+      const currentDate = new Date();
+      const diffTime = currentDate.getTime() - regDate.getTime();
+      const daysPassed = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+      return daysPassed > 0 ? `${daysPassed} days passed` : 'Just registered';
     } else {
-      const daysPassed = Math.min(diffDays, 30);
-      return t.daysStatus?.replace('{days}', `${daysPassed} day${daysPassed === 1 ? '' : 's'} passed`) || `${daysPassed} day${daysPassed === 1 ? '' : 's'} passed`;
+      return 'N/A';
     }
   }, [t]);
 
@@ -197,23 +208,25 @@ export default function SearchComponent({ searchQuery, setSearchQuery, theme, us
     try {
       const docRef = doc(db, 'GYM', item.id);
       const updateData: { payment: string; paymentStartDate?: string | null } = {
-        payment: newPayment,
+        payment: newPayment, // The new status ('Payed' or 'Not Payed')
       };
 
-      // Only update paymentStartDate if it doesn't exist or if the payment status changes
-      if (!item.paymentStartDate || item.payment !== newPayment) {
-        updateData.paymentStartDate = newPayment === 'Payed' ? new Date().toISOString() : null;
+      // When status is manually changed to 'Payed', set a new start date.
+      // When manually changed to 'Not Payed', we preserve the existing paymentStartDate.
+      if (newPayment === 'Payed') {
+        updateData.paymentStartDate = new Date().toISOString();
       }
 
       await updateDoc(docRef, updateData);
       setSearchResults((prev) =>
         prev.map((i) =>
           i.id === item.id
-            ? {
-                ...i,
-                payment: newPayment,
-                paymentStartDate: updateData.paymentStartDate !== undefined ? updateData.paymentStartDate : i.paymentStartDate,
-              } as CollectionItem
+            ? ({
+              ...i,
+              payment: newPayment,
+              // Only update paymentStartDate in the local state if it was changed
+              ...(newPayment === 'Payed' && { paymentStartDate: updateData.paymentStartDate }),
+            } as CollectionItem)
             : i
         )
       );
@@ -574,7 +587,7 @@ export default function SearchComponent({ searchQuery, setSearchQuery, theme, us
                           } truncate max-w-[15%]`}
                         >
                           <span className="inline-block animate-pulse">
-                            {calculateDaysDisplay(item.payment || 'Not Payed', item.paymentStartDate)}
+                            {calculateDaysDisplay(item.payment || 'Not Payed', item.paymentStartDate, item.registrationDate)}
                           </span>
                         </td>
                         <td

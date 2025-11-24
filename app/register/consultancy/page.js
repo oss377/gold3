@@ -62,7 +62,7 @@ const GYMForm = () => {
       signature: '',
       role: "user",
       category: "personalTraining",
-      payment: "not payed",
+      payment: "Not Payed",
     },
   });
   const [isAuthenticated, setIsAuthenticated] = useState(false);
