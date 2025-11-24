@@ -234,11 +234,15 @@ export default function ProfilePage() {
         }, 3000);
       } else {
         setPasswordError(data.error || t?.passwordUpdateFailed || "Failed to update password");
-        toast.error(data.error || t?.passwordUpdateFailed || "Failed to update password");
+        toast.error(data.error || t?.passwordUpdateFailed || "Failed to update password. Please check your current password.");
       }
     } catch (error) {
       console.error("Password change error:", error);
-      const errorMessage = t?.errorOccurred || "An error occurred. Please try again.";
+      let errorMessage = t?.errorOccurred || "An error occurred. Please try again.";
+      // Check if the error is due to a server misconfiguration (e.g., 500 error with non-JSON response)
+      if (error instanceof SyntaxError) {
+        errorMessage = t?.serverMisconfigured || "Server misconfigured. Could not process the response.";
+      }
       setPasswordError(errorMessage);
       toast.error(errorMessage);
     } finally {

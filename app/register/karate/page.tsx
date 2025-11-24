@@ -218,6 +218,14 @@ export default function GymRegisterForm() {
     };
   }, [showCamera]);
 
+  const handleTakePhotoClick = () => {
+    if (showCamera) {
+      setShowCamera(false);
+    } else if (window.confirm(t.cameraPermission || "This feature requires camera access. Do you want to proceed?")) {
+      setShowCamera(true);
+    }
+  };
+
   // Validate Cloudinary configuration
   useEffect(() => {
     if (!CLOUDINARY_CLOUD_NAME || !CLOUDINARY_UPLOAD_PRESET) {
@@ -428,11 +436,11 @@ export default function GymRegisterForm() {
         console.log(`Firestore document created with ID: ${user.uid}`);
         sessionStorage.setItem("pendingUserId", user.uid);
 
-        toast.success(t.registrationSuccessRedirect || "Registration successful! Redirecting to payment...");
+        toast.success(t.registrationSuccessRedirect || "Registration successful! Redirecting to login...");
         setIsSubmitted(true);
         setTimeout(() => {
           setPhotoPreview(null);
-          router.push("/payment");
+          router.push(`/login?email=${encodeURIComponent(formData.email)}`);
         }, 3000);
       } catch (error: any) {
         console.error("Registration error:", error);
@@ -1035,7 +1043,7 @@ export default function GymRegisterForm() {
                     />
                     <button
                       type="button"
-                      onClick={() => setShowCamera(!showCamera)}
+                      onClick={handleTakePhotoClick}
                       className={`mt-1 px-4 py-2 rounded-lg font-medium transition-colors duration-200 flex items-center gap-2 ${
                         theme === "light"
                           ? "bg-blue-600 text-white hover:bg-blue-700 focus:ring-2 focus:ring-blue-500"

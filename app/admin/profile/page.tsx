@@ -7,7 +7,7 @@ import 'react-toastify/dist/ReactToastify.css';
 import { motion, AnimatePresence, Variants } from 'framer-motion';
 import { Eye, EyeOff, Lock, CheckCircle, AlertCircle } from 'lucide-react';
 import { db } from '../../fconfig';
-import { doc, getDoc, updateDoc } from 'firebase/firestore';
+import { doc, getDoc, updateDoc } from "firebase/firestore";
 import { ThemeContext } from '../../../context/ThemeContext';
 import { LanguageContext } from '../../../context/LanguageContext';
 
@@ -30,8 +30,15 @@ interface PasswordRequirement {
 
 const ProfilePage: React.FC = () => {
   const router = useRouter();
-  const { theme } = useContext(ThemeContext);
-  const { language } = useContext(LanguageContext);
+  const themeContext = useContext(ThemeContext);
+  const languageContext = useContext(LanguageContext);
+
+  if (!themeContext || !languageContext) {
+    throw new Error("ProfilePage must be used within Theme and Language providers");
+  }
+
+  const { theme } = themeContext;
+  const { language, t: translations } = languageContext;
   const [user, setUser] = useState<User | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isEditing, setIsEditing] = useState(false);
@@ -51,12 +58,20 @@ const ProfilePage: React.FC = () => {
   const [successMessage, setSuccessMessage] = useState('');
   const [formLoading, setFormLoading] = useState(false);
 
-  const t = {
+  const t = useMemo(() => ({
     permissionDenied: language === 'en' ? 'Permission denied. Please log in to access this page.' : 'Acceso denegado. Por favor, inicia sesión.',
     updateSuccess: language === 'en' ? 'Profile updated successfully' : 'Perfil actualizado con éxito',
     passwordUpdateSuccess: language === 'en' ? 'Password updated successfully! Please log in again.' : 'Contraseña actualizada con éxito. Por favor, inicia sesión de nuevo.',
     updateError: language === 'en' ? 'Failed to update profile' : 'Error al actualizar el perfil',
-  };
+    strong: language === 'en' ? 'Strong' : 'Fuerte',
+    medium: language === 'en' ? 'Medium' : 'Medio',
+    weak: language === 'en' ? 'Weak' : 'Débil',
+    none: language === 'en' ? 'None' : 'Ninguno',
+    verifyingSession: language === 'en' ? 'Verifying your session...' : 'Verificando tu sesión...',
+    userProfile: language === 'en' ? 'User Profile' : 'Perfil de Usuario',
+    manageAccount: language === 'en' ? 'Manage your account details' : 'Gestiona los detalles de tu cuenta',
+    ...translations
+  }), [language, translations]);
 
   // Password requirements
   const passwordRequirements = useMemo<PasswordRequirement[]>(
@@ -73,11 +88,11 @@ const ProfilePage: React.FC = () => {
   // Password strength calculation
   const passwordStrength = useMemo(() => {
     const validCount = passwordRequirements.filter((req) => req.valid).length;
-    if (validCount === 5) return { strength: 100, color: 'from-green-500 to-teal-500', label: language === 'en' ? 'Strong' : 'Fuerte' };
-    if (validCount >= 3) return { strength: 60, color: 'from-yellow-400 to-orange-500', label: language === 'en' ? 'Medium' : 'Medio' };
-    if (validCount >= 1) return { strength: 30, color: 'from-red-500 to-pink-500', label: language === 'en' ? 'Weak' : 'Débil' };
-    return { strength: 0, color: 'from-gray-400 to-gray-500', label: language === 'en' ? 'None' : 'Ninguno' };
-  }, [passwordRequirements, language]);
+    if (validCount === 5) return { strength: 100, color: 'from-green-500 to-teal-500', label: t.strong || 'Strong' };
+    if (validCount >= 3) return { strength: 60, color: 'from-yellow-400 to-orange-500', label: t.medium || 'Medium' };
+    if (validCount >= 1) return { strength: 30, color: 'from-red-500 to-pink-500', label: t.weak || 'Weak' };
+    return { strength: 0, color: 'from-gray-400 to-gray-500', label: t.none || 'None' };
+  }, [passwordRequirements, t]);
 
   // Validate current password
   const validateCurrentPassword = () => {
@@ -307,14 +322,21 @@ const ProfilePage: React.FC = () => {
 
   if (isLoading) {
     return (
-      <div className={`min-h-screen flex items-center justify-center ${theme === 'light' ? 'bg-gradient-to-br from-blue-50 via-white to-teal-50' : 'bg-gradient-to-br from-gray-900 via-gray-800 to-gray-700'}`}>
-        <motion.div
-          initial={{ rotate: 0 }}
-          animate={{ rotate: 360 }}
-          transition={{ duration: 1, repeat: Infinity, ease: 'linear' }}
-          className="w-8 h-8 border-4 border-blue-600 border-t-transparent rounded-full"
-        />
-      </div>
+      <motion.div
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        transition={{ duration: 0.5 }}
+        className={`min-h-screen flex items-center justify-center ${
+          theme === "light" ? "bg-gradient-to-br from-blue-50 to-indigo-100" : "bg-gradient-to-br from-gray-900 to-gray-800"
+        }`}
+      >
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500 mx-auto mb-4"></div>
+          <p className={`text-lg ${theme === "light" ? "text-gray-600" : "text-gray-300"}`}>
+            {t.verifyingSession || 'Verifying your session...'}
+          </p>
+        </div>
+      </motion.div>
     );
   }
 
@@ -324,7 +346,7 @@ const ProfilePage: React.FC = () => {
 
   return (
     <div className={`min-h-screen py-12 px-4 ${theme === 'light' ? 'bg-gradient-to-br from-blue-50 via-white to-teal-50' : 'bg-gradient-to-br from-gray-900 via-gray-800 to-gray-700'}`}>
-      <ToastContainer
+       <ToastContainer
         position="top-right"
         autoClose={5000}
         hideProgressBar={false}
@@ -338,16 +360,17 @@ const ProfilePage: React.FC = () => {
       />
       <div className="max-w-2xl mx-auto">
         <motion.div variants={containerVariants} initial="hidden" animate="visible">
-          <motion.div variants={itemVariants} className="mb-8">
+          <motion.div variants={itemVariants} className="text-center mb-8">
             <h1 className={`text-4xl font-extrabold mb-2 ${theme === 'light' ? 'text-gray-800' : 'text-gray-100'}`}>
-              {language === 'en' ? 'User Profile' : 'Perfil de Usuario'}
+              {t.userProfile || 'User Profile'}
             </h1>
-            <p className={`text-lg ${theme === 'light' ? 'text-gray-600' : 'text-gray-300'}`}>
-              {language === 'en' ? 'Manage your account details' : 'Gestiona los detalles de tu cuenta'}
+            <p className={`text-xl opacity-80 ${theme === 'light' ? 'text-gray-600' : 'text-gray-300'}`}>
+              {t.manageAccount || 'Manage your account details'}
             </p>
           </motion.div>
 
-          <motion.div variants={itemVariants} className={`bg-white/80 dark:bg-gray-800/80 backdrop-blur-xl rounded-3xl shadow-2xl p-8 border ${theme === 'light' ? 'border-gray-200/50' : 'border-gray-700/50'}`}>
+          <motion.div variants={itemVariants} className={`bg-white/80 dark:bg-gray-800/80 backdrop-blur-xl rounded-3xl shadow-2xl p-8 border ${theme === 'light' ? 'border-gray-200/50' : 'border-gray-700/50'}`}
+>
             <div className="mb-8">
               <h3 className={`text-lg font-semibold mb-4 ${theme === 'light' ? 'text-gray-800' : 'text-gray-100'}`}>
                 {language === 'en' ? 'User Information' : 'Información del Usuario'}
@@ -365,7 +388,7 @@ const ProfilePage: React.FC = () => {
                         type="text"
                         name="firstName"
                         value={formData.firstName}
-                        onChange={handleInputChange}
+                        onChange={handleInputChange} 
                         className={`border rounded px-2 py-1 w-full max-w-xs ${theme === 'light' ? 'bg-white border-gray-300' : 'bg-gray-700 border-gray-600 text-gray-100'}`}
                       />
                     ) : (
@@ -381,7 +404,7 @@ const ProfilePage: React.FC = () => {
                         type="text"
                         name="lastName"
                         value={formData.lastName}
-                        onChange={handleInputChange}
+                        onChange={handleInputChange} 
                         className={`border rounded px-2 py-1 w-full max-w-xs ${theme === 'light' ? 'bg-white border-gray-300' : 'bg-gray-700 border-gray-600 text-gray-100'}`}
                       />
                     ) : (
@@ -393,14 +416,14 @@ const ProfilePage: React.FC = () => {
               <div className="mt-4 flex space-x-4">
                 <button
                   onClick={handleEditToggle}
-                  className={`px-4 py-2 rounded ${theme === 'light' ? 'bg-blue-500 text-white hover:bg-blue-600' : 'bg-yellow-400 text-gray-900 hover:bg-yellow-500'}`}
+                  className={`px-4 py-2 rounded-lg font-semibold transition-all duration-200 ${theme === 'light' ? 'bg-blue-500 text-white hover:bg-blue-600' : 'bg-yellow-400 text-gray-900 hover:bg-yellow-500'}`}
                 >
                   {isEditing ? (language === 'en' ? 'Cancel' : 'Cancelar') : (language === 'en' ? 'Edit Profile' : 'Editar Perfil')}
                 </button>
                 {isEditing && (
                   <button
                     onClick={handleProfileUpdate}
-                    className={`px-4 py-2 rounded ${theme === 'light' ? 'bg-green-500 text-white hover:bg-green-600' : 'bg-green-400 text-gray-900 hover:bg-green-500'}`}
+                    className={`px-4 py-2 rounded-lg font-semibold transition-all duration-200 ${theme === 'light' ? 'bg-green-500 text-white hover:bg-green-600' : 'bg-green-400 text-gray-900 hover:bg-green-500'}`}
                   >
                     {language === 'en' ? 'Save Changes' : 'Guardar Cambios'}
                   </button>
@@ -432,8 +455,8 @@ const ProfilePage: React.FC = () => {
                       className={`w-full pl-10 pr-12 py-3 border rounded-xl focus:ring-2 focus:ring-offset-2 transition-all duration-300 ${
                         currentPasswordError
                           ? 'border-red-500 focus:ring-red-500'
-                          : theme === 'light'
-                          ? 'border-gray-300 focus:border-blue-500 focus:ring-blue-500'
+                          : theme === "light"
+                          ? "border-gray-300 focus:border-blue-500 focus:ring-blue-500 bg-white"
                           : 'border-gray-600 bg-gray-700 focus:border-yellow-400 focus:ring-yellow-400'
                       } ${theme === 'light' ? 'bg-white text-gray-900 placeholder-gray-500' : 'bg-gray-700 text-gray-100 placeholder-gray-400'}`}
                       placeholder={language === 'en' ? 'Enter your current password' : 'Ingresa tu contraseña actual'}
@@ -479,8 +502,8 @@ const ProfilePage: React.FC = () => {
                       className={`w-full pl-10 pr-12 py-3 border rounded-xl focus:ring-2 focus:ring-offset-2 transition-all duration-300 ${
                         passwordError
                           ? 'border-red-500 focus:ring-red-500'
-                          : theme === 'light'
-                          ? 'border-gray-300 focus:border-blue-500 focus:ring-blue-500'
+                          : theme === "light"
+                          ? "border-gray-300 focus:border-blue-500 focus:ring-blue-500 bg-white"
                           : 'border-gray-600 bg-gray-700 focus:border-yellow-400 focus:ring-yellow-400'
                       } ${theme === 'light' ? 'bg-white text-gray-900 placeholder-gray-500' : 'bg-gray-700 text-gray-100 placeholder-gray-400'}`}
                       placeholder={language === 'en' ? 'Create a strong password' : 'Crea una contraseña fuerte'}
@@ -544,7 +567,7 @@ const ProfilePage: React.FC = () => {
                     </div>
                   </motion.div>
 
-                  <motion.div initial={{ opacity: 0 }} animate={{ opacity: newPassword ? 1 : 0 }} className="mt-4 space-y-1">
+                  <motion.div initial={{ opacity: 0 }} animate={{ opacity: newPassword ? 1 : 0 }} className="mt-4 space-y-1" >
                     <div className={`grid grid-cols-1 gap-2 p-3 rounded-xl ${theme === 'light' ? 'bg-gradient-to-r from-blue-50/50 to-teal-50/50' : 'bg-gradient-to-r from-gray-700/50 to-gray-600/50'}`}>
                       {passwordRequirements.map((req) => (
                         <motion.div
@@ -555,8 +578,8 @@ const ProfilePage: React.FC = () => {
                           animate="visible"
                           className={`flex items-center gap-3 p-2 rounded-lg transition-colors ${
                             req.valid
-                              ? theme === 'light'
-                                ? 'bg-green-50 text-green-700'
+                              ? theme === "light" 
+                                ? "bg-green-100/50 text-green-700"
                                 : 'bg-green-900/20 text-green-400'
                               : theme === 'light'
                               ? 'bg-gray-50 text-gray-600 hover:bg-gray-100'
@@ -566,7 +589,7 @@ const ProfilePage: React.FC = () => {
                           <motion.div
                             animate={{ scale: req.valid ? 1 : 0.8 }}
                             transition={{ duration: 0.2 }}
-                            className={`flex-shrink-0 w-5 h-5 rounded-full ${req.valid ? 'bg-green-500 border-2 border-green-600' : 'bg-gray-300 dark:bg-gray-600 border-2 border-gray-400 dark:border-gray-500'}`}
+                            className={`flex-shrink-0 w-5 h-5 rounded-full flex items-center justify-center ${req.valid ? 'bg-green-500 border-2 border-green-600' : 'bg-gray-300 dark:bg-gray-600 border-2 border-gray-400 dark:border-gray-500'}`}
                           >
                             {req.valid && <CheckCircle className={`w-3 h-3 m-auto text-white ${theme === 'dark' ? 'text-green-100' : ''}`} />}
                           </motion.div>
@@ -605,8 +628,8 @@ const ProfilePage: React.FC = () => {
                       className={`w-full pl-10 pr-12 py-3 border rounded-xl focus:ring-2 focus:ring-offset-2 transition-all duration-300 ${
                         confirmPasswordError
                           ? 'border-red-500 focus:ring-red-500'
-                          : theme === 'light'
-                          ? 'border-gray-300 focus:border-blue-500 focus:ring-blue-500'
+                          : theme === "light"
+                          ? "border-gray-300 focus:border-blue-500 focus:ring-blue-500 bg-white"
                           : 'border-gray-600 bg-gray-700 focus:border-yellow-400 focus:ring-yellow-400'
                       } ${theme === 'light' ? 'bg-white text-gray-900 placeholder-gray-500' : 'bg-gray-700 text-gray-100 placeholder-gray-400'}`}
                       placeholder={language === 'en' ? 'Confirm your new password' : 'Confirma tu nueva contraseña'}

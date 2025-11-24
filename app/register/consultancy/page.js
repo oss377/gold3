@@ -136,7 +136,15 @@ const GYMForm = () => {
         }
       } catch (error) {
         console.error('Error accessing camera:', error);
-        toast.error('Unable to access camera. Please select an image instead.');
+        if (error.name === 'NotAllowedError') {
+          toast.error(t.cameraPermissionDenied || "Camera access was denied. Please enable camera permissions in your browser settings to use this feature.");
+        } else if (error.name === 'NotFoundError') {
+          toast.error(t.cameraNotFound || "No camera was found. Please ensure a camera is connected and enabled.");
+        } else if (error.name === 'NotReadableError') {
+          toast.error(t.cameraNotReadable || "The camera is currently in use by another application or the system.");
+        } else {
+          toast.error(t.cameraError || 'Unable to access camera. Please select an image instead.');
+        }
         setShowCamera(false);
       }
     };
@@ -151,6 +159,14 @@ const GYMForm = () => {
       }
     };
   }, [showCamera]);
+
+  const handleTakePhotoClick = () => {
+    if (showCamera) {
+      setShowCamera(false);
+    } else if (window.confirm(t.cameraPermission || "This feature requires camera access. Do you want to proceed?")) {
+      setShowCamera(true);
+    }
+  };
 
   // Validate Firebase services and authentication
   useEffect(() => {
@@ -348,7 +364,7 @@ const GYMForm = () => {
       sessionStorage.setItem('pendingDocId', user.uid);
       sessionStorage.setItem('pendingUserId', user.uid);
 
-      toast.success(t.registrationComplete || 'Registration successful! Redirecting to payment...', {
+      toast.success(t.registrationComplete || 'Registration successful! Redirecting to login...', {
         position: 'top-center',
         autoClose: 3000,
       });
@@ -356,7 +372,7 @@ const GYMForm = () => {
       setIsSubmitted(true);
       setTimeout(() => {
         reset();
-        router.push('/payment');
+        router.push(`/login?email=${encodeURIComponent(data.email)}`);
       }, 3000);
     } catch (error) {
       console.error('Complete registration error:', error);
@@ -1035,7 +1051,7 @@ const GYMForm = () => {
                       />
                       <button
                         type="button"
-                        onClick={() => setShowCamera(!showCamera)}
+                        onClick={handleTakePhotoClick}
                         className={`mt-1 px-4 py-2 rounded-lg font-medium transition-colors duration-200 flex items-center gap-2 ${theme === "light" ? "bg-blue-600 text-white hover:bg-blue-700 focus:ring-2 focus:ring-blue-500" : "bg-gray-700 text-white hover:bg-gray-600 focus:ring-2 focus:ring-yellow-400"}`}
                       >
                         <CameraIcon className="w-5 h-5" /> {showCamera ? 'Close Camera' : 'Take Photo'}

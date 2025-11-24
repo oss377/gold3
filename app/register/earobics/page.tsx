@@ -232,12 +232,21 @@ export default function RegisterForm() {
           videoRef.current.srcObject = stream;
           videoRef.current.play();
         }
-      } catch (error) {
+      } catch (error: any) {
         console.error('Error accessing camera:', error);
-        toast.error(t.cameraError || 'Unable to access camera. Please select an image instead.');
+        if (error.name === 'NotAllowedError') {
+          toast.error(t.cameraPermissionDenied || "Camera access was denied. Please enable camera permissions in your browser settings to use this feature.");
+        } else if (error.name === 'NotFoundError') {
+          toast.error(t.cameraNotFound || "No camera was found. Please ensure a camera is connected and enabled.");
+        } else if (error.name === 'NotReadableError') {
+          toast.error(t.cameraNotReadable || "The camera is currently in use by another application or the system.");
+        } else {
+          toast.error(t.cameraError || 'Unable to access camera. Please select an image instead.');
+        }
         setShowCamera(false);
       }
     };
+
 
     if (showCamera) {
       startCamera();
@@ -249,6 +258,14 @@ export default function RegisterForm() {
       }
     };
   }, [showCamera]);
+
+  const handleTakePhotoClick = () => {
+    if (showCamera) {
+      setShowCamera(false);
+    } else if (window.confirm(t.cameraPermission || "This feature requires camera access. Do you want to proceed?")) {
+      setShowCamera(true);
+    }
+  };
 
   const handlePhotoChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     console.log('Photo input changed:', e.target.files);
@@ -547,14 +564,14 @@ export default function RegisterForm() {
       console.log(`Firestore document created with ID: ${user.uid}`);
       sessionStorage.setItem('pendingUserId', user.uid);
 
-      toast.success(t.registrationSuccessRedirect || 'Registration successful! Redirecting to payment...');
+      toast.success(t.registrationSuccessRedirect || 'Registration successful! Redirecting to login...');
       setIsSubmitted(true);
       setTimeout(() => {
         reset();
         setUploadedPhotos([]);
         setPhotoPreviews([]);
         setUploadStatus(null);
-        router.push('/payment');
+        router.push(`/login?email=${encodeURIComponent(formData.email)}`);
       }, 2000);
     } catch (error: any) {
       console.error('Registration error:', error);
@@ -1023,7 +1040,7 @@ export default function RegisterForm() {
                     />
                     <button
                       type="button"
-                      onClick={() => setShowCamera(!showCamera)}
+                      onClick={handleTakePhotoClick}
                       className={`mt-1 px-4 py-2 rounded-lg font-medium transition-colors duration-200 flex items-center gap-2 ${theme === "light" ? "bg-blue-600 text-white hover:bg-blue-700 focus:ring-2 focus:ring-blue-500" : "bg-gray-700 text-white hover:bg-gray-600 focus:ring-2 focus:ring-yellow-400"}`}
                     >
                       <Camera size={20} /> {showCamera ? t.closeCamera || 'Close Camera' : t.takePhoto || 'Take Photo'}

@@ -53,6 +53,8 @@ interface NavItem {
   name: string;
   href?: string;
   icon: React.ComponentType<{ size: number; className?: string }>;
+  subItems?: NavItem[];
+  onClick?: () => void;
 }
 
 // Interface for Modal Props
@@ -97,6 +99,7 @@ export default function GymDashboard() {
   const [isRegisterModalOpen, setIsRegisterModalOpen] = useState<boolean>(false);
   const [isScheduleModalOpen, setIsScheduleModalOpen] = useState<boolean>(false);
   const [isMessageOptionsOpen, setIsMessageOptionsOpen] = useState<boolean>(false);
+  const [openSettings, setOpenSettings] = useState<boolean>(false);
   const [refreshTrigger, setRefreshTrigger] = useState<number>(0);
   const [activeView, setActiveView] = useState<'dashboard' | 'users' | 'videos'>('dashboard');
   const [isAuthorized, setIsAuthorized] = useState<boolean>(false);
@@ -195,13 +198,26 @@ export default function GymDashboard() {
   const navItems: NavItem[] = [
     { name: t['dashboard'] || 'Dashboard', href: '/admin', icon: BarChart },
     { name: t['profile'] || 'Profile', href: '/admin/profile', icon: User },
-    { name: t['members'] || 'Members', href: '/admin/members', icon: Users },
-    { name: t['classes'] || 'Classes', href: '/admin/classes', icon: Calendar },
-    { name: t['settings'] || 'Settings', href: '/admin/settings', icon: Settings },
+    { 
+      name: t['members'] || 'Members', 
+      icon: Users, 
+      href: '#', 
+      onClick: () => setActiveView('users') 
+    },
+    { name: t.classes || 'Classes', href: '/admin/classes', icon: Calendar },
+    { 
+      name: t.settings || 'Settings', 
+      icon: Settings,
+      subItems: [
+        { name: theme === 'light' ? (t.darkMode || 'Dark Mode') : (t.lightMode || 'Light Mode'), icon: theme === 'light' ? Moon : Sun },
+        { name: language === 'en' ? 'አማርኛ' : 'English', icon: Globe },
+      ]
+    },
     { name: t['logout'] || 'Logout', icon: LogOut },
   ];
 
   const toggleSidebar = () => setIsSidebarOpen(!isSidebarOpen);
+  const handleSettingsClick = () => setOpenSettings(!openSettings);
   const toggleSidebarCollapse = () => setIsSidebarCollapsed(!isSidebarCollapsed);
 
   const handleLogout = async () => {
@@ -274,23 +290,23 @@ export default function GymDashboard() {
   return (
     <div
       className={`flex min-h-screen font-sans transition-colors duration-500 relative ${
-        theme === 'light' ? 'bg-blue-50 bg-opacity-30' : 'bg-blue-950 bg-opacity-50'
+        theme === 'light' ? 'bg-gray-50' : 'bg-gray-900'
       }`}
       style={{
-        backgroundImage: `url("data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' fill-rule='evenodd'%3E%3Cpath d='M29 58C13.536 58 1 45.464 1 30 1 14.536 13.536 2 29 2c8.467 0 16.194 3.832 21.213 10.106C55.232 18.38 58 25.534 58 33c0 7.466-2.768 14.62-7.787 20.894C45.194 54.168 37.467 58 29 58z' fill='%23${theme === 'light' ? 'a3bffa' : '2a4365'}' fill-opacity='0.1'/%3E%3C/g%3E%3C/svg%3E")`,
+        backgroundImage: `url("data:image/svg+xml,%3Csvg width='80' height='80' viewBox='0 0 80 80' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' fill-rule='evenodd'%3E%3Cg fill='%23${theme === 'light' ? 'dbeafe' : '1e3a8a'}' fill-opacity='0.1'%3E%3Cpath d='M50 50c0-5.523 4.477-10 10-10s10 4.477 10 10-4.477 10-10 10-10-4.477-10-10zM10 10c0-5.523 4.477-10 10-10s10 4.477 10 10-4.477 10-10 10-10-4.477-10-10z'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E")`,
       }}
     >
       {/* Sidebar */}
       <aside
         className={`fixed inset-y-0 left-0 z-50 shadow-2xl transform transition-transform duration-500 ease-in-out ${
           theme === 'light'
-            ? 'bg-gradient-to-b from-blue-100 to-teal-100 text-blue-900'
-            : 'bg-gradient-to-b from-blue-900 to-teal-900 text-white'
+            ? 'bg-white text-gray-800'
+            : 'bg-gray-800 text-gray-200'
         } ${isSidebarOpen ? 'translate-x-0' : '-translate-x-full'} ${isSidebarCollapsed ? 'w-20' : 'w-72'}`}
       >
         <div
           className={`flex items-center justify-between p-4 border-b ${
-            theme === 'light' ? 'border-blue-200' : 'border-blue-800'
+            theme === 'light' ? 'border-gray-200' : 'border-gray-700'
           }`}
         >
           <div className={`flex items-center ${isSidebarCollapsed ? 'justify-center' : 'space-x-3'}`}>
@@ -307,7 +323,7 @@ export default function GymDashboard() {
               <Dumbbell
                 ref={fallbackRef}
                 size={32}
-                className={`${theme === 'light' ? 'text-teal-600' : 'text-teal-300'} hidden`}
+                className={`${theme === 'light' ? 'text-blue-600' : 'text-blue-400'} hidden`}
               />
             </div>
             {!isSidebarCollapsed && (
@@ -316,20 +332,20 @@ export default function GymDashboard() {
                   theme === 'light' ? 'text-blue-900' : 'text-white'
                 }`}
               >
-                Workout App
+                {t.appTitle || 'Gym Admin'}
               </h1>
             )}
           </div>
           <div className="flex items-center space-x-2">
             <button
-              className={theme === 'light' ? 'text-blue-600 hover:text-blue-900' : 'text-blue-300 hover:text-white'}
+              className={theme === 'light' ? 'text-gray-500 hover:text-gray-800' : 'text-gray-400 hover:text-white'}
               onClick={toggleSidebar}
             >
               <XCircle size={28} />
             </button>
             <button
               className={`p-2 rounded-full transition-all duration-300 hover:scale-105 ${
-                theme === 'light' ? 'text-teal-600 hover:bg-teal-100' : 'text-teal-300 hover:bg-teal-800'
+                theme === 'light' ? 'text-blue-600 hover:bg-gray-100' : 'text-blue-400 hover:bg-gray-700'
               }`}
               onClick={toggleSidebarCollapse}
               aria-label={isSidebarCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
@@ -345,8 +361,8 @@ export default function GymDashboard() {
         <nav
           className={`mt-4 space-y-2 px-2 overflow-y-auto max-h-[calc(100vh-80px)] scrollbar-thin ${
             theme === 'light'
-              ? 'scrollbar-thumb-teal-600 scrollbar-track-blue-100'
-              : 'scrollbar-thumb-teal-300 scrollbar-track-blue-900'
+              ? 'scrollbar-thumb-gray-300 scrollbar-track-gray-100'
+              : 'scrollbar-thumb-gray-600 scrollbar-track-gray-800'
           }`}
         >
           {navItems.map((item) =>
@@ -354,82 +370,79 @@ export default function GymDashboard() {
               <button
                 key={item.name}
                 onClick={handleLogout}
-                className={`flex items-center w-full px-4 py-3 rounded-2xl text-base font-semibold transition-all duration-300 hover:scale-105 hover:shadow-lg ${
-                  isSidebarCollapsed
-                    ? 'justify-end'
-                    : theme === 'light'
-                    ? 'hover:bg-teal-100 hover:text-teal-600'
-                    : 'hover:bg-teal-800 hover:text-white'
-                }`}
+                className={`flex items-center w-full px-4 py-3 rounded-xl text-sm font-medium transition-all duration-300 group hover:bg-gradient-to-r hover:from-red-500 hover:to-pink-500 hover:text-white transform hover:-translate-y-0.5 hover:shadow-lg ${
+                  theme === 'light' ? 'text-gray-700' : 'text-gray-300'
+                } ${isSidebarCollapsed ? 'justify-center' : ''}`}
               >
                 <item.icon
                   size={22}
                   className={`${
-                    isSidebarCollapsed ? '' : 'mr-4'
-                  } ${theme === 'light' ? 'text-teal-600' : 'text-teal-300'}`}
+                    isSidebarCollapsed ? '' : 'mr-3'
+                  } transition-colors duration-300 group-hover:text-white ${theme === 'light' ? 'text-red-500' : 'text-red-400'}`}
                 />
                 {!isSidebarCollapsed && <span>{item.name}</span>}
               </button>
+            ) : item.subItems ? (
+              <div key={item.name}>
+                <button
+                  onClick={handleSettingsClick}
+                  className={`flex items-center justify-between w-full px-4 py-3 rounded-xl text-sm font-medium transition-all duration-300 group hover:bg-gradient-to-r hover:from-teal-500 hover:to-blue-500 hover:text-white transform hover:-translate-y-0.5 hover:shadow-lg ${
+                    theme === 'light' ? 'text-gray-700' : 'text-gray-300'
+                  } ${isSidebarCollapsed ? 'justify-center' : ''}`}
+                >
+                  <div className="flex items-center">
+                    <item.icon
+                      size={22}
+                      className={`${
+                        isSidebarCollapsed ? '' : 'mr-3'
+                      } transition-colors duration-300 group-hover:text-white ${theme === 'light' ? 'text-blue-600' : 'text-blue-400'}`}
+                    />
+                    {!isSidebarCollapsed && <span>{item.name}</span>}
+                  </div>
+                  {!isSidebarCollapsed && (
+                    <ChevronRight
+                      size={16}
+                      className={`transition-transform duration-300 ${openSettings ? 'rotate-90' : ''}`}
+                    />
+                  )}
+                </button>
+                {!isSidebarCollapsed && openSettings && (
+                  <div className="mt-2 space-y-2 pl-8">
+                    {item.subItems.map((subItem) => (
+                      <button
+                        key={subItem.name}
+                        onClick={subItem.name.includes('Mode') ? toggleTheme : toggleLanguage}
+                        className={`flex items-center w-full px-4 py-2 rounded-xl text-sm font-medium transition-all duration-300 group hover:bg-blue-500 hover:text-white ${theme === 'light' ? 'text-gray-600' : 'text-gray-400'}`}
+                      >
+                        <subItem.icon size={18} className="mr-3" />
+                        <span>{subItem.name}</span>
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
             ) : (
               <Link
                 key={item.name}
                 href={item.href ?? '#'}
-                className={`flex items-center px-4 py-3 rounded-2xl text-base font-semibold transition-all duration-300 hover:scale-105 hover:shadow-lg ${
-                  isSidebarCollapsed
-                    ? 'justify-end'
-                    : theme === 'light'
-                    ? 'hover:bg-teal-100 hover:text-teal-600'
-                    : 'hover:bg-teal-800 hover:text-white'
-                }`}
-                onClick={() => setIsSidebarOpen(false)}
+                className={`flex items-center w-full px-4 py-3 rounded-xl text-sm font-medium transition-all duration-300 group hover:bg-gradient-to-r hover:from-teal-500 hover:to-blue-500 hover:text-white transform hover:-translate-y-0.5 hover:shadow-lg ${
+                  theme === 'light' ? 'text-gray-700' : 'text-gray-300'
+                } ${isSidebarCollapsed ? 'justify-center' : ''}`}
+                onClick={() => {
+                  if (item.onClick) item.onClick();
+                  setIsSidebarOpen(false);
+                }}
               >
                 <item.icon
                   size={22}
                   className={`${
-                    isSidebarCollapsed ? '' : 'mr-4'
-                  } ${theme === 'light' ? 'text-teal-600' : 'text-teal-300'}`}
+                    isSidebarCollapsed ? '' : 'mr-3'
+                  } transition-colors duration-300 group-hover:text-white ${theme === 'light' ? 'text-blue-600' : 'text-blue-400'}`}
                 />
                 {!isSidebarCollapsed && <span>{item.name}</span>}
               </Link>
             )
           )}
-          <button
-            onClick={toggleTheme}
-            className={`flex items-center w-full px-4 py-3 rounded-2xl text-base font-semibold transition-all duration-300 hover:scale-105 hover:shadow-lg ${
-              isSidebarCollapsed
-                ? 'justify-end'
-                : theme === 'light'
-                ? 'hover:bg-teal-100 hover:text-teal-600'
-                : 'hover:bg-teal-800 hover:text-white'
-            }`}
-            aria-label={theme === 'light' ? 'Switch to dark mode' : 'Switch to light mode'}
-          >
-            {theme === 'light' ? (
-              <Moon size={22} className={`${isSidebarCollapsed ? '' : 'mr-4'} text-teal-600`} />
-            ) : (
-              <Sun size={22} className={`${isSidebarCollapsed ? '' : 'mr-4'} text-teal-300`} />
-            )}
-            {!isSidebarCollapsed && <span>{t['darkMode'] || 'Dark Mode'}</span>}
-          </button>
-          <button
-            onClick={toggleLanguage}
-            className={`flex items-center w-full px-4 py-3 rounded-2xl text-base font-semibold transition-all duration-300 hover:scale-105 hover:shadow-lg ${
-              isSidebarCollapsed
-                ? 'justify-end'
-                : theme === 'light'
-                ? 'hover:bg-teal-100 hover:text-teal-600'
-                : 'hover:bg-teal-800 hover:text-white'
-            }`}
-            aria-label={language === 'en' ? 'Switch to Amharic' : 'Switch to English'}
-          >
-            <Globe
-              size={22}
-              className={`${
-                isSidebarCollapsed ? '' : 'mr-4'
-              } ${theme === 'light' ? 'text-teal-600' : 'text-teal-300'}`}
-            />
-            {!isSidebarCollapsed && <span>{language === 'en' ? 'አማርኛ' : 'English'}</span>}
-          </button>
         </nav>
       </aside>
 
@@ -446,14 +459,14 @@ export default function GymDashboard() {
         {/* Header */}
         <header
           className={`shadow-2xl p-6 flex items-center justify-between sticky top-0 z-40 transition-colors duration-500 ${
-            theme === 'light'
-              ? 'bg-gradient-to-r from-blue-100 to-teal-100 text-blue-900'
-              : 'bg-gradient-to-r from-blue-900 to-teal-900 text-white'
+            theme === 'light' 
+              ? 'bg-white/80 backdrop-blur-sm text-gray-800' 
+              : 'bg-gray-800/80 backdrop-blur-sm text-gray-200'
           }`}
         >
           <div className="flex items-center space-x-4">
             <button
-              className={theme === 'light' ? 'text-teal-600 hover:text-teal-800' : 'text-teal-300 hover:text-teal-200'}
+              className={theme === 'light' ? 'text-gray-500 hover:text-gray-800' : 'text-gray-400 hover:text-white'}
               onClick={toggleSidebar}
             >
               {isSidebarOpen ? <XCircle size={28} /> : <Menu size={28} />}
@@ -463,7 +476,7 @@ export default function GymDashboard() {
                 theme === 'light' ? 'text-blue-900' : 'text-white'
               }`}
             >
-              {t['adminDashboard'] || 'Gym Dashboard'}
+              {t.adminDashboard || 'Admin Dashboard'}
             </h2>
           </div>
           <div className="flex items-center space-x-4">
@@ -475,7 +488,7 @@ export default function GymDashboard() {
             />
             <button
               onClick={handleMessageClick}
-              className={`p-2 rounded-2xl transition-all hover:scale-105 hover:shadow-lg ${
+              className={`relative p-2 rounded-full transition-all duration-300 ${
                 theme === 'light' ? 'text-teal-600 hover:bg-teal-100' : 'text-teal-300 hover:bg-teal-800'
               }`}
               aria-label={t.messages || 'Messages'}
@@ -485,34 +498,34 @@ export default function GymDashboard() {
             <button
               onClick={openUploadModal}
               className={`flex items-center px-5 py-2 rounded-2xl font-semibold transition-all duration-300 hover:scale-105 hover:shadow-lg ${
-                theme === 'light' ? 'bg-teal-600 hover:bg-teal-700 text-white' : 'bg-teal-800 hover:bg-teal-700 text-white'
+                theme === 'light' ? 'bg-blue-600 hover:bg-blue-700 text-white' : 'bg-blue-500 hover:bg-blue-600 text-white'
               }`}
             >
               <Upload size={20} className="mr-2" />
-              {t['uploadVideo'] || 'Upload Video'}
+              {t.uploadVideo || 'Upload Video'}
             </button>
             <button
               onClick={openRegisterModal}
               className={`flex items-center px-5 py-2 rounded-2xl font-semibold transition-all duration-300 hover:scale-105 hover:shadow-lg ${
-                theme === 'light' ? 'bg-teal-600 hover:bg-teal-700 text-white' : 'bg-teal-800 hover:bg-teal-700 text-white'
+                theme === 'light' ? 'bg-blue-600 hover:bg-blue-700 text-white' : 'bg-blue-500 hover:bg-blue-600 text-white'
               }`}
             >
               <UserPlus size={20} className="mr-2" />
-              {t['registerMember'] || 'Register Member'}
+              {t.registerMember || 'Register Member'}
             </button>
             <button
               onClick={openScheduleModal}
               className={`flex items-center px-5 py-2 rounded-2xl font-semibold transition-all duration-300 hover:scale-105 hover:shadow-lg ${
-                theme === 'light' ? 'bg-teal-600 hover:bg-teal-700 text-white' : 'bg-teal-800 hover:bg-teal-700 text-white'
+                theme === 'light' ? 'bg-blue-600 hover:bg-blue-700 text-white' : 'bg-blue-500 hover:bg-blue-600 text-white'
               }`}
             >
               <Calendar size={20} className="mr-2" />
-              {t['uploadSchedule'] || 'Upload Schedule'}
+              {t.uploadSchedule || 'Upload Schedule'}
             </button>
             <button
               onClick={toggleTheme}
-              className={`p-2 rounded-2xl transition-all hover:scale-105 hover:shadow-lg ${
-                theme === 'light' ? 'text-teal-600 hover:bg-teal-100' : 'text-teal-300 hover:bg-teal-800'
+              className={`p-2 rounded-full transition-all duration-300 ${
+                theme === 'light' ? 'text-gray-600 hover:bg-gray-100' : 'text-gray-300 hover:bg-gray-700'
               }`}
               aria-label={theme === 'light' ? 'Switch to dark mode' : 'Switch to light mode'}
             >
@@ -520,8 +533,8 @@ export default function GymDashboard() {
             </button>
             <button
               onClick={toggleLanguage}
-              className={`p-2 rounded-2xl transition-all hover:scale-105 hover:shadow-lg ${
-                theme === 'light' ? 'text-teal-600 hover:bg-teal-100' : 'text-teal-300 hover:bg-teal-800'
+              className={`p-2 rounded-full transition-all duration-300 ${
+                theme === 'light' ? 'text-gray-600 hover:bg-gray-100' : 'text-gray-300 hover:bg-gray-700'
               }`}
               aria-label={language === 'en' ? 'Switch to Amharic' : 'Switch to English'}
             >
@@ -547,20 +560,15 @@ export default function GymDashboard() {
             onClick={() => setIsMessageOptionsOpen(false)}
           >
             <div
-              className={`rounded-3xl shadow-2xl p-8 max-w-md w-full mx-4 transform transition-all duration-500 scale-100 hover:scale-105 ${
+              className={`rounded-2xl shadow-2xl p-6 max-w-sm w-full mx-4 transform transition-all duration-300 ${
                 theme === 'light'
-                  ? 'bg-gradient-to-br from-white to-blue-50 text-blue-900'
-                  : 'bg-gradient-to-br from-blue-900 to-teal-900 text-white'
+                  ? 'bg-white text-gray-800'
+                  : 'bg-gray-800 text-white'
               }`}
               onClick={(e) => e.stopPropagation()}
-              style={{
-                boxShadow: theme === 'light'
-                  ? '0 15px 40px rgba(59, 130, 246, 0.4)'
-                  : '0 15px 40px rgba(45, 212, 191, 0.4)',
-              }}
             >
               <div className="flex justify-between items-center mb-6">
-                <h3 className="text-2xl font-bold">{t['chooseMessageType'] || 'Choose Message Type'}</h3>
+                <h3 className="text-xl font-bold">{t.chooseMessageType || 'Choose Message Type'}</h3>
                 <button
                   onClick={() => setIsMessageOptionsOpen(false)}
                   className={`${theme === 'light' ? 'text-blue-600 hover:text-blue-900' : 'text-teal-300 hover:text-white'}`}
@@ -571,25 +579,25 @@ export default function GymDashboard() {
               <div className="grid grid-cols-1 gap-4">
                 <button
                   onClick={handlePublicMessage}
-                  className={`flex items-center justify-center p-4 rounded-2xl font-semibold transition-all duration-300 hover:scale-105 hover:shadow-lg ${
+                  className={`flex items-center justify-center p-4 rounded-xl font-semibold transition-all duration-300 hover:scale-105 hover:shadow-md ${
                     theme === 'light'
-                      ? 'bg-teal-100 hover:bg-teal-200 text-teal-800'
-                      : 'bg-teal-800 hover:bg-teal-700 text-white'
+                      ? 'bg-gray-100 hover:bg-gray-200 text-gray-800'
+                      : 'bg-gray-700 hover:bg-gray-600 text-white'
                   }`}
                 >
                   <Globe size={24} className="mr-3" />
-                  {t['publicMessage'] || 'Public Message'}
+                  {t.publicMessage || 'Public Message'}
                 </button>
                 <button
                   onClick={handlePersonalMessage}
-                  className={`flex items-center justify-center p-4 rounded-2xl font-semibold transition-all duration-300 hover:scale-105 hover:shadow-lg ${
+                  className={`flex items-center justify-center p-4 rounded-xl font-semibold transition-all duration-300 hover:scale-105 hover:shadow-md ${
                     theme === 'light'
-                      ? 'bg-blue-100 hover:bg-blue-200 text-blue-800'
-                      : 'bg-blue-800 hover:bg-blue-700 text-white'
+                      ? 'bg-gray-100 hover:bg-gray-200 text-gray-800'
+                      : 'bg-gray-700 hover:bg-gray-600 text-white'
                   }`}
                 >
                   <Lock size={24} className="mr-3" />
-                  {t['personalMessage'] || 'Personal Message'}
+                  {t.personalMessage || 'Personal Message'}
                 </button>
               </div>
             </div>
@@ -599,7 +607,7 @@ export default function GymDashboard() {
         {/* Main Content Area */}
         <main
           className={`flex-1 p-8 overflow-y-auto scroll-smooth ${
-            theme === 'light' ? 'bg-gradient-to-br from-blue-50 to-teal-50 text-blue-900' : 'bg-gradient-to-br from-blue-950 to-teal-950 text-white'
+            theme === 'light' ? 'text-gray-800' : 'text-gray-200'
           }`}
         >
           {/* Welcome Card with Background Image */}
@@ -634,29 +642,22 @@ export default function GymDashboard() {
               className={`grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-8 mb-12 transition-all duration-500 relative`}
             >
               {[
-                { title: t['activeMembers'] || 'Active Members', value: stats.activeMembers.toLocaleString(), change: t['changeMembers'] || '+12% this month', rotation: '-2deg' },
-                { title: t['classesToday'] || 'Classes Today', value: stats.classesToday.toString(), change: t['changeClasses'] || '+3 from yesterday', rotation: '2deg' },
-                { title: t['newSignups'] || 'New Signups', value: stats.newSignups.toString(), change: t['changeSignups'] || '+15% this week', rotation: '-1deg' },
-                { title: t['revenue'] || 'Revenue', value: `$${stats.revenue.toLocaleString()}`, change: t['changeRevenue'] || '+7% this month', rotation: '1deg' },
+                { title: t.activeMembers || 'Active Members', value: stats.activeMembers.toLocaleString(), change: t.changeMembers || '+12% this month' },
+                { title: t.classesToday || 'Classes Today', value: stats.classesToday.toString(), change: t.changeClasses || '+3 from yesterday' },
+                { title: t.newSignups || 'New Signups', value: stats.newSignups.toString(), change: t.changeSignups || '+15% this week' },
+                { title: t.revenue || 'Revenue', value: `$${stats.revenue.toLocaleString()}`, change: t.changeRevenue || '+7% this month' },
               ].map((stat, index) => (
                 <motion.div
                   key={index}
-                  initial={{ opacity: 0, y: 50, rotate: stat.rotation }}
-                  animate={{ opacity: 1, y: 0, rotate: stat.rotation }}
+                  initial={{ opacity: 0, y: 50 }}
+                  animate={{ opacity: 1, y: 0 }}
                   transition={{ duration: 0.5, delay: index * 0.1 }}
                   whileHover={{ y: -8, scale: 1.05 }}
-                  className={`rounded-3xl shadow-2xl p-8 border relative overflow-hidden ${
+                  className={`rounded-2xl shadow-lg p-6 border relative overflow-hidden ${
                     theme === 'light'
-                      ? 'bg-white bg-opacity-90 text-blue-900 border-blue-100'
-                      : 'bg-blue-800 bg-opacity-90 text-white border-teal-800'
+                      ? 'bg-white text-gray-800 border-gray-200'
+                      : 'bg-gray-800 text-gray-200 border-gray-700'
                   }`}
-                  style={{
-                    transform: `rotate(${stat.rotation})`,
-                    boxShadow: theme === 'light'
-                      ? '0 10px 30px rgba(59, 130, 246, 0.3), 0 4px 10px rgba(59, 130, 246, 0.2)'
-                      : '0 10px 30px rgba(45, 212, 191, 0.3), 0 4px 10px rgba(45, 212, 191, 0.2)',
-                    backgroundImage: `url("data:image/svg+xml,%3Csvg width='20' height='20' viewBox='0 0 20 20' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' fill-rule='evenodd'%3E%3Cpath d='M10 20C4.477 20 0 15.523 0 10S4.477 0 10 0s10 4.477 10 10-4.477 10-10 10z' fill='%23${theme === 'light' ? 'dbeafe' : '1e3a8a'}' fill-opacity='0.05'/%3E%3C/g%3E%3C/svg%3E")`,
-                  }}
                 >
                   <h3 className={`text-xl font-bold ${theme === 'light' ? 'text-blue-900' : 'text-white'}`}>
                     {stat.title}
@@ -668,7 +669,7 @@ export default function GymDashboard() {
                   >
                     {stat.value}
                   </p>
-                  <p className={`text-sm mt-3 ${theme === 'light' ? 'text-blue-500' : 'text-teal-400'}`}>
+                  <p className={`text-sm mt-3 ${theme === 'light' ? 'text-gray-500' : 'text-gray-400'}`}>
                     {stat.change}
                   </p>
                 </motion.div>
@@ -678,7 +679,7 @@ export default function GymDashboard() {
 
           {/* Quick Actions Section */}
           <div className="mt-12">
-            <h3 className={`text-2xl font-bold mb-6 ${theme === 'light' ? 'text-blue-900' : 'text-white'}`}>
+            <h3 className={`text-2xl font-bold mb-6 ${theme === 'light' ? 'text-gray-900' : 'text-white'}`}>
               {t.quickActions || 'Quick Actions'}
             </h3>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -686,23 +687,23 @@ export default function GymDashboard() {
                 onClick={() => setActiveView('videos')}
                 className={`p-6 rounded-2xl shadow-lg flex flex-col items-center justify-center transition-all duration-300 hover:scale-105 ${
                   theme === 'light'
-                    ? 'bg-white text-blue-900 hover:bg-teal-50'
-                    : 'bg-blue-800 text-white hover:bg-blue-700'
+                    ? 'bg-white text-gray-900 hover:bg-gray-50'
+                    : 'bg-gray-800 text-white hover:bg-gray-700'
                 }`}
               >
                 <Video size={40} className="mb-4" />
-                <span className="font-semibold">{t['manageVideos'] || 'Manage Videos'}</span>
+                <span className="font-semibold">{t.manageVideos || 'Manage Videos'}</span>
               </button>
               <button
                 onClick={() => setActiveView('users')}
                 className={`p-6 rounded-2xl shadow-lg flex flex-col items-center justify-center transition-all duration-300 hover:scale-105 ${
                   theme === 'light'
-                    ? 'bg-white text-blue-900 hover:bg-teal-50'
-                    : 'bg-blue-800 text-white hover:bg-blue-700'
+                    ? 'bg-white text-gray-900 hover:bg-gray-50'
+                    : 'bg-gray-800 text-white hover:bg-gray-700'
                 }`}
               >
                 <Users size={40} className="mb-4" />
-                <span className="font-semibold">{t['manageUsers'] || 'Manage Users'}</span>
+                <span className="font-semibold">{t.manageUsers || 'Manage Users'}</span>
               </button>
             </div>
           </div>
@@ -794,7 +795,7 @@ function ManageVideos({ theme, t }: { theme: 'light' | 'dark'; t: Translation })
           <h3 className="text-xl font-semibold">{t.manageVideos || 'Manage Videos'}</h3>
           <button
             onClick={fetchVideos}
-            className={`flex items-center px-3 py-1 rounded-lg text-sm ${theme === 'light' ? 'bg-blue-600 hover:bg-blue-700 text-white' : 'bg-gray-700 hover:bg-gray-600 text-white'}`}
+            className={`flex items-center px-3 py-1 rounded-lg text-sm ${theme === 'light' ? 'bg-blue-600 hover:bg-blue-700 text-white' : 'bg-blue-500 hover:bg-blue-600 text-white'}`}
           >
             <RefreshCw size={16} className="mr-1" />
             {t.refresh || 'Refresh'}
@@ -803,7 +804,7 @@ function ManageVideos({ theme, t }: { theme: 'light' | 'dark'; t: Translation })
         <div className="overflow-x-auto">
           <table className="w-full text-left">
             <thead>
-              <tr className={`border-b ${theme === 'light' ? 'border-gray-200 text-gray-600' : 'border-gray-600 text-gray-300'}`}>
+              <tr className={`border-b ${theme === 'light' ? 'border-gray-200 text-gray-600' : 'border-gray-700 text-gray-400'}`}>
                 <th className="py-4 px-2">{t.thumbnail || 'Thumbnail'}</th>
                 <th className="py-4 px-2">{t.title || 'Title'}</th>
                 <th className="py-4 px-2">{t.category || 'Category'}</th>
@@ -812,7 +813,7 @@ function ManageVideos({ theme, t }: { theme: 'light' | 'dark'; t: Translation })
             </thead>
             <tbody>
               {videos.map(video => (
-                <tr key={video.id} className={`border-b ${theme === 'light' ? 'border-gray-200 hover:bg-blue-50' : 'border-gray-600 hover:bg-gray-700'} transition-colors duration-200`}>
+                <tr key={video.id} className={`border-b ${theme === 'light' ? 'border-gray-200 hover:bg-gray-50' : 'border-gray-700 hover:bg-gray-700/50'} transition-colors duration-200`}>
                   <td className="py-4 px-2">
                     <img src={video.thumbnail || '/placeholder.png'} alt={video.title} className="w-24 h-14 object-cover rounded-md" />
                   </td>
@@ -821,13 +822,13 @@ function ManageVideos({ theme, t }: { theme: 'light' | 'dark'; t: Translation })
                   <td className="py-4 px-2 flex space-x-2">
                     <button
                       onClick={() => handleUpdate(video)}
-                      className={`px-3 py-1 rounded-lg text-sm ${theme === 'light' ? 'bg-blue-600 text-white hover:bg-blue-700' : 'bg-gray-700 text-white hover:bg-gray-600'}`}
+                      className={`px-3 py-1 rounded-lg text-sm ${theme === 'light' ? 'bg-blue-600 text-white hover:bg-blue-700' : 'bg-blue-500 text-white hover:bg-blue-600'}`}
                     >
                       {t.update || 'Update'}
                     </button>
                     <button
                       onClick={() => handleDelete(video.id)}
-                      className={`px-3 py-1 rounded-lg text-sm ${theme === 'light' ? 'bg-red-500 text-white hover:bg-red-600' : 'bg-red-700 text-white hover:bg-red-600'}`}
+                      className={`px-3 py-1 rounded-lg text-sm ${theme === 'light' ? 'bg-red-500 text-white hover:bg-red-600' : 'bg-red-600 text-white hover:bg-red-700'}`}
                     >
                       {t.delete || 'Delete'}
                     </button>

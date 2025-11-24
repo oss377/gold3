@@ -12,6 +12,7 @@ import {
   LogOut,
   Sun,
   Moon,
+  ChevronDown,
   Search,
   Stethoscope,
   Globe,
@@ -62,6 +63,7 @@ interface NavItem {
   name: string;
   icon: React.ElementType;
   href?: string;
+  subItems?: NavItem[];
 }
 
 // Define interface for translations
@@ -151,6 +153,7 @@ export default function UserDashboard() {
   const [schedules, setSchedules] = useState<Schedule[]>([]);
   const [recentActivities, setRecentActivities] = useState<Activity[]>([]);
   const [showMessageOptions, setShowMessageOptions] = useState(false);
+  const [openSettings, setOpenSettings] = useState(false);
   const router = useRouter();
   const pathname = usePathname();
   const themeContext = useContext(ThemeContext);
@@ -268,15 +271,18 @@ export default function UserDashboard() {
         try {
           const activitiesQ = query(
             collection(db, 'activities'),
-            where('userEmail', '==', userEmail),
-            orderBy('date', 'desc'),
-            limit(3)
+            where('userEmail', '==', userEmail)
           );
           const activitiesSnap = await getDocs(activitiesQ);
-          const fetchedActivities: Activity[] = activitiesSnap.docs.map((docSnap) => ({
+          let fetchedActivities: Activity[] = activitiesSnap.docs.map((docSnap) => ({
             id: docSnap.id,
             ...docSnap.data(),
           })) as Activity[];
+
+          // Sort by date descending on the client side and take the first 3
+          fetchedActivities.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+          fetchedActivities = fetchedActivities.slice(0, 3);
+
           setRecentActivities(fetchedActivities);
           console.log('Recent activities found:', fetchedActivities.length);
         } catch (error: any) {
@@ -324,10 +330,21 @@ export default function UserDashboard() {
     { name: t.dashboard || 'Dashboard', icon: BarChart, href: '/user' },
     { name: t.profile || 'Profile', icon: User, href: '/user/profile' },
     { name: t.schedules || 'Schedules', icon: Calendar, href: '/user/schedules' },
-    { name: t.workouts || 'Workouts', icon: Dumbbell, href: '/user/workouts' },
-    { name: t.settings || 'Settings', icon: Settings, href: '/user/settings' },
+    { name: t.workouts || 'Workouts', icon: Dumbbell, href: '/workouts' },    
+    { 
+      name: t.settings || 'Settings', 
+      icon: Settings, 
+      subItems: [ 
+        { name: theme === 'light' ? (t.darkMode || 'Dark Mode') : (t.lightMode || 'Light Mode'), icon: theme === 'light' ? Moon : Sun },
+        { name: language === 'en' ? 'አማርኛ' : 'English', icon: Globe },
+      ]
+    },
     { name: t.logout || 'Logout', icon: LogOut },
   ];
+
+  const handleSettingsClick = (item: NavItem) => {
+    if (item.subItems) setOpenSettings(!openSettings);
+  };
 
   const toggleSidebar = () => setIsSidebarOpen(!isSidebarOpen);
 
@@ -377,9 +394,10 @@ export default function UserDashboard() {
 
   const cardStyle = {
     boxShadow: theme === 'light'
-      ? '0 10px 30px rgba(59, 130, 246, 0.3), 0 4px 10px rgba(59, 130, 246, 0.2)'
-      : '0 10px 30px rgba(45, 212, 191, 0.3), 0 4px 10px rgba(45, 212, 191, 0.2)',
-    backgroundImage: `url("data:image/svg+xml,%3Csvg width='20' height='20' viewBox='0 0 20 20' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' fill-rule='evenodd'%3E%3Cpath d='M10 20C4.477 20 0 15.523 0 10S4.477 0 10 0s10 4.477 10 10-4.477 10-10 10z' fill='%23${theme === 'light' ? 'dbeafe' : '1e3a8a'}' fill-opacity='0.05'/%3E%3C/g%3E%3C/svg%3E")`,
+      ? '0 8px 24px rgba(149, 157, 165, 0.2)'
+      : '0 8px 24px rgba(0, 0, 0, 0.5)',
+    backdropFilter: 'blur(10px)',
+    WebkitBackdropFilter: 'blur(10px)',
   };
 
   if (!isAuthorized) {
@@ -392,14 +410,14 @@ export default function UserDashboard() {
     return (
       <div
         className={`flex h-screen items-center justify-center ${
-          theme === 'light' ? 'bg-blue-50 bg-opacity-30' : 'bg-blue-950 bg-opacity-50'
+          theme === 'light' ? 'bg-gray-100' : 'bg-gray-900'
         }`}
         style={{
           backgroundImage: `url("data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' fill-rule='evenodd'%3E%3Cpath d='M29 58C13.536 58 1 45.464 1 30 1 14.536 13.536 2 29 2c8.467 0 16.194 3.832 21.213 10.106C55.232 18.38 58 25.534 58 33c0 7.466-2.768 14.62-7.787 20.894C45.194 54.168 37.467 58 29 58z' fill='%23${theme === 'light' ? 'a3bffa' : '2a4365'}' fill-opacity='0.1'/%3E%3C/g%3E%3C/svg%3E")`,
         }}
       >
-        <Loader2 className={`h-8 w-8 animate-spin mr-2 ${theme === 'light' ? 'text-teal-600' : 'text-teal-300'}`} />
-        <span className={theme === 'light' ? 'text-blue-900' : 'text-white'}>{t.loading || 'Loading dashboard...'}</span>
+        <Loader2 className={`h-8 w-8 animate-spin mr-2 ${theme === 'light' ? 'text-blue-600' : 'text-blue-300'}`} />
+        <span className={theme === 'light' ? 'text-gray-800' : 'text-gray-200'}>{t.loading || 'Loading dashboard...'}</span>
       </div>
     );
   }
@@ -415,7 +433,7 @@ export default function UserDashboard() {
   return (
     <div
       className={`flex min-h-screen font-sans transition-colors duration-500 ${
-        theme === 'light' ? 'bg-blue-50 bg-opacity-30' : 'bg-blue-950 bg-opacity-50'
+        theme === 'light' ? 'bg-gray-100' : 'bg-gray-900'
       }`}
       style={{
         backgroundImage: `url("data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' fill-rule='evenodd'%3E%3Cpath d='M29 58C13.536 58 1 45.464 1 30 1 14.536 13.536 2 29 2c8.467 0 16.194 3.832 21.213 10.106C55.232 18.38 58 25.534 58 33c0 7.466-2.768 14.62-7.787 20.894C45.194 54.168 37.467 58 29 58z' fill='%23${theme === 'light' ? 'a3bffa' : '2a4365'}' fill-opacity='0.1'/%3E%3C/g%3E%3C/svg%3E")`,
@@ -424,13 +442,13 @@ export default function UserDashboard() {
       <aside
         className={`fixed inset-y-0 left-0 z-50 w-64 shadow-2xl transform transition-transform duration-500 ease-in-out ${
           theme === 'light'
-            ? 'bg-gradient-to-b from-blue-100 to-teal-100 text-blue-900'
-            : 'bg-gradient-to-b from-blue-900 to-teal-900 text-white'
+            ? 'bg-white text-gray-800'
+            : 'bg-gray-800 text-gray-200'
         } ${isSidebarOpen ? 'translate-x-0' : '-translate-x-full'}`}
       >
         <div
           className={`flex items-center justify-between p-6 border-b ${
-            theme === 'light' ? 'border-blue-200' : 'border-teal-800'
+            theme === 'light' ? 'border-gray-200' : 'border-gray-700'
           }`}
         >
           <div className="flex items-center space-x-3">
@@ -445,19 +463,19 @@ export default function UserDashboard() {
               <Dumbbell
                 ref={sidebarIconRef}
                 size={30}
-                className={`${theme === 'light' ? 'text-teal-600' : 'text-teal-300'} hidden`}
+                className={`${theme === 'light' ? 'text-blue-600' : 'text-blue-400'} hidden`}
               />
             </div>
             <h1
               className={`text-xl font-extrabold tracking-tight ${
-                theme === 'light' ? 'text-blue-900' : 'text-white'
+                theme === 'light' ? 'text-gray-900' : 'text-white'
               }`}
             >
               {t.appTitle || 'Gym House'}
             </h1>
           </div>
           <button
-            className={theme === 'light' ? 'text-teal-600 hover:text-teal-800' : 'text-teal-300 hover:text-teal-200'}
+            className={theme === 'light' ? 'text-gray-500 hover:text-gray-800' : 'text-gray-400 hover:text-white'}
             onClick={toggleSidebar}
             aria-label={isSidebarOpen ? t.closeSidebar || 'Close sidebar' : t.openSidebar || 'Open sidebar'}
           >
@@ -471,8 +489,8 @@ export default function UserDashboard() {
                 key={item.name}
                 href={item.href}
                 className={`flex items-center px-4 py-3 rounded-xl text-sm font-medium transition-all duration-300 group hover:bg-gradient-to-r hover:from-teal-500 hover:to-blue-500 hover:text-white transform hover:-translate-y-0.5 hover:shadow-lg ${
-                  theme === 'light' ? 'text-blue-900' : 'text-teal-200'
-                } ${pathname === item.href ? 'bg-gradient-to-r from-teal-500 to-blue-500 text-white shadow-md' : ''} ${
+                  theme === 'light' ? 'text-gray-700' : 'text-gray-300'
+                } ${pathname === item.href ? 'bg-blue-600 text-white shadow-md' : ''} ${
                   isSidebarOpen ? 'animate-slide-in' : ''
                 }`}
                 style={{ animationDelay: `${index * 50}ms` }}
@@ -484,60 +502,78 @@ export default function UserDashboard() {
                     pathname === item.href
                       ? 'text-white'
                       : theme === 'light'
-                      ? 'text-teal-600'
-                      : 'text-teal-300'
+                      ? 'text-blue-600'
+                      : 'text-blue-400'
                   }`}
                 />
                 <span>{item.name}</span>
               </Link>
+            ) : item.subItems ? (
+              <div key={item.name}>
+                <button
+                  onClick={() => handleSettingsClick(item)}
+                  className={`flex items-center justify-between w-full px-4 py-3 rounded-xl text-sm font-medium transition-all duration-300 group hover:bg-gradient-to-r hover:from-teal-500 hover:to-blue-500 hover:text-white transform hover:-translate-y-0.5 hover:shadow-lg ${
+                    theme === 'light' ? 'text-gray-700' : 'text-gray-300'
+                  } ${isSidebarOpen ? 'animate-slide-in' : ''}`}
+                  style={{ animationDelay: `${index * 50}ms` }}
+                  aria-label={item.name}
+                >
+                  <div className="flex items-center">
+                    <item.icon
+                      size={20}
+                      className={`mr-3 transition-colors duration-300 group-hover:text-white ${
+                        theme === 'light' ? 'text-teal-600' : 'text-teal-300'
+                      }`} 
+                    />
+                    <span>{item.name}</span>
+                  </div>
+                  <ChevronDown
+                    size={16}
+                    className={`transition-transform duration-300 ${openSettings ? 'rotate-180' : ''}`}
+                  />
+                </button>
+                {openSettings && (
+                  <div className="mt-2 space-y-2 pl-6">
+                    {item.subItems.map((subItem: NavItem) =>
+                      subItem.href ? (
+                        <Link key={subItem.name} href={subItem.href} className={`flex items-center px-4 py-2 rounded-xl text-sm font-medium transition-all duration-300 group hover:bg-blue-500 hover:text-white ${theme === 'light' ? 'text-gray-600' : 'text-gray-400'}`}>
+                          <subItem.icon size={18} className="mr-3" />
+                          <span>{subItem.name}</span>
+                        </Link>
+                      ) : (
+                        <button
+                          key={subItem.name}
+                          onClick={subItem.name.includes('Mode') ? toggleTheme : toggleLanguage}
+                          className={`flex items-center w-full px-4 py-2 rounded-xl text-sm font-medium transition-all duration-300 group hover:bg-blue-500 hover:text-white ${theme === 'light' ? 'text-gray-600' : 'text-gray-400'}`}
+                        >
+                          <subItem.icon size={18} className="mr-3" />
+                          <span>{subItem.name}</span>
+                        </button>
+                      )
+                    )}
+                  </div>
+                )}
+              </div>
             ) : (
               <button
                 key={item.name}
                 onClick={handleLogout}
                 className={`flex items-center w-full px-4 py-3 rounded-xl text-sm font-medium transition-all duration-300 group hover:bg-gradient-to-r hover:from-teal-500 hover:to-blue-500 hover:text-white transform hover:-translate-y-0.5 hover:shadow-lg ${
-                  theme === 'light' ? 'text-blue-900' : 'text-teal-200'
-                } ${isSidebarOpen ? 'animate-slide-in' : ''}`}
+                  theme === 'light' ? 'text-gray-700' : 'text-gray-300'
+                }`}
                 style={{ animationDelay: `${index * 50}ms` }}
                 aria-label={t.logout || 'Logout'}
               >
                 <item.icon
                   size={20}
                   className={`mr-3 transition-colors duration-300 group-hover:text-white ${
-                    theme === 'light' ? 'text-teal-600' : 'text-teal-300'
+                    theme === 'light' ? 'text-red-500' : 'text-red-400'
                   }`}
                 />
                 <span>{item.name}</span>
               </button>
             )
           )}
-          <button
-            onClick={toggleTheme}
-            className={`flex items-center w-full px-4 py-3 rounded-xl text-sm font-medium transition-all duration-300 group hover:bg-gradient-to-r hover:from-teal-500 hover:to-blue-500 hover:text-white transform hover:-translate-y-0.5 hover:shadow-lg ${
-              theme === 'light' ? 'text-blue-900' : 'text-teal-200'
-            } ${isSidebarOpen ? 'animate-slide-in' : ''}`}
-            style={{ animationDelay: `${(navItems.length) * 50}ms` }}
-            aria-label={theme === 'light' ? t.darkMode || 'Switch to dark mode' : t.lightMode || 'Switch to light mode'}
-          >
-            {theme === 'light' ? (
-              <Moon size={20} className="mr-3 text-teal-600 group-hover:text-white" />
-            ) : (
-              <Sun size={20} className="mr-3 text-teal-300 group-hover:text-white" />
-            )}
-            <span>{theme === 'light' ? (t.darkMode || 'Dark Mode') : (t.lightMode || 'Light Mode')}</span>
-          </button>
-          <button
-            onClick={toggleLanguage}
-            className={`flex items-center w-full px-4 py-3 rounded-xl text-sm font-medium transition-all duration-300 group hover:bg-gradient-to-r hover:from-teal-500 hover:to-blue-500 hover:text-white transform
-
- hover:-translate-y-0.5 hover:shadow-lg ${
-              theme === 'light' ? 'text-blue-900' : 'text-teal-200'
-            } ${isSidebarOpen ? 'animate-slide-in' : ''}`}
-            style={{ animationDelay: `${(navItems.length + 1) * 50}ms` }}
-            aria-label={language === 'en' ? t.switchAmharic || 'Switch to Amharic' : t.switchEnglish || 'Switch to English'}
-          >
-            <Globe size={20} className={`mr-3 ${theme === 'light' ? 'text-teal-600 group-hover:text-white' : 'text-teal-300 group-hover:text-white'}`} />
-            <span>{language === 'en' ? 'አማርኛ' : 'English'}</span>
-          </button>
         </nav>
       </aside>
 
@@ -546,14 +582,14 @@ export default function UserDashboard() {
       >
         <header
           className={`shadow-2xl p-6 flex items-center justify-between sticky top-0 z-40 transition-colors duration-500 ${
-            theme === 'light'
-              ? 'bg-gradient-to-r from-blue-100 to-teal-100 text-blue-900'
-              : 'bg-gradient-to-r from-blue-900 to-teal-900 text-white'
+            theme === 'light' 
+              ? 'bg-white/80 backdrop-blur-sm text-gray-800' 
+              : 'bg-gray-800/80 backdrop-blur-sm text-gray-200'
           }`}
         >
           <div className="flex items-center space-x-4">
             <button
-              className={theme === 'light' ? 'text-teal-600 hover:text-teal-800' : 'text-teal-300 hover:text-teal-200'}
+              className={theme === 'light' ? 'text-gray-500 hover:text-gray-800' : 'text-gray-400 hover:text-white'}
               onClick={toggleSidebar}
               aria-label={isSidebarOpen ? t.closeSidebar || 'Close sidebar' : t.openSidebar || 'Open sidebar'}
             >
@@ -571,19 +607,19 @@ export default function UserDashboard() {
                 <Dumbbell
                   ref={headerIconRef}
                   size={30}
-                  className={`${theme === 'light' ? 'text-teal-600' : 'text-teal-300'} hidden`}
+                  className={`${theme === 'light' ? 'text-blue-600' : 'text-blue-400'} hidden`}
                 />
               </div>
               <div>
                 <h2
                   className={`text-3xl font-extrabold tracking-tight ${
-                    theme === 'light' ? 'text-blue-900' : 'text-white'
+                    theme === 'light' ? 'text-gray-900' : 'text-white'
                   }`}
                 >
                   {t.dashboard || 'User Dashboard'}
                 </h2>
                 <p
-                  className={`text-sm ${theme === 'light' ? 'text-blue-500' : 'text-teal-400'}`}
+                  className={`text-sm ${theme === 'light' ? 'text-gray-500' : 'text-gray-400'}`}
                 >
                   {t.welcome || 'Welcome'}: {userEmail} | {t.category || 'Category'}: {userCategory}
                 </p>
@@ -595,7 +631,7 @@ export default function UserDashboard() {
               <Search
                 size={24}
                 className={`absolute left-3 top-1/2 transform -translate-y-1/2 ${
-                  theme === 'light' ? 'text-blue-500' : 'text-teal-400'
+                  theme === 'light' ? 'text-gray-400' : 'text-gray-500'
                 }`}
               />
               <input
@@ -603,7 +639,7 @@ export default function UserDashboard() {
                 placeholder={t.searchPlaceholder || 'Search classes, trainers...'}
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                className={`pl-10 pr-4 py-2 rounded-2xl border ${
+                className={`pl-10 pr-4 py-2 rounded-2xl border transition-all duration-300 ${
                   theme === 'light'
                     ? 'bg-white bg-opacity-90 border-blue-100 text-blue-900'
                     : 'bg-blue-800 bg-opacity-90 border-teal-800 text-white'
@@ -615,7 +651,7 @@ export default function UserDashboard() {
             <div className="relative">
               <button
                 onClick={handleMessageClick}
-                className={`relative p-2 rounded-full transition-all duration-300 ${
+                className={`relative p-2 rounded-full transition-all duration-300 ${ 
                   theme === 'light' ? 'text-teal-600 hover:bg-teal-100' : 'text-teal-300 hover:bg-teal-800'
                 }`}
                 aria-label={t.messages || 'Messages'}
@@ -647,13 +683,13 @@ export default function UserDashboard() {
               {showMessageOptions && (
                 <div
                   ref={messageOptionsRef}
-                  className={`absolute right-0 mt-3 w-80 rounded-2xl shadow-2xl z-50 overflow-hidden transition-all duration-300 transform origin-top-right ${
-                    theme === 'light' ? 'bg-white bg-opacity-95 text-blue-900 border border-blue-100' : 'bg-blue-800 bg-opacity-95 text-white border border-teal-800'
+                  className={`absolute right-0 mt-3 w-80 rounded-2xl shadow-2xl z-50 overflow-hidden transition-all duration-300 transform origin-top-right ${ 
+                    theme === 'light' ? 'bg-white/80 text-gray-800 border border-gray-200' : 'bg-gray-800/80 text-gray-200 border border-gray-700'
                   }`}
                   style={cardStyle}
                 >
                   <div className="p-4">
-                    <h3 className={`text-lg font-bold mb-4 ${theme === 'light' ? 'text-blue-900' : 'text-white'}`}>
+                    <h3 className={`text-lg font-bold mb-4 ${theme === 'light' ? 'text-gray-900' : 'text-white'}`}>
                       {t.selectMessageType || 'Select Message Type'}
                     </h3>
                     <div className="space-y-3">
@@ -665,10 +701,10 @@ export default function UserDashboard() {
                       >
                         <User size={24} className={`mr-3 flex-shrink-0 ${theme === 'light' ? 'text-teal-600' : 'text-teal-300'}`} />
                         <div>
-                          <h4 className={`font-semibold text-base ${theme === 'light' ? 'text-blue-900' : 'text-white'}`}>
+                          <h4 className={`font-semibold text-base ${theme === 'light' ? 'text-gray-900' : 'text-white'}`}>
                             {t.personalMessage || 'Personal Message'}
                           </h4>
-                          <p className={`text-sm ${theme === 'light' ? 'text-blue-500' : 'text-teal-400'}`}>
+                          <p className={`text-sm ${theme === 'light' ? 'text-gray-500' : 'text-gray-400'}`}>
                             {t.personalMessageDesc || 'Send a private message to a specific user or trainer.'}
                           </p>
                         </div>
@@ -681,10 +717,10 @@ export default function UserDashboard() {
                       >
                         <Users size={24} className={`mr-3 flex-shrink-0 ${theme === 'light' ? 'text-teal-600' : 'text-teal-300'}`} />
                         <div>
-                          <h4 className={`font-semibold text-base ${theme === 'light' ? 'text-blue-900' : 'text-white'}`}>
+                          <h4 className={`font-semibold text-base ${theme === 'light' ? 'text-gray-900' : 'text-white'}`}>
                             {t.publicMessage || 'Public Message'}
                           </h4>
-                          <p className={`text-sm ${theme === 'light' ? 'text-blue-500' : 'text-teal-400'}`}>
+                          <p className={`text-sm ${theme === 'light' ? 'text-gray-500' : 'text-gray-400'}`}>
                             {t.publicMessageDesc || 'Post a message visible to all users in the community.'}
                           </p>
                         </div>
@@ -696,19 +732,21 @@ export default function UserDashboard() {
             </div>
             <button
               onClick={handlePay}
-              className={`flex items-center px-5 py-2 rounded-2xl font-semibold transition-all duration-300 hover:scale-105 hover:shadow-lg ${
-                theme === 'light' ? 'bg-teal-600 hover:bg-teal-700 text-white' : 'bg-teal-800 hover:bg-teal-700 text-white'
-              }`}
+              className={`flex items-center px-5 py-2 rounded-2xl font-semibold transition-all duration-300 ${ 
+                theme === 'light' ? 'bg-blue-600 text-white' : 'bg-blue-800 text-white'
+              } disabled:opacity-50 disabled:cursor-not-allowed`}
               aria-label={t.pay || 'Make a Payment'}
+              disabled
             >
               <CreditCard size={20} className="mr-2" />
               {t.pay || 'Pay'}
             </button>
             <button
               onClick={handleConsultancy}
-              className={`flex items-center px-5 py-2 rounded-2xl font-semibold transition-all duration-300 hover:scale-105 hover:shadow-lg ${
-                theme === 'light' ? 'bg-teal-600 hover:bg-teal-700 text-white' : 'bg-teal-800 hover:bg-teal-700 text-white'
-              }`}
+              className={`flex items-center px-5 py-2 rounded-2xl font-semibold transition-all duration-300 ${ 
+                theme === 'light' ? 'bg-blue-600 text-white' : 'bg-blue-800 text-white'
+              } disabled:opacity-50 disabled:cursor-not-allowed`}
+              disabled
             >
               <Stethoscope size={20} className="mr-2" />
               {t.getConsultancy || 'Get Consultancy'}
@@ -718,8 +756,8 @@ export default function UserDashboard() {
 
         {errorMessage && (
           <div
-            className={`mx-8 mt-4 p-4 rounded-2xl relative overflow-hidden ${
-              theme === 'light' ? 'bg-red-100 text-red-700 border-red-200' : 'bg-red-900 text-red-200 border-red-800'
+            className={`mx-8 mt-4 p-4 rounded-2xl relative overflow-hidden ${ 
+              theme === 'light' ? 'bg-red-100 text-red-700 border-red-200' : 'bg-red-900/50 text-red-300 border-red-800/50'
             }`}
             style={cardStyle}
           >
@@ -729,7 +767,7 @@ export default function UserDashboard() {
 
         <main
           className={`flex-1 p-8 overflow-y-auto ${
-            theme === 'light' ? 'bg-gradient-to-br from-blue-50 to-teal-50 text-blue-900' : 'bg-gradient-to-br from-blue-950 to-teal-950 text-white'
+            theme === 'light' ? 'text-gray-800' : 'text-gray-200'
           }`}
         >
           <div
@@ -760,31 +798,31 @@ export default function UserDashboard() {
               <div
                 key={index}
                 className={`rounded-3xl shadow-2xl p-6 hover:shadow-3xl transform hover:-translate-y-2 transition-all duration-500 border relative overflow-hidden ${
-                  theme === 'light'
-                    ? 'bg-white bg-opacity-90 text-blue-900 border-blue-100'
-                    : 'bg-blue-800 bg-opacity-90 text-white border-teal-800'
+                  theme === 'light' 
+                    ? 'bg-white/80 text-gray-800 border-gray-200' 
+                    : 'bg-gray-800/80 text-gray-200 border-gray-700'
                 }`}
                 style={cardStyle}
               >
                 {stat.title === (t.progress || 'Progress') && (
-                  <div className={`w-full h-2 rounded-full mt-4 mb-2 ${theme === 'light' ? 'bg-blue-100' : 'bg-teal-800'}`}>
+                  <div className={`w-full h-2 rounded-full mt-4 mb-2 ${theme === 'light' ? 'bg-gray-200' : 'bg-gray-700'}`}>
                     <div 
-                      className={`h-2 rounded-full transition-all duration-300 ${theme === 'light' ? 'bg-teal-600' : 'bg-teal-300'}`}
+                      className={`h-2 rounded-full transition-all duration-300 ${theme === 'light' ? 'bg-blue-600' : 'bg-blue-400'}`}
                       style={{ width: `${stats.progress}%` }}
                     />
                   </div>
                 )}
                 <h3
-                  className={`text-lg font-bold ${theme === 'light' ? 'text-blue-900' : 'text-white'}`}
+                  className={`text-lg font-bold ${theme === 'light' ? 'text-gray-900' : 'text-white'}`}
                 >
                   {stat.title}
                 </h3>
                 <p
-                  className={`text-3xl font-extrabold mt-2 ${theme === 'light' ? 'text-teal-600' : 'text-teal-300'}`}
+                  className={`text-3xl font-extrabold mt-2 ${theme === 'light' ? 'text-blue-600' : 'text-blue-400'}`}
                 >
                   {stat.value || 0}
                 </p>
-                <p className={`text-sm mt-1 ${theme === 'light' ? 'text-blue-500' : 'text-teal-400'}`}>
+                <p className={`text-sm mt-1 ${theme === 'light' ? 'text-gray-500' : 'text-gray-400'}`}>
                   {stat.change}
                 </p>
               </div>
@@ -792,12 +830,12 @@ export default function UserDashboard() {
           </div>
 
           <div
-            className={`rounded-3xl shadow-2xl p-8 mb-12 border relative overflow-hidden ${
-              theme === 'light' ? 'bg-white bg-opacity-90 text-blue-900 border-blue-100' : 'bg-blue-800 bg-opacity-90 text-white border-teal-800'
+            className={`rounded-3xl shadow-2xl p-8 mb-12 border relative overflow-hidden ${ 
+              theme === 'light' ? 'bg-white/80 text-gray-800 border-gray-200' : 'bg-gray-800/80 text-gray-200 border-gray-700'
             }`}
             style={cardStyle}
           >
-            <h3 className={`text-2xl font-bold mb-6 ${theme === 'light' ? 'text-blue-900' : 'text-white'}`}>
+            <h3 className={`text-2xl font-bold mb-6 ${theme === 'light' ? 'text-gray-900' : 'text-white'}`}>
               {t.workoutSchedule || 'Your Workout Schedule'} ({schedules.length} {t.schedulesFound || 'found'})
             </h3>
             <div
@@ -808,25 +846,25 @@ export default function UserDashboard() {
                   <div
                     key={schedule.id}
                     className={`border rounded-2xl p-5 transition-all duration-300 cursor-pointer hover:scale-105 hover:shadow-lg ${
-                      theme === 'light'
-                        ? 'border-blue-100 hover:bg-teal-50'
-                        : 'border-teal-800 hover:bg-teal-900'
+                      theme === 'light' 
+                        ? 'border-gray-200 hover:bg-gray-50' 
+                        : 'border-gray-700 hover:bg-gray-700/50'
                     }`}
                     onClick={() => router.push(`/user/schedules/${schedule.id}`)}
                   >
-                    <h4 className={`font-semibold text-lg ${theme === 'light' ? 'text-blue-900' : 'text-white'}`}>
+                    <h4 className={`font-semibold text-lg ${theme === 'light' ? 'text-gray-900' : 'text-white'}`}>
                       {schedule.title || t.yogaClass || 'Yoga Class'}
                     </h4>
-                    <p className={`text-sm ${theme === 'light' ? 'text-blue-500' : 'text-teal-400'}`}>
+                    <p className={`text-sm ${theme === 'light' ? 'text-gray-500' : 'text-gray-400'}`}>
                       {schedule.time ? new Date(schedule.time).toLocaleDateString() : t.yogaTime || '2025-07-11'}
                     </p>
-                    <p className={`text-sm ${theme === 'light' ? 'text-blue-500' : 'text-teal-400'}`}>
+                    <p className={`text-sm ${theme === 'light' ? 'text-gray-500' : 'text-gray-400'}`}>
                       {t.instructor || 'Instructor'}: {schedule.instructor || t.yogaInstructor || 'Sarah Johnson'}
                     </p>
                   </div>
                 ))
               ) : (
-                <p className={`col-span-full text-center ${theme === 'light' ? 'text-blue-500' : 'text-teal-400'}`}>
+                <p className={`col-span-full text-center ${theme === 'light' ? 'text-gray-500' : 'text-gray-400'}`}>
                   {t.noSchedules || 'No schedules available for your category.'}
                 </p>
               )}
@@ -834,12 +872,12 @@ export default function UserDashboard() {
           </div>
 
           <div
-            className={`rounded-3xl shadow-2xl p-8 border relative overflow-hidden ${
-              theme === 'light' ? 'bg-white bg-opacity-90 text-blue-900 border-blue-100' : 'bg-blue-800 bg-opacity-90 text-white border-teal-800'
+            className={`rounded-3xl shadow-2xl p-8 border relative overflow-hidden ${ 
+              theme === 'light' ? 'bg-white/80 text-gray-800 border-gray-200' : 'bg-gray-800/80 text-gray-200 border-gray-700'
             }`}
             style={cardStyle}
           >
-            <h3 className={`text-2xl font-bold mb-6 ${theme === 'light' ? 'text-blue-900' : 'text-white'}`}>
+            <h3 className={`text-2xl font-bold mb-6 ${theme === 'light' ? 'text-gray-900' : 'text-white'}`}>
               {t.recentActivities || 'Recent Activities'} ({recentActivities.length})
             </h3>
             <div className="overflow-x-auto">
@@ -847,7 +885,7 @@ export default function UserDashboard() {
                 <thead>
                   <tr
                     className={`border-b ${theme === 'light' ? 'border-blue-100 text-blue-500' : 'border-teal-800 text-teal-400'}`}
-                  >
+                  > 
                     <th className="py-4 px-2">{t.activity || 'Activity'}</th>
                     <th className="py-4 px-2">{t.date || 'Date'}</th>
                     <th className="py-4 px-2">{t.trainer || 'Trainer'}</th>
@@ -857,14 +895,14 @@ export default function UserDashboard() {
                 <tbody>
                   {recentActivities.length > 0 ? (
                     recentActivities.map((activity: Activity) => {
-                      const statusColor = activity.status === (t.completed || 'Completed') 
-                        ? (theme === 'light' ? 'text-teal-600' : 'text-teal-300')
-                        : (theme === 'light' ? 'text-yellow-500' : 'text-yellow-400');
+                      const statusColor = activity.status === (t.completed || 'Completed')
+                        ? (theme === 'light' ? 'text-green-600' : 'text-green-400')
+                        : (theme === 'light' ? 'text-yellow-600' : 'text-yellow-400');
                       return (
                         <tr
                           key={activity.id}
                           className={`border-b ${
-                            theme === 'light' ? 'border-blue-100 hover:bg-teal-50' : 'border-teal-800 hover:bg-teal-900'
+                            theme === 'light' ? 'border-gray-200 hover:bg-gray-50' : 'border-gray-700 hover:bg-gray-700/50'
                           } transition-colors duration-300`}
                         >
                           <td className="py-4 px-2">{activity.activity || t.yogaClass || 'Yoga Class'}</td>
@@ -878,7 +916,7 @@ export default function UserDashboard() {
                     })
                   ) : (
                     <tr>
-                      <td colSpan={4} className={`py-8 text-center ${theme === 'light' ? 'text-blue-500' : 'text-teal-400'}`}>
+                      <td colSpan={4} className={`py-8 text-center ${theme === 'light' ? 'text-gray-500' : 'text-gray-400'}`}>
                         {t.noActivities || 'No recent activities found.'}
                       </td>
                     </tr>
