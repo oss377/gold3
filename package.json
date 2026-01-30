@@ -23,7 +23,7 @@
     "lucide-react": "^0.517.0",
     "mongodb": "^6.17.0",
     "mongoose": "^8.16.0",
-    "next": "^15.5.2",
+    "next": "15.5.9",
     "next-intl": "^4.3.2",
     "pdfkit": "^0.17.2",
     "react": "^19.0.0",
